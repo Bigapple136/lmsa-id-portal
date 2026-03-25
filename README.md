@@ -1,15 +1,15 @@
-# LIMSA ID Card Portal
+# lmsa ID Card Portal
 
 **Built by GoldWay · Emmett Stone Gbatu**
 
-A full-stack web portal for the Liberia Medical Students Association (LIMSA) to manage student ID card verification for A.M. Dogliotti College of Medicine.
+A full-stack web portal for the Liberia Medical Students Association (lmsa) to manage student ID card verification for A.M. Dogliotti College of Medicine.
 
 ---
 
 ## Project Structure
 
 ```
-limsa-id-portal/
+lmsa-id-portal/
 ├── frontend/          React app (hosted on Vercel)
 └── backend/           Node.js + Express API (hosted on Render)
 ```
@@ -20,7 +20,7 @@ limsa-id-portal/
 
 ### 1. Clone or open the project in VS Code
 
-Open the `limsa-id-portal` folder in VS Code.
+Open the `lmsa-id-portal` folder in VS Code.
 
 ---
 
@@ -50,7 +50,7 @@ Start the backend:
 npm run dev
 ```
 
-You should see: `LIMSA ID Portal backend running on port 4000`
+You should see: `lmsa ID Portal backend running on port 4000`
 
 ---
 
@@ -143,7 +143,7 @@ Your site will be live at `your-project.vercel.app`
    - `PORT` → `4000`
 7. Click Deploy
 
-Once deployed, copy your Render backend URL (e.g. `https://limsa-backend.onrender.com`)
+Once deployed, copy your Render backend URL (e.g. `https://lmsa-backend.onrender.com`)
 
 ---
 
@@ -154,7 +154,7 @@ After deploying both, open `frontend/vite.config.js` and update the proxy to poi
 ```js
 server: {
   proxy: {
-    '/api': 'https://limsa-backend.onrender.com'
+    '/api': 'https://lmsa-backend.onrender.com'
   }
 }
 ```
