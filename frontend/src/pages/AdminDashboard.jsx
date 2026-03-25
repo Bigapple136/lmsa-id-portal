@@ -1,0 +1,580 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
+import { adminFetch, adminJson, adminForm } from '../lib/api'
+import LayoutMapper from '../components/LayoutMapper'
+
+const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
+
+const FIELD_META = {
+  student_id: { label: 'Student ID', locked: true },
+  full_name:  { label: 'Full Name',  locked: false },
+  year_level: { label: 'Level',      locked: false },
+  position:   { label: 'Position',   locked: false },
+  signature:  { label: 'Signature',  locked: false },
+}
+
+export default function AdminDashboard() {
+  const [session, setSession] = useState(null)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+
+  const [activeTab, setActiveTab] = useState('overview')
+  const [uploadMode, setUploadMode] = useState('csv')
+
+  const [students, setStudents] = useState([])
+  const [activeTemplate, setActiveTemplate] = useState(null)
+  const [stats, setStats] = useState({ total:0, confirmed:0, pending:0, issues:0 })
+  const [search, setSearch] = useState('')
+  const [dataLoading, setDataLoading] = useState(false)
+
+  const [templateFile, setTemplateFile] = useState(null)
+  const [csvFile, setCsvFile] = useState(null)
+  const [zipFile, setZipFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadMsg, setUploadMsg] = useState(null)
+
+  const [manualForm, setManualForm] = useState({ student_id:'', full_name:'', year_level:'1st Year', position:'' })
+  const [manualPhoto, setManualPhoto] = useState(null)
+  const [manualSig, setManualSig] = useState(null)
+  const [manualSubmitting, setManualSubmitting] = useState(false)
+  const [manualMsg, setManualMsg] = useState(null)
+
+  const [editStudent, setEditStudent] = useState(null)
+  const [editForm, setEditForm] = useState({})
+  const [editPhoto, setEditPhoto] = useState(null)
+  const [editSig, setEditSig] = useState(null)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editMsg, setEditMsg] = useState(null)
+  const [issueNotes, setIssueNotes] = useState({})
+
+  // Field toggle state
+  const [fields, setFields] = useState(null)
+  const [fieldsSaving, setFieldsSaving] = useState(false)
+  const [fieldsMsg, setFieldsMsg] = useState(null)
+
+  // Card layout state
+  const [cardLayout, setCardLayout] = useState(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => { if (session) loadAll() }, [session])
+
+  async function login(e) {
+    e.preventDefault(); setLoginLoading(true); setLoginError('')
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) setLoginError(error.message)
+    setLoginLoading(false)
+  }
+
+  async function loadAll() {
+    setDataLoading(true)
+    await Promise.all([loadStudents(), loadTemplate(), loadFields(), loadLayout()])
+    setDataLoading(false)
+  }
+
+  async function loadStudents() {
+    const res = await adminFetch('/api/students')
+    if (!res.ok) return
+    const data = await res.json()
+    setStudents(data)
+    setStats({
+      total: data.length,
+      confirmed: data.filter(s => s.status === 'confirmed').length,
+      pending: data.filter(s => ['pending','self_corrected'].includes(s.status)).length,
+      issues: data.filter(s => ['issue','photo_issue'].includes(s.status)).length
+    })
+    const issueStudents = data.filter(s => ['issue','photo_issue'].includes(s.status))
+    if (issueStudents.length) {
+      const { data: confs } = await supabase
+        .from('confirmations').select('student_id, note, action')
+        .in('student_id', issueStudents.map(s => s.student_id))
+        .order('confirmed_at', { ascending: false })
+      if (confs) {
+        const map = {}
+        confs.forEach(c => { if (!map[c.student_id]) map[c.student_id] = c })
+        setIssueNotes(map)
+      }
+    }
+  }
+
+  async function loadTemplate() {
+    const res = await adminFetch('/api/templates/active')
+    if (res.ok) setActiveTemplate(await res.json())
+  }
+
+  async function loadFields() {
+    const res = await adminFetch('/api/settings/fields')
+    if (res.ok) setFields(await res.json())
+  }
+
+  async function loadLayout() {
+    const res = await adminFetch('/api/settings/layout')
+    if (res.ok) setCardLayout(await res.json())
+  }
+
+  async function saveLayout(layout) {
+    const res = await adminJson('/api/settings/layout', 'PUT', layout)
+    if (!res.ok) throw new Error('Save failed')
+    const saved = await res.json()
+    setCardLayout(saved)
+  }
+
+  async function saveFields() {
+    setFieldsSaving(true); setFieldsMsg(null)
+    const res = await adminJson('/api/settings/fields', 'PUT', fields)
+    setFieldsSaving(false)
+    if (res.ok) setFieldsMsg({ ok: true, text: 'Field settings saved.' })
+    else setFieldsMsg({ ok: false, text: 'Failed to save settings.' })
+    setTimeout(() => setFieldsMsg(null), 2500)
+  }
+
+  function toggleField(key) {
+    if (FIELD_META[key].locked) return
+    setFields(prev => ({ ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }))
+  }
+
+  async function handleTemplateUpload() {
+    if (!templateFile) return
+    setUploading(true); setUploadMsg(null)
+    const form = new FormData()
+    form.append('file', templateFile)
+    const res = await adminForm('/api/templates', 'POST', form)
+    const data = await res.json()
+    setUploading(false)
+    if (res.ok) { setActiveTemplate(data); setTemplateFile(null); setUploadMsg({ ok: true, text: 'Template uploaded and set as active.' }) }
+    else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
+  }
+
+  async function handleCSVUpload() {
+    if (!csvFile) return
+    setUploading(true); setUploadMsg(null)
+    const form = new FormData()
+    form.append('csv', csvFile)
+    if (zipFile) form.append('zip', zipFile)
+    const res = await adminForm('/api/students/bulk', 'POST', form)
+    const data = await res.json()
+    setUploading(false)
+    if (res.ok) {
+      setCsvFile(null); setZipFile(null)
+      setUploadMsg({ ok: true, text: `${data.inserted} student records uploaded successfully.` })
+      loadStudents()
+    } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
+  }
+
+  async function handleManualAdd(e) {
+    e.preventDefault(); setManualSubmitting(true); setManualMsg(null)
+    const form = new FormData()
+    Object.entries(manualForm).forEach(([k, v]) => form.append(k, v))
+    if (manualPhoto) form.append('photo', manualPhoto)
+    if (manualSig) form.append('signature', manualSig)
+    const res = await adminForm('/api/students', 'POST', form)
+    const data = await res.json()
+    setManualSubmitting(false)
+    if (res.ok) {
+      setManualMsg({ ok: true, text: `${data.full_name} added successfully.` })
+      setManualForm({ student_id:'', full_name:'', year_level:'1st Year', position:'' })
+      setManualPhoto(null); setManualSig(null)
+      loadStudents()
+    } else setManualMsg({ ok: false, text: data.error || 'Could not add student.' })
+  }
+
+  function openEdit(s) {
+    setEditStudent(s)
+    setEditForm({ full_name: s.full_name, year_level: s.year_level, position: s.position || '' })
+    setEditPhoto(null); setEditSig(null); setEditMsg(null)
+  }
+
+  async function handleEditSave(e) {
+    e.preventDefault(); setEditSubmitting(true); setEditMsg(null)
+    const form = new FormData()
+    form.append('full_name', editForm.full_name)
+    form.append('year_level', editForm.year_level)
+    form.append('position', editForm.position || '')
+    if (editPhoto) form.append('photo', editPhoto)
+    if (editSig) form.append('signature', editSig)
+    const res = await adminForm(`/api/students/${encodeURIComponent(editStudent.student_id)}`, 'PATCH', form)
+    const data = await res.json()
+    setEditSubmitting(false)
+    if (res.ok) {
+      setEditMsg({ ok: true, text: 'Student updated. Status reset to pending.' })
+      loadStudents()
+      setTimeout(() => setEditStudent(null), 1200)
+    } else setEditMsg({ ok: false, text: data.error || 'Update failed.' })
+  }
+
+  function getInitials(name) {
+    return name.split(' ').map(n => n[0]).filter(Boolean).slice(0,2).join('').toUpperCase()
+  }
+
+  function statusPill(status) {
+    if (status === 'confirmed') return <span className="pill pill-green">Confirmed</span>
+    if (status === 'issue') return <span className="pill pill-amber">Issue</span>
+    if (status === 'photo_issue') return <span className="pill pill-photo">Photo issue</span>
+    if (status === 'self_corrected') return <span className="pill pill-blue">Self-corrected</span>
+    return <span className="pill pill-gray">Pending</span>
+  }
+
+  const filtered = students.filter(s =>
+    s.full_name.toLowerCase().includes(search.toLowerCase()) ||
+    s.student_id.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const recentActivity = [...students]
+    .sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0,6)
+
+  if (!session) return (
+    <div className="page-center">
+      <div className="landing-card">
+        <div className="landing-header">
+          <p className="landing-subtitle">GoldWay · Admin Access</p>
+          <h1 className="landing-title" style={{ fontSize:'1.3rem' }}>LMSA ID Portal</h1>
+          <p className="landing-desc">Admin Dashboard</p>
+        </div>
+        <form className="landing-form" onSubmit={login}>
+          <div className="field-group">
+            <label className="field-label">Email</label>
+            <input className="field-input" type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email"/>
+          </div>
+          <div className="field-group">
+            <label className="field-label">Password</label>
+            <input className="field-input" type="password" value={password} onChange={e=>setPassword(e.target.value)} required/>
+          </div>
+          {loginError && <div className="error-box">{loginError}</div>}
+          <button className="btn-primary" type="submit" disabled={loginLoading}>{loginLoading?'Signing in...':'Sign In'}</button>
+        </form>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="admin-wrapper">
+
+      {/* ── EDIT MODAL ── */}
+      {editStudent && (
+        <div className="modal-overlay" onClick={() => setEditStudent(null)}>
+          <div className="modal" style={{ maxWidth:'420px' }} onClick={e=>e.stopPropagation()}>
+            <div className="modal-header">
+              <span>Edit — {editStudent.student_id}</span>
+              <button className="modal-close" onClick={() => setEditStudent(null)}>×</button>
+            </div>
+            {issueNotes[editStudent.student_id] && (
+              <div className="info-box" style={{ marginBottom:'14px' }}>
+                <strong>Student's report:</strong> {issueNotes[editStudent.student_id].note}
+              </div>
+            )}
+            <form onSubmit={handleEditSave} style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+              <div className="field-group">
+                <label className="field-label">Full Name</label>
+                <input className="field-input" value={editForm.full_name} onChange={e=>setEditForm({...editForm, full_name:e.target.value})} required/>
+              </div>
+              <div className="field-group">
+                <label className="field-label">Year / Level</label>
+                <select className="field-input" value={editForm.year_level} onChange={e=>setEditForm({...editForm, year_level:e.target.value})}>
+                  {YEARS.map(y=><option key={y}>{y}</option>)}
+                </select>
+              </div>
+              {fields?.position?.enabled && (
+                <div className="field-group">
+                  <label className="field-label">Position</label>
+                  <input className="field-input" placeholder="e.g. Class Representative" value={editForm.position} onChange={e=>setEditForm({...editForm, position:e.target.value})}/>
+                </div>
+              )}
+              <div className="field-group">
+                <label className="field-label">Replace Photo (optional)</label>
+                <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('edit-photo-input').click()}>
+                  <input id="edit-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>setEditPhoto(e.target.files[0])}/>
+                  {editStudent.photo_url && !editPhoto
+                    ? <div style={{ display:'flex', alignItems:'center', gap:'10px' }}><img src={editStudent.photo_url} alt="" style={{ width:'36px', height:'44px', objectFit:'cover', borderRadius:'3px' }}/><span className="upload-text">Current photo · <span className="upload-link">Replace</span></span></div>
+                    : editPhoto ? <p className="upload-selected">📷 {editPhoto.name}</p>
+                    : <p className="upload-text">No photo yet · <span className="upload-link">Upload</span></p>}
+                </div>
+              </div>
+              {fields?.signature?.enabled && (
+                <div className="field-group">
+                  <label className="field-label">Replace Signature (optional)</label>
+                  <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('edit-sig-input').click()}>
+                    <input id="edit-sig-input" type="file" accept=".png" hidden onChange={e=>setEditSig(e.target.files[0])}/>
+                    {editStudent.signature_url && !editSig
+                      ? <div style={{ display:'flex', alignItems:'center', gap:'10px' }}><img src={editStudent.signature_url} alt="" style={{ height:'28px', objectFit:'contain', maxWidth:'80px' }}/><span className="upload-text">Current sig · <span className="upload-link">Replace</span></span></div>
+                      : editSig ? <p className="upload-selected">✍ {editSig.name}</p>
+                      : <p className="upload-text">PNG only · transparent background · <span className="upload-link">Upload</span></p>}
+                  </div>
+                </div>
+              )}
+              {editMsg && <div className={editMsg.ok?'success-box':'error-box'}>{editMsg.text}</div>}
+              <div className="btn-row">
+                <button className="btn-gold" type="submit" disabled={editSubmitting}>{editSubmitting?'Saving...':'Save Changes'}</button>
+                <button className="btn-outline" type="button" onClick={()=>setEditStudent(null)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <div className="admin-topbar">
+        <div>
+          <div className="topbar-logo">LMSA ID Portal</div>
+          <div className="topbar-sub">GoldWay Admin Dashboard</div>
+        </div>
+        <button className="btn-outline-light" onClick={()=>supabase.auth.signOut()}>Sign out</button>
+      </div>
+
+      <div className="admin-tabs">
+        {['overview','upload','layout','students'].map(tab => (
+          <button key={tab} className={`admin-tab ${activeTab===tab?'active':''}`} onClick={()=>setActiveTab(tab)}>
+            {tab.charAt(0).toUpperCase()+tab.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div className="admin-body">
+        {dataLoading && <div className="loading">Loading data...</div>}
+
+        {/* ── OVERVIEW ── */}
+        {activeTab==='overview' && !dataLoading && (
+          <div>
+            <div className="stats-grid">
+              <div className="stat-box"><div className="stat-num">{stats.total}</div><div className="stat-lbl">Total</div></div>
+              <div className="stat-box"><div className="stat-num confirmed">{stats.confirmed}</div><div className="stat-lbl">Confirmed</div></div>
+              <div className="stat-box"><div className="stat-num pending">{stats.pending}</div><div className="stat-lbl">Pending</div></div>
+              <div className="stat-box"><div className="stat-num issue">{stats.issues}</div><div className="stat-lbl">Issues</div></div>
+            </div>
+            <div className="section-title">Active template</div>
+            {activeTemplate ? (
+              <div className="template-row">
+                <div className="template-icon">🎨</div>
+                <div className="template-info">
+                  <div className="template-name">{activeTemplate.file_name}</div>
+                  <div className="template-meta">Uploaded {new Date(activeTemplate.uploaded_at).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})} · {stats.total} cards</div>
+                </div>
+                <span className="pill pill-green">Active</span>
+              </div>
+            ) : (
+              <div className="error-box" style={{ marginBottom:'14px' }}>No template uploaded. <span style={{ textDecoration:'underline', cursor:'pointer' }} onClick={()=>setActiveTab('upload')}>Upload now →</span></div>
+            )}
+            <div className="section-title" style={{ marginTop:'16px' }}>Recent activity</div>
+            {recentActivity.length===0 && <p style={{ fontSize:'13px', color:'var(--muted)', padding:'8px 0' }}>No students yet.</p>}
+            {recentActivity.map(s => (
+              <div className="student-row" key={s.id}>
+                <div className="avatar">{getInitials(s.full_name)}</div>
+                <div className="student-info">
+                  <div className="student-name">{s.full_name}</div>
+                  <div className="student-meta">{s.student_id} · {s.year_level}{s.position ? ` · ${s.position}` : ''}</div>
+                </div>
+                {statusPill(s.status)}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── UPLOAD ── */}
+        {activeTab==='upload' && !dataLoading && (
+          <div>
+
+            {/* Field toggle panel */}
+            <div className="section-title">Card field settings <span className="new-badge">Template config</span></div>
+            <p className="section-desc">Toggle which fields appear on the ID card. This also controls the columns in the downloadable Excel template and the structure of the image folder.</p>
+            {fields && (
+              <div className="field-toggle-panel">
+                {Object.entries(FIELD_META).map(([key, meta]) => (
+                  <div key={key} className={`field-toggle-row ${fields[key]?.enabled ? 'on' : ''} ${meta.locked ? 'locked' : ''}`} onClick={()=>toggleField(key)}>
+                    <div className="field-toggle-check">{fields[key]?.enabled ? '✓' : ''}</div>
+                    <div className="field-toggle-label">{meta.label}</div>
+                    {meta.locked && <span className="field-toggle-badge">Always on</span>}
+                  </div>
+                ))}
+                <div style={{ marginTop:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
+                  <button className="btn-gold" onClick={saveFields} disabled={fieldsSaving} style={{ padding:'7px 16px', fontSize:'13px' }}>
+                    {fieldsSaving ? 'Saving...' : 'Save field settings'}
+                  </button>
+                  {fieldsMsg && <span style={{ fontSize:'12px', color: fieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{fieldsMsg.text}</span>}
+                </div>
+              </div>
+            )}
+
+            <div className="divider"/>
+
+            {/* Downloads */}
+            <div className="section-title">Download templates</div>
+            <p className="section-desc">Download the pre-configured Excel file to fill in student data, and the pre-built image folder to organise your photos before uploading.</p>
+            <div className="download-row">
+              <a className="download-btn" href="/api/settings/download-excel" download>
+                <div className="download-icon">📊</div>
+                <div>
+                  <div className="download-title">Student data template</div>
+                  <div className="download-sub">Excel · pre-formatted columns</div>
+                </div>
+              </a>
+              <a className="download-btn" href="/api/settings/download-image-folder" download>
+                <div className="download-icon">📁</div>
+                <div>
+                  <div className="download-title">Image folder package</div>
+                  <div className="download-sub">ZIP · year subfolders + README</div>
+                </div>
+              </a>
+            </div>
+
+            <div className="divider"/>
+
+            {/* Template upload */}
+            <div className="section-title">ID card design template <span className="new-badge">Master design</span></div>
+            <p className="section-desc">Upload your master card background (PNG/JPG). Student data will overlay automatically.</p>
+            {activeTemplate && (
+              <div className="template-row">
+                <div className="template-icon">🎨</div>
+                <div className="template-info">
+                  <div className="template-name">{activeTemplate.file_name}</div>
+                  <div className="template-meta">Currently active · CR-80</div>
+                </div>
+                <span className="pill pill-green">Active</span>
+              </div>
+            )}
+            <div className="upload-zone" onClick={()=>document.getElementById('template-input').click()}>
+              <input id="template-input" type="file" accept=".png,.jpg,.jpeg" hidden onChange={e=>{setTemplateFile(e.target.files[0]);setUploadMsg(null)}}/>
+              {templateFile ? <p className="upload-selected">📄 {templateFile.name}</p>
+                : <><p className="upload-icon">⬆</p><p className="upload-text">Drop template or <span className="upload-link">browse</span></p><p className="upload-hint">PNG or JPG · 1012 × 638 px (CR-80 at 300 DPI)</p></>}
+            </div>
+            {templateFile && <button className="btn-gold-full" onClick={handleTemplateUpload} disabled={uploading}>{uploading?'Uploading...':'Upload Template'}</button>}
+            {uploadMsg && <div className={uploadMsg.ok?'success-box':'error-box'} style={{ marginTop:'10px' }}>{uploadMsg.text}</div>}
+
+            <div className="divider"/>
+
+            {/* Student data upload */}
+            <div className="section-title">Add students</div>
+            <div className="mode-toggle">
+              <button className={`mode-btn ${uploadMode==='csv'?'active':''}`} onClick={()=>{setUploadMode('csv');setUploadMsg(null)}}>CSV batch upload</button>
+              <button className={`mode-btn ${uploadMode==='manual'?'active':''}`} onClick={()=>{setUploadMode('manual');setManualMsg(null)}}>Add manually</button>
+            </div>
+
+            {uploadMode==='csv' && (
+              <div>
+                <p className="section-desc">Fill in the Excel template above, save as CSV, then upload it here. Optionally attach the image folder ZIP.</p>
+                <div className="upload-zone" style={{ marginBottom:'8px' }} onClick={()=>document.getElementById('csv-input').click()}>
+                  <input id="csv-input" type="file" accept=".csv" hidden onChange={e=>{setCsvFile(e.target.files[0]);setUploadMsg(null)}}/>
+                  {csvFile ? <p className="upload-selected">📋 {csvFile.name}</p>
+                    : <><p className="upload-icon">⬆</p><p className="upload-text">Drop CSV or <span className="upload-link">browse</span></p><p className="upload-hint">Save your Excel file as CSV before uploading</p></>}
+                </div>
+                <div className="upload-zone" style={{ marginBottom:'10px', padding:'12px' }} onClick={()=>document.getElementById('zip-input').click()}>
+                  <input id="zip-input" type="file" accept=".zip" hidden onChange={e=>{setZipFile(e.target.files[0]);setUploadMsg(null)}}/>
+                  {zipFile ? <p className="upload-selected">📦 {zipFile.name}</p>
+                    : <p className="upload-text">Drop image folder ZIP (optional) · <span className="upload-link">browse</span></p>}
+                </div>
+                {csvFile && <button className="btn-gold-full" onClick={handleCSVUpload} disabled={uploading}>{uploading?'Uploading...':'Upload CSV'}{zipFile?' + Photos':''}</button>}
+                {uploadMsg && <div className={uploadMsg.ok?'success-box':'error-box'} style={{ marginTop:'10px' }}>{uploadMsg.text}</div>}
+              </div>
+            )}
+
+            {uploadMode==='manual' && (
+              <form onSubmit={handleManualAdd}>
+                <div className="manual-form">
+                  <div className="field-group">
+                    <label className="field-label">Full Name</label>
+                    <input className="field-input" placeholder="e.g. Josephine K. Freeman" value={manualForm.full_name} onChange={e=>setManualForm({...manualForm, full_name:e.target.value})} required/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Student ID Number</label>
+                    <input className="field-input" placeholder="e.g. AMD-2024-0042" value={manualForm.student_id} onChange={e=>setManualForm({...manualForm, student_id:e.target.value})} required/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Year / Level</label>
+                    <select className="field-input" value={manualForm.year_level} onChange={e=>setManualForm({...manualForm, year_level:e.target.value})}>
+                      {YEARS.map(y=><option key={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  {fields?.position?.enabled && (
+                    <div className="field-group">
+                      <label className="field-label">Position</label>
+                      <input className="field-input" placeholder="e.g. Class Representative" value={manualForm.position} onChange={e=>setManualForm({...manualForm, position:e.target.value})}/>
+                    </div>
+                  )}
+                  <div className="field-group">
+                    <label className="field-label">Student Photo</label>
+                    <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('manual-photo-input').click()}>
+                      <input id="manual-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>setManualPhoto(e.target.files[0])}/>
+                      {manualPhoto ? <p className="upload-selected">📷 {manualPhoto.name}</p>
+                        : <p className="upload-text">Upload photo (optional) · <span className="upload-link">browse</span></p>}
+                    </div>
+                  </div>
+                  {fields?.signature?.enabled && (
+                    <div className="field-group">
+                      <label className="field-label">Student Signature</label>
+                      <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('manual-sig-input').click()}>
+                        <input id="manual-sig-input" type="file" accept=".png" hidden onChange={e=>setManualSig(e.target.files[0])}/>
+                        {manualSig ? <p className="upload-selected">✍ {manualSig.name}</p>
+                          : <p className="upload-text">PNG · transparent background · <span className="upload-link">browse</span></p>}
+                      </div>
+                    </div>
+                  )}
+                  <div className="btn-row">
+                    <button className="btn-gold" type="submit" disabled={manualSubmitting}>{manualSubmitting?'Adding...':'Add Student'}</button>
+                    <button className="btn-outline" type="button" onClick={()=>{setManualForm({student_id:'',full_name:'',year_level:'1st Year',position:''});setManualPhoto(null);setManualSig(null);setManualMsg(null)}}>Clear</button>
+                  </div>
+                </div>
+                {manualMsg && <div className={manualMsg.ok?'success-box':'error-box'} style={{ marginTop:'10px' }}>{manualMsg.text}</div>}
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ── LAYOUT ── */}
+        {activeTab==='layout' && !dataLoading && (
+          <div>
+            <div className="section-title">Card layout mapper <span className="new-badge">Template 2</span></div>
+            <p className="section-desc">
+              Drag each coloured box to position it on your card template. Use the panel on the right to fine-tune coordinates, size, font size, and text colour. Click Save layout when done — your preview pages will update immediately.
+            </p>
+            {!activeTemplate && (
+              <div className="error-box" style={{ marginBottom:'14px' }}>
+                No template uploaded yet.{' '}
+                <span style={{ textDecoration:'underline', cursor:'pointer' }} onClick={()=>setActiveTab('upload')}>
+                  Upload your card design first →
+                </span>
+              </div>
+            )}
+            <LayoutMapper
+              enabledFields={fields}
+              templateUrl={activeTemplate?.file_url || null}
+              initialLayout={cardLayout}
+              onSave={saveLayout}
+            />
+          </div>
+        )}
+
+        {/* ── STUDENTS ── */}
+        {activeTab==='students' && !dataLoading && (
+          <div>
+            <div style={{ display:'flex', gap:'8px', marginBottom:'14px', alignItems:'center' }}>
+              <input className="field-input" placeholder="Search by name or student ID..." value={search} onChange={e=>setSearch(e.target.value)} style={{ flex:1 }}/>
+              <button className="btn-gold" onClick={()=>{setActiveTab('upload');setUploadMode('manual')}}>+ Add</button>
+            </div>
+            {filtered.length===0 && (
+              <p style={{ fontSize:'13px', color:'var(--muted)', padding:'12px 0' }}>
+                {search?'No students match your search.':'No students added yet.'}
+              </p>
+            )}
+            {filtered.map(s => (
+              <div className="student-row" key={s.id}>
+                {s.photo_url
+                  ? <img src={s.photo_url} alt={s.full_name} style={{ width:'30px', height:'36px', borderRadius:'3px', objectFit:'cover', flexShrink:0 }}/>
+                  : <div className="avatar">{getInitials(s.full_name)}</div>}
+                <div className="student-info">
+                  <div className="student-name">{s.full_name}</div>
+                  <div className="student-meta">{s.student_id} · {s.year_level}{s.position ? ` · ${s.position}` : ''}</div>
+                  {issueNotes[s.student_id] && <div className="student-issue-note">{issueNotes[s.student_id].note}</div>}
+                </div>
+                {statusPill(s.status)}
+                <button className="btn-edit" onClick={()=>openEdit(s)}>Edit</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

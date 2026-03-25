@@ -1,0 +1,73 @@
+import { useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+
+export default function Navbar({ showLogin = true }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const isAbout = location.pathname === '/about'
+
+  return (
+    <nav className="navbar">
+      <div className="navbar-inner">
+
+        {/* Left — LMSA identity */}
+        <div className="navbar-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+          <div className="navbar-brand-name">LMSA</div>
+          <div className="navbar-brand-sub">ID Card Portal</div>
+        </div>
+
+        {/* Right — desktop links */}
+        <div className="navbar-links">
+          <button
+            className={`navbar-link ${isAbout ? 'active' : ''}`}
+            onClick={() => navigate('/about')}
+          >
+            About
+          </button>
+
+          {showLogin && (
+            <button
+              className="navbar-login"
+              onClick={() => navigate('/admin')}
+            >
+              Admin Login
+            </button>
+          )}
+        </div>
+
+        {/* Mobile hamburger */}
+        <button
+          className="navbar-hamburger"
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label="Toggle menu"
+        >
+          <span className={`ham-line ${menuOpen ? 'open' : ''}`} />
+          <span className={`ham-line ${menuOpen ? 'open' : ''}`} />
+          <span className={`ham-line ${menuOpen ? 'open' : ''}`} />
+        </button>
+      </div>
+
+      {/* Mobile dropdown */}
+      {menuOpen && (
+        <div className="navbar-mobile-menu">
+          <button
+            className="navbar-mobile-link"
+            onClick={() => { navigate('/about'); setMenuOpen(false) }}
+          >
+            About
+          </button>
+          {showLogin && (
+            <button
+              className="navbar-mobile-login"
+              onClick={() => { navigate('/admin'); setMenuOpen(false) }}
+            >
+              Admin Login
+            </button>
+          )}
+        </div>
+      )}
+    </nav>
+  )
+}
