@@ -23,7 +23,7 @@ export default function AboutPage() {
 
       <div className="about-body">
 
-        {/* About this portal */}
+        {/* About this portal: Brand */}
         <div className="about-section">
           <h2 className="about-section-title">About this portal</h2>
           <p className="about-section-text">
