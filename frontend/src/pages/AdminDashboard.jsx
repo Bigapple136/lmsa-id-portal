@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase'
 import { adminFetch, adminJson, adminForm } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 
 const FIELD_META = {
@@ -404,14 +406,14 @@ export default function AdminDashboard() {
             <div className="section-title">Download templates</div>
             <p className="section-desc">Download the pre-configured Excel file to fill in student data, and the pre-built image folder to organise your photos before uploading.</p>
             <div className="download-row">
-              <a className="download-btn" href="/api/settings/download-excel" download>
+              <a className="download-btn" href={`${API_BASE}/api/settings/download-excel`} download>
                 <div className="download-icon">📊</div>
                 <div>
                   <div className="download-title">Student data template</div>
                   <div className="download-sub">Excel · pre-formatted columns</div>
                 </div>
               </a>
-              <a className="download-btn" href="/api/settings/download-image-folder" download>
+              <a className="download-btn" href={`${API_BASE}/api/settings/download-image-folder`} download>
                 <div className="download-icon">📁</div>
                 <div>
                   <div className="download-title">Image folder package</div>
