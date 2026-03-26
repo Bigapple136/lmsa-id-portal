@@ -12,8 +12,8 @@ export default function PrintPreviewModal({ student, onClose }) {
     async function load() {
       try {
         const [tRes, lRes] = await Promise.all([
-          fetch('/api/templates/active'),
-          fetch('/api/settings/layout')
+          apiFetch('/api/templates/active'),
+          apiFetch('/api/settings/layout')
         ])
         if (tRes.ok) { const t = await tRes.json(); setTemplateUrl(t.file_url) }
         if (lRes.ok) { setCardLayout(await lRes.json()) }

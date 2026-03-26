@@ -3,8 +3,6 @@ import { supabase } from '../lib/supabase'
 import { adminFetch, adminJson, adminForm } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
-
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 
 const FIELD_META = {
@@ -58,6 +56,9 @@ export default function AdminDashboard() {
 
   // Card layout state
   const [cardLayout, setCardLayout] = useState(null)
+
+  // Download state
+  const [downloading, setDownloading] = useState({})
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -139,6 +140,31 @@ export default function AdminDashboard() {
   function toggleField(key) {
     if (FIELD_META[key].locked) return
     setFields(prev => ({ ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }))
+  }
+
+  async function handleDownload(endpoint, filename) {
+    setDownloading(prev => ({ ...prev, [endpoint]: true }))
+    try {
+      const res = await adminFetch(`/api/settings/${endpoint}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || 'Download failed. Please try again.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Download failed. Please check your connection.')
+    } finally {
+      setDownloading(prev => ({ ...prev, [endpoint]: false }))
+    }
   }
 
   async function handleTemplateUpload() {
@@ -406,20 +432,28 @@ export default function AdminDashboard() {
             <div className="section-title">Download templates</div>
             <p className="section-desc">Download the pre-configured Excel file to fill in student data, and the pre-built image folder to organise your photos before uploading.</p>
             <div className="download-row">
-              <a className="download-btn" href={`${API_BASE}/api/settings/download-excel`} download>
+              <button
+                className="download-btn"
+                onClick={() => handleDownload('download-excel', 'LMSA_Student_Template.xlsx')}
+                disabled={downloading['download-excel']}
+              >
                 <div className="download-icon">📊</div>
                 <div>
-                  <div className="download-title">Student data template</div>
+                  <div className="download-title">{downloading['download-excel'] ? 'Downloading...' : 'Student data template'}</div>
                   <div className="download-sub">Excel · pre-formatted columns</div>
                 </div>
-              </a>
-              <a className="download-btn" href={`${API_BASE}/api/settings/download-image-folder`} download>
+              </button>
+              <button
+                className="download-btn"
+                onClick={() => handleDownload('download-image-folder', 'LMSA_Image_Upload_Folder.zip')}
+                disabled={downloading['download-image-folder']}
+              >
                 <div className="download-icon">📁</div>
                 <div>
-                  <div className="download-title">Image folder package</div>
+                  <div className="download-title">{downloading['download-image-folder'] ? 'Downloading...' : 'Image folder package'}</div>
                   <div className="download-sub">ZIP · year subfolders + README</div>
                 </div>
-              </a>
+              </button>
             </div>
 
             <div className="divider"/>
