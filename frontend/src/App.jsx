@@ -3,6 +3,7 @@ import LandingPage from './pages/LandingPage'
 import PreviewPage from './pages/PreviewPage'
 import AdminDashboard from './pages/AdminDashboard'
 import AboutPage from './pages/AboutPage'
+import QrViewPage from './pages/QrViewPage'
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/preview/:studentId" element={<PreviewPage />} />
+        <Route path="/qr/:studentId" element={<QrViewPage />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/about" element={<AboutPage />} />
       </Routes>

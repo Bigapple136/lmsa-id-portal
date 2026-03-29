@@ -9,6 +9,7 @@ const FIELD_META = {
   year_level: { label: 'Level',     color: '#8B5CF6', bg: '#EDE9FE' },
   position:   { label: 'Position',  color: '#F43F5E', bg: '#FFE4E6' },
   signature:  { label: 'Signature', color: '#14B8A6', bg: '#CCFBF1' },
+  qr:         { label: 'QR Code',   color: '#6B7280', bg: '#F3F4F6' },
 }
 
 const DEFAULT_LAYOUT = {
@@ -18,6 +19,7 @@ const DEFAULT_LAYOUT = {
   year_level: { x:0.06, y:0.61, fontSize:0.035, color:'#444444', bold:false, type:'text' },
   position:   { x:0.06, y:0.68, fontSize:0.032, color:'#666666', bold:false, type:'text' },
   signature:  { x:0.06, y:0.82, width:0.55,   height:0.08, type:'image' },
+  qr:         { x:0.68, y:0.78, width:0.26,   height:0.16, type:'image' },
 }
 
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
@@ -45,7 +47,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
   }, [templateUrl])
 
   // Which fields are active
-  const activeFields = Object.keys(FIELD_META).filter(k => enabledFields?.[k]?.enabled !== false)
+  const activeFields = Object.keys(FIELD_META).filter(k => k === 'qr' || enabledFields?.[k]?.enabled !== false)
 
   // ── Drag ──
   function startDrag(e, field) {

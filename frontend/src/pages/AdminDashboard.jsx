@@ -58,6 +58,11 @@ export default function AdminDashboard() {
   const [fieldsSaving, setFieldsSaving] = useState(false)
   const [fieldsMsg, setFieldsMsg] = useState(null)
 
+  // QR field toggle state
+  const [qrFields, setQrFields] = useState(null)
+  const [qrFieldsSaving, setQrFieldsSaving] = useState(false)
+  const [qrFieldsMsg, setQrFieldsMsg] = useState(null)
+
   // Card layout state
   const [cardLayout, setCardLayout] = useState(null)
 
@@ -85,7 +90,7 @@ export default function AdminDashboard() {
 
   async function loadAll() {
     setDataLoading(true)
-    await Promise.all([loadStudents(), loadTemplate(), loadFields(), loadLayout()])
+    await Promise.all([loadStudents(), loadTemplate(), loadFields(), loadQrFields(), loadLayout()])
     setDataLoading(false)
   }
 
@@ -122,6 +127,24 @@ export default function AdminDashboard() {
   async function loadFields() {
     const res = await adminFetch('/api/settings/fields')
     if (res.ok) setFields(await res.json())
+  }
+
+  async function loadQrFields() {
+    const res = await adminFetch('/api/settings/qr-fields')
+    if (res.ok) setQrFields(await res.json())
+  }
+
+  async function saveQrFields() {
+    setQrFieldsSaving(true); setQrFieldsMsg(null)
+    const res = await adminJson('/api/settings/qr-fields', 'PUT', qrFields)
+    setQrFieldsSaving(false)
+    if (res.ok) setQrFieldsMsg({ ok: true, text: 'QR field settings saved.' })
+    else setQrFieldsMsg({ ok: false, text: 'Failed to save QR settings.' })
+    setTimeout(() => setQrFieldsMsg(null), 2500)
+  }
+
+  function toggleQrField(key) {
+    setQrFields(prev => ({ ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }))
   }
 
   async function loadLayout() {
@@ -492,6 +515,26 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* QR field toggles */}
+            <div className="section-title" style={{ marginTop:'18px' }}>QR code fields <span className="new-badge">QR</span></div>
+            <p className="section-desc">Toggle which extra fields are encoded into the QR code. Enabled fields are included in the QR payload and appear on the QR verification page.</p>
+            {qrFields && (
+              <div className="field-toggle-panel">
+                {Object.entries(qrFields).map(([key, meta]) => (
+                  <div key={key} className={`field-toggle-row ${meta.enabled ? 'on' : ''}`} onClick={() => toggleQrField(key)}>
+                    <div className="field-toggle-check">{meta.enabled ? '✓' : ''}</div>
+                    <div className="field-toggle-label">{meta.label}</div>
+                  </div>
+                ))}
+                <div style={{ marginTop:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
+                  <button className="btn-gold" onClick={saveQrFields} disabled={qrFieldsSaving} style={{ padding:'7px 16px', fontSize:'13px' }}>
+                    {qrFieldsSaving ? 'Saving...' : 'Save QR fields'}
+                  </button>
+                  {qrFieldsMsg && <span style={{ fontSize:'12px', color: qrFieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{qrFieldsMsg.text}</span>}
+                </div>
+              </div>
+            )}
+
             <div className="divider"/>
 
             {/* Downloads */}
@@ -723,7 +766,10 @@ export default function AdminDashboard() {
                   </div>
                   <div style={{ display:'flex', alignItems:'center', gap:'6px', marginTop:'2px' }}>
                     {s.qr_url
-                      ? <span style={{ fontSize:'10px', color:'var(--success-text)', background:'var(--success-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--success-border)' }}>QR ✓</span>
+                      ? <>
+                          <span style={{ fontSize:'10px', color:'var(--success-text)', background:'var(--success-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--success-border)' }}>QR ✓</span>
+                          <a href={`/qr/${encodeURIComponent(s.student_id)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:'10px', color:'var(--gold)', textDecoration:'none', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--gold)' }}>View page</a>
+                        </>
                       : <button style={{ fontSize:'10px', color:'var(--warn-text)', background:'var(--warn-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--warn-border)', cursor:'pointer' }}
                           onClick={async()=>{ await handleGenerateQR(s.student_id) }}>
                           Generate QR

@@ -18,6 +18,22 @@ const DEFAULT_FIELDS = {
   signature:  { label: 'Signature',  enabled: false, locked: false },
 }
 
+const DEFAULT_QR_FIELDS = {
+  programme:               { label: 'Programme',               enabled: true  },
+  blood_type:               { label: 'Blood Type',              enabled: true  },
+  student_email:           { label: 'Student Email',           enabled: false },
+  emergency_contact_name:   { label: 'Emergency Contact Name',  enabled: true  },
+  emergency_contact_phone:  { label: 'Emergency Contact Phone', enabled: true  },
+}
+
+const QR_COLUMN_META = {
+  programme:               { header: 'programme',               width: 20, note: 'QR only. e.g. MBBS, Pharm.D', qr: true },
+  blood_type:              { header: 'blood_type',              width: 12, note: 'QR only. e.g. O+, AB-', qr: true },
+  student_email:          { header: 'student_email',          width: 28, note: 'QR only. Student email address.', qr: true },
+  emergency_contact_name:  { header: 'emergency_contact_name', width: 28, note: 'QR only. Full name of emergency contact.', qr: true },
+  emergency_contact_phone: { header: 'emergency_contact_phone',width: 22, note: 'QR only. e.g. +231 770 405785', qr: true },
+}
+
 const DEFAULT_LAYOUT = {
   photo:      { x:0.1271, y:0.1673, width:0.7458, height:0.3287, type:'image' },
   full_name:  { x:0.5,    y:0.5896, fontSize:0.0678, color:'#1A1A1A', bold:true,  textAlign:'center', type:'text' },
@@ -31,6 +47,11 @@ const DEFAULT_LAYOUT = {
 router.get('/fields', async (req, res) => {
   const { data } = await supabase.from('portal_settings').select('value').eq('key', 'card_fields').maybeSingle()
   res.json(data?.value || DEFAULT_FIELDS)
+})
+
+router.get('/qr-fields', async (req, res) => {
+  const { data } = await supabase.from('portal_settings').select('value').eq('key', 'qr_fields').maybeSingle()
+  res.json(data?.value || DEFAULT_QR_FIELDS)
 })
 
 router.get('/layout', async (req, res) => {
@@ -49,6 +70,14 @@ router.put('/fields', requireAdmin, async (req, res) => {
   res.json(data.value)
 })
 
+router.put('/qr-fields', requireAdmin, async (req, res) => {
+  const { data, error } = await supabase.from('portal_settings')
+    .upsert({ key: 'qr_fields', value: req.body, updated_at: new Date().toISOString() })
+    .select().single()
+  if (error) return res.status(400).json({ error: error.message })
+  res.json(data.value)
+})
+
 router.put('/layout', requireAdmin, async (req, res) => {
   const { data, error } = await supabase.from('portal_settings')
     .upsert({ key: 'card_layout', value: req.body, updated_at: new Date().toISOString() })
@@ -59,15 +88,18 @@ router.put('/layout', requireAdmin, async (req, res) => {
 
 // ── ADMIN downloads ──
 router.get('/download-excel', requireAdmin, async (req, res) => {
-  const { data } = await supabase.from('portal_settings').select('value').eq('key', 'card_fields').maybeSingle()
-  const fields = data?.value || DEFAULT_FIELDS
+  const [fieldsData, qrFieldsData] = await Promise.all([
+    supabase.from('portal_settings').select('value').eq('key', 'card_fields').maybeSingle(),
+    supabase.from('portal_settings').select('value').eq('key', 'qr_fields').maybeSingle(),
+  ])
+  const fields = fieldsData?.data?.value || DEFAULT_FIELDS
+  const qrFields = qrFieldsData?.data?.value || DEFAULT_QR_FIELDS
 
-  // Card face columns (filtered by toggle) + QR columns (always included)
+  // Card face columns (filtered by toggle) + QR columns (filtered by enabled toggle)
   const cardColumnOrder = ['student_id', 'full_name', 'year_level', 'position']
-  const qrColumns = ['programme', 'blood_type', 'student_email', 'emergency_contact_name', 'emergency_contact_phone']
   const activeCols = [
     ...cardColumnOrder.filter(k => fields[k]?.enabled !== false),
-    ...qrColumns
+    ...Object.keys(DEFAULT_QR_FIELDS).filter(k => qrFields[k]?.enabled !== false),
   ]
   const YEAR_OPTIONS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 
