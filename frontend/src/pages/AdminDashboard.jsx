@@ -285,6 +285,13 @@ export default function AdminDashboard() {
     return false
   }
 
+  async function handleRegenerateQR(studentId) {
+    const res = await adminFetch(`/api/qr/regenerate/${encodeURIComponent(studentId)}`, { method: 'POST' })
+    const data = await res.json()
+    if (res.ok) { loadStudents(); return true }
+    return false
+  }
+
   async function handleGenerateAllQR() {
     setQrGenerating(true); setQrMsg(null)
     const res = await adminFetch('/api/qr/generate-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: false }) })
@@ -294,6 +301,18 @@ export default function AdminDashboard() {
     else setQrMsg({ ok: false, text: data.error || 'Generation failed.' })
     loadStudents()
     setTimeout(() => setQrMsg(null), 4000)
+  }
+
+  async function handleRegenerateAllQR() {
+    if (!window.confirm('This will clear and regenerate QR codes for ALL students. Continue?')) return
+    setQrGenerating(true); setQrMsg(null)
+    const res = await adminFetch('/api/qr/regenerate-all', { method: 'POST' })
+    const data = await res.json()
+    setQrGenerating(false)
+    if (res.ok) setQrMsg({ ok: true, text: `Regenerated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}` })
+    else setQrMsg({ ok: false, text: data.error || 'Regeneration failed.' })
+    loadStudents()
+    setTimeout(() => setQrMsg(null), 6000)
   }
 
   function getInitials(name) {
@@ -738,6 +757,9 @@ export default function AdminDashboard() {
                 <button className="btn-gold" onClick={handleGenerateAllQR} disabled={qrGenerating} style={{ fontSize:'12px', padding:'7px 14px' }}>
                   {qrGenerating ? 'Generating...' : '⚡ Generate missing QR codes'}
                 </button>
+                <button className="btn-outline" onClick={handleRegenerateAllQR} disabled={qrGenerating} style={{ fontSize:'12px', padding:'7px 14px', borderColor:'#CC0000', color:'#CC0000' }}>
+                  {qrGenerating ? 'Regenerating...' : '🔄 Regenerate all'}
+                </button>
                 <button className="btn-outline" onClick={() => handleDownload('qr/export', 'LMSA_QR_Codes.zip')} disabled={downloading['qr/export']} style={{ fontSize:'12px', padding:'7px 14px' }}>
                   {downloading['qr/export'] ? 'Exporting...' : '⬇ Export all as ZIP'}
                 </button>
@@ -768,7 +790,11 @@ export default function AdminDashboard() {
                     {s.qr_url
                       ? <>
                           <span style={{ fontSize:'10px', color:'var(--success-text)', background:'var(--success-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--success-border)' }}>QR ✓</span>
-                          <a href={`/qr/${encodeURIComponent(s.student_id)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:'10px', color:'var(--gold)', textDecoration:'none', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--gold)' }}>View page</a>
+                          <a href={`${import.meta.env.VITE_API_URL || ''}/api/qr/html/${encodeURIComponent(s.student_id)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:'10px', color:'var(--gold)', textDecoration:'none', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--gold)' }}>View page</a>
+                          <button style={{ fontSize:'10px', color:'#CC0000', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid #CC0000', cursor:'pointer' }}
+                            onClick={async()=>{ await handleRegenerateQR(s.student_id) }}>
+                            Regenerate
+                          </button>
                         </>
                       : <button style={{ fontSize:'10px', color:'var(--warn-text)', background:'var(--warn-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--warn-border)', cursor:'pointer' }}
                           onClick={async()=>{ await handleGenerateQR(s.student_id) }}>

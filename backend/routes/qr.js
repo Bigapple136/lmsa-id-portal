@@ -95,6 +95,47 @@ router.post('/generate-all', requireAdmin, async (req, res) => {
   res.json({ generated, failed, total: students.length })
 })
 
+router.post('/regenerate/:studentId', requireAdmin, async (req, res) => {
+  const { data: student, error } = await supabase
+    .from('students').select('*')
+    .eq('student_id', req.params.studentId).maybeSingle()
+
+  if (error || !student)
+    return res.status(404).json({ error: 'Student not found.' })
+
+  try {
+    await supabase.from('students')
+      .update({ qr_url: null })
+      .eq('student_id', student.student_id)
+    const url = await generateForStudent(student)
+    res.json({ qr_url: url, student_id: student.student_id })
+  } catch (err) {
+    res.status(500).json({ error: 'QR regeneration failed: ' + err.message })
+  }
+})
+
+router.post('/regenerate-all', requireAdmin, async (req, res) => {
+  const { data: students, error } = await supabase
+    .from('students').select('*')
+
+  if (error) return res.status(500).json({ error: error.message })
+  if (!students?.length) return res.json({ generated: 0, message: 'No students found.' })
+
+  await supabase.from('students').update({ qr_url: null }).not('qr_url', 'is', null)
+
+  let generated = 0, failed = 0
+  for (const student of students) {
+    try {
+      await generateForStudent(student)
+      generated++
+    } catch {
+      failed++
+    }
+  }
+
+  res.json({ generated, failed, total: students.length })
+})
+
 router.get('/html/:studentId', async (req, res) => {
   const { data: student, error } = await supabase
     .from('students').select('*')
