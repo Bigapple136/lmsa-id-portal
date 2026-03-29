@@ -14,6 +14,7 @@ const supabase = createClient(
 const JSZip = require('jszip')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
+const BACKEND_URL = process.env.BACKEND_URL || FRONTEND_URL
 const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET || 'dev-secret-change-in-production'
 
 function signStudentToken(studentId) {
@@ -31,7 +32,7 @@ function verifyStudentToken(token) {
 
 async function buildPayload(student) {
   const token = signStudentToken(student.student_id)
-  return `${FRONTEND_URL}/api/qr/html/${token}`
+  return `${BACKEND_URL}/api/qr/html/${token}`
 }
 
 async function generateQRBuffer(student) {
@@ -170,7 +171,7 @@ router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
     const { data: student, error } = await supabase
       .from('students').select('student_id').eq('student_id', req.params.studentId).maybeSingle()
     if (error || !student) return res.status(404).json({ error: 'Student not found.' })
-    const url = `${FRONTEND_URL}/api/qr/html/${signStudentToken(student.student_id)}`
+    const url = `${BACKEND_URL}/api/qr/html/${signStudentToken(student.student_id)}`
     res.json({ url })
   } catch (err) {
     res.status(500).json({ error: err.message })
