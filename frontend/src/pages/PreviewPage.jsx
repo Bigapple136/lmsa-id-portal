@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import IDCardDisplay from '../components/IDCardDisplay'
 import CardCanvas from '../components/CardCanvas'
 import PrintPreviewModal from '../components/PrintPreviewModal'
