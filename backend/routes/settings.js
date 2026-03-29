@@ -229,4 +229,11 @@ router.get('/download-image-folder', requireAdmin, async (req, res) => {
   res.send(buffer)
 })
 
+async function getQRFields() {
+  const { data } = await supabase.from('portal_settings')
+    .select('value').eq('key', 'qr_fields').maybeSingle()
+  return data?.value || DEFAULT_QR_FIELDS
+}
+
 module.exports = router
+module.exports.getQRFields = getQRFields
