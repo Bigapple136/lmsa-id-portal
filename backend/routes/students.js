@@ -306,7 +306,7 @@ router.patch('/:studentId', requireAdmin, upload.fields([
 
 // ── PUBLIC: self-correct ──
 router.patch('/:studentId/self-correct', async (req, res) => {
-  const { corrections, photo_issue } = req.body
+  const { corrections, qr_corrections, photo_issue } = req.body
   const studentId = req.params.studentId
 
   const { data: student, error: lookupErr } = await supabase.from('students').select('student_id, status').eq('student_id', studentId).maybeSingle()
@@ -316,13 +316,29 @@ router.patch('/:studentId/self-correct', async (req, res) => {
   if (corrections?.full_name && !validateTextLength(corrections.full_name)) return res.status(400).json({ error: 'full_name too long.' })
   if (corrections?.position && !validateTextLength(corrections.position)) return res.status(400).json({ error: 'position too long.' })
 
+  const VALID_QR_FIELDS = ['blood_type', 'programme', 'email', 'emergency_contact_name', 'emergency_contact_phone']
+  if (qr_corrections) {
+    for (const key of Object.keys(qr_corrections)) {
+      if (!VALID_QR_FIELDS.includes(key)) return res.status(400).json({ error: `Invalid QR field: ${key}` })
+      if (!validateTextLength(String(qr_corrections[key]), 200)) return res.status(400).json({ error: `${key} too long.` })
+    }
+  }
+
   const updates = { status: 'pending' }
   const notes = []
   if (corrections?.full_name) { updates.full_name = corrections.full_name.trim(); notes.push(`Name corrected to: ${corrections.full_name.trim()}`) }
   if (corrections?.year_level) { updates.year_level = corrections.year_level; notes.push(`Year corrected to: ${corrections.year_level}`) }
   if (corrections?.position !== undefined) { updates.position = corrections.position?.trim() || null; notes.push(`Position corrected to: ${corrections.position}`) }
 
-  if (Object.keys(updates).length > 1) {
+  if (qr_corrections) {
+    for (const [key, value] of Object.entries(qr_corrections)) {
+      updates[key] = String(value).trim()
+      notes.push(`${key} corrected to: ${String(value).trim()}`)
+    }
+  }
+
+  const hasUpdates = Object.keys(updates).some(k => k !== 'status')
+  if (hasUpdates) {
     const { error } = await supabase.from('students').update(updates).eq('student_id', studentId)
     if (error) return res.status(400).json({ error: error.message })
   }
@@ -334,7 +350,6 @@ router.patch('/:studentId/self-correct', async (req, res) => {
 
   if (notes.length) {
     await supabase.from('confirmations').insert({ student_id: studentId, action: 'self_corrected', note: notes.join(' | ').slice(0, MAX_NOTE_LENGTH) })
-    // Regenerate QR after self-correction
     const { data: updated } = await supabase.from('students').select('*').eq('student_id', studentId).single()
     if (updated) { try { await getQRGenerator()(updated) } catch {} }
   }

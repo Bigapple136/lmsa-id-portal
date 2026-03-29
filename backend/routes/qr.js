@@ -235,7 +235,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 .topbar{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(6,45,27,0.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
 .topbar-inner{max-width:480px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
 .topbar-logo{font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:15px;color:#fff;letter-spacing:-0.01em}
-.topbar-crest{width:32px;height:32px;background:#C9A84C;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Manrope',Arial,sans-serif;font-weight:900;font-size:11px;color:#0D1B2A;flex-shrink:0}
+.topbar-crest{width:32px;height:32px;flex-shrink:0;overflow:hidden}
 
 /* page content */
 .page{padding:72px 16px 32px}
@@ -310,7 +310,9 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 <header class="topbar">
   <div class="topbar-inner">
     <div class="topbar-logo">LMSA — A.M. Dogliotti College of Medicine</div>
-    <div class="topbar-crest">LM</div>
+    <div class="topbar-crest" style="background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+      <img src="https://lmsa-id-portal.vercel.app/lmsa-logo.png" alt="LMSA Logo" width="28" height="28" style="border-radius:50%;object-fit:contain;" crossorigin="anonymous"/>
+    </div>
   </div>
 </header>
 
