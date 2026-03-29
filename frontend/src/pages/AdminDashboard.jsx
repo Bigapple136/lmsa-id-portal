@@ -807,6 +807,19 @@ export default function AdminDashboard() {
                     {s.qr_url
                       ? <>
                           <span style={{ fontSize:'10px', color:'var(--success-text)', background:'var(--success-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--success-border)' }}>QR ✓</span>
+                          <button style={{ fontSize:'10px', color:'#5b8def', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid #5b8def', cursor:'pointer' }}
+                            onClick={async()=>{
+                              try {
+                                const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/students/preview-url/${encodeURIComponent(s.student_id)}`, {
+                                  headers: { Authorization: `Bearer ${session.access_token}` }
+                                });
+                                if (!res.ok) return;
+                                const { url } = await res.json();
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                              } catch {}
+                            }}>
+                            View preview
+                          </button>
                           <button style={{ fontSize:'10px', color:'var(--gold)', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--gold)', cursor:'pointer' }}
                             onClick={async()=>{
                               try {

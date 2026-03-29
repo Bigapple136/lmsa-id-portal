@@ -457,3 +457,5 @@ router.get('/export', requireAdmin, async (req, res) => {
 module.exports = router
 module.exports.generateForStudent = generateForStudent
 module.exports.deleteQRFile = deleteQRFile
+module.exports.signStudentToken = signStudentToken
+module.exports.verifyStudentToken = verifyStudentToken

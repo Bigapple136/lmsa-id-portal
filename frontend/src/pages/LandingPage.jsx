@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
 
@@ -8,7 +7,6 @@ export default function LandingPage() {
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const navigate = useNavigate()
 
   async function handleSearch(e) {
     e.preventDefault()
@@ -29,7 +27,7 @@ export default function LandingPage() {
         setError('No student found with those details. Please check your Student ID and full name and try again.')
         return
       }
-      navigate(`/preview/${encodeURIComponent(studentId.trim())}`)
+      window.location.href = data.preview_url
     } catch {
       setError('Something went wrong. Please check your connection and try again.')
     } finally {

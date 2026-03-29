@@ -10,7 +10,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/preview/:studentId" element={<PreviewPage />} />
+        <Route path="/preview/:token" element={<PreviewPage />} />
         <Route path="/qr/:studentId" element={<QrViewPage />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/about" element={<AboutPage />} />

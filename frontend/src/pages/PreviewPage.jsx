@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import IDCardDisplay from '../components/IDCardDisplay'
 import CardCanvas from '../components/CardCanvas'
 import PrintPreviewModal from '../components/PrintPreviewModal'
@@ -15,9 +15,8 @@ const ISSUE_TYPES = [
 ]
 
 export default function PreviewPage() {
-  const { studentId } = useParams()
+  const { token } = useParams()
   const navigate = useNavigate()
-
   const [student, setStudent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -40,7 +39,7 @@ export default function PreviewPage() {
   useEffect(() => {
     fetchStudent()
     fetchTemplateAndLayout()
-  }, [studentId])
+  }, [token])
 
   async function fetchTemplateAndLayout() {
     try {
@@ -64,7 +63,8 @@ export default function PreviewPage() {
   async function fetchStudent() {
     setLoading(true)
     try {
-      const res = await apiFetch(`/api/students/${encodeURIComponent(studentId)}`)
+      const res = await apiFetch(`/api/students/preview/${encodeURIComponent(token)}`)
+      if (res.status === 403) { setError('Invalid or tampered link.'); return }
       if (!res.ok) { setError('Student record not found.'); return }
       const data = await res.json()
       setStudent(data)
@@ -82,7 +82,7 @@ export default function PreviewPage() {
       await apiFetch('/api/confirmations', {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({ student_id: studentId, action:'confirmed' })
+        body: JSON.stringify({ student_id: student.student_id, action:'confirmed' })
       })
       setConfirmed(true)
     } catch {
@@ -126,7 +126,7 @@ export default function PreviewPage() {
       photo_issue: hasPhoto
     }
     try {
-      const res = await apiFetch(`/api/students/${encodeURIComponent(studentId)}/self-correct`, {
+      const res = await apiFetch(`/api/students/${encodeURIComponent(student.student_id)}/self-correct`, {
         method:'PATCH',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify(body)
@@ -146,7 +146,7 @@ export default function PreviewPage() {
   async function handlePhotoOnlyReport() {
     setSubmitting(true)
     try {
-      const res = await apiFetch(`/api/students/${encodeURIComponent(studentId)}/self-correct`, {
+      const res = await apiFetch(`/api/students/${encodeURIComponent(student.student_id)}/self-correct`, {
         method:'PATCH',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({ corrections:{}, photo_issue: true })

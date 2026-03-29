@@ -6,6 +6,9 @@ const JSZip = require('jszip')
 const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
+const { signStudentToken, verifyStudentToken } = require('./qr')
+
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -98,10 +101,26 @@ router.get('/lookup', async (req, res) => {
   if (!validateTextLength(student_id, 50) || !validateTextLength(full_name)) return res.status(400).json({ found: false, error: 'Input too long.' })
   const { data, error } = await supabase.from('students').select('student_id').ilike('student_id', student_id.trim()).ilike('full_name', full_name.trim()).maybeSingle()
   if (error) return res.status(500).json({ found: false, error: 'Lookup failed.' })
-  res.json({ found: !!data })
+  if (!data) return res.status(404).json({ found: false, error: 'No student found.' })
+  const token = signStudentToken(data.student_id)
+  res.json({ found: true, preview_url: `${FRONTEND_URL}/preview/${token}` })
 })
 
-router.get('/:studentId', async (req, res) => {
+router.get('/preview/:token', async (req, res) => {
+  const studentId = verifyStudentToken(req.params.token)
+  if (!studentId) return res.status(403).json({ error: 'Invalid or tampered link.' })
+  const { data, error } = await supabase.from('students').select('*').eq('student_id', studentId).maybeSingle()
+  if (error) return res.status(500).json({ error: 'Failed to load student.' })
+  if (!data) return res.status(404).json({ error: 'Student not found.' })
+  res.json(data)
+})
+
+router.get('/preview-url/:studentId', requireAdmin, async (req, res) => {
+  const token = signStudentToken(req.params.studentId)
+  res.json({ url: `${FRONTEND_URL}/preview/${token}` })
+})
+
+router.get('/:studentId', requireAdmin, async (req, res) => {
   const { data, error } = await supabase.from('students').select('*').eq('student_id', req.params.studentId).maybeSingle()
   if (error) return res.status(500).json({ error: 'Failed to load student.' })
   if (!data) return res.status(404).json({ error: 'Student not found.' })
