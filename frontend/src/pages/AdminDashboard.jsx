@@ -35,7 +35,11 @@ export default function AdminDashboard() {
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState(null)
 
-  const [manualForm, setManualForm] = useState({ student_id:'', full_name:'', year_level:'1st Year', position:'' })
+  const [manualForm, setManualForm] = useState({
+    student_id:'', full_name:'', year_level:'1st Year', position:'',
+    programme:'', blood_type:'', student_email:'',
+    emergency_contact_name:'', emergency_contact_phone:''
+  })
   const [manualPhoto, setManualPhoto] = useState(null)
   const [manualSig, setManualSig] = useState(null)
   const [manualSubmitting, setManualSubmitting] = useState(false)
@@ -59,6 +63,10 @@ export default function AdminDashboard() {
 
   // Download state
   const [downloading, setDownloading] = useState({})
+
+  // QR state
+  const [qrGenerating, setQrGenerating] = useState(false)
+  const [qrMsg, setQrMsg] = useState(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -205,8 +213,9 @@ export default function AdminDashboard() {
     const data = await res.json()
     setManualSubmitting(false)
     if (res.ok) {
-      setManualMsg({ ok: true, text: `${data.full_name} added successfully.` })
-      setManualForm({ student_id:'', full_name:'', year_level:'1st Year', position:'' })
+      setManualMsg({ ok: true, text: `${data.full_name} added successfully. QR code generated.` })
+      setManualForm({ student_id:'', full_name:'', year_level:'1st Year', position:'',
+        programme:'', blood_type:'', student_email:'', emergency_contact_name:'', emergency_contact_phone:'' })
       setManualPhoto(null); setManualSig(null)
       loadStudents()
     } else setManualMsg({ ok: false, text: data.error || 'Could not add student.' })
@@ -214,7 +223,13 @@ export default function AdminDashboard() {
 
   function openEdit(s) {
     setEditStudent(s)
-    setEditForm({ full_name: s.full_name, year_level: s.year_level, position: s.position || '' })
+    setEditForm({
+      full_name: s.full_name, year_level: s.year_level, position: s.position || '',
+      programme: s.programme || '', blood_type: s.blood_type || '',
+      student_email: s.student_email || '',
+      emergency_contact_name: s.emergency_contact_name || '',
+      emergency_contact_phone: s.emergency_contact_phone || '',
+    })
     setEditPhoto(null); setEditSig(null); setEditMsg(null)
   }
 
@@ -224,16 +239,38 @@ export default function AdminDashboard() {
     form.append('full_name', editForm.full_name)
     form.append('year_level', editForm.year_level)
     form.append('position', editForm.position || '')
+    form.append('programme', editForm.programme || '')
+    form.append('blood_type', editForm.blood_type || '')
+    form.append('student_email', editForm.student_email || '')
+    form.append('emergency_contact_name', editForm.emergency_contact_name || '')
+    form.append('emergency_contact_phone', editForm.emergency_contact_phone || '')
     if (editPhoto) form.append('photo', editPhoto)
     if (editSig) form.append('signature', editSig)
     const res = await adminForm(`/api/students/${encodeURIComponent(editStudent.student_id)}`, 'PATCH', form)
     const data = await res.json()
     setEditSubmitting(false)
     if (res.ok) {
-      setEditMsg({ ok: true, text: 'Student updated. Status reset to pending.' })
+      setEditMsg({ ok: true, text: 'Student updated. QR code regenerated.' })
       loadStudents()
       setTimeout(() => setEditStudent(null), 1200)
     } else setEditMsg({ ok: false, text: data.error || 'Update failed.' })
+  }
+
+  async function handleGenerateQR(studentId) {
+    const res = await adminFetch(`/api/qr/generate/${encodeURIComponent(studentId)}`, { method: 'POST' })
+    if (res.ok) { loadStudents(); return true }
+    return false
+  }
+
+  async function handleGenerateAllQR() {
+    setQrGenerating(true); setQrMsg(null)
+    const res = await adminFetch('/api/qr/generate-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ force: false }) })
+    const data = await res.json()
+    setQrGenerating(false)
+    if (res.ok) setQrMsg({ ok: true, text: `Generated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}` })
+    else setQrMsg({ ok: false, text: data.error || 'Generation failed.' })
+    loadStudents()
+    setTimeout(() => setQrMsg(null), 4000)
   }
 
   function getInitials(name) {
@@ -313,6 +350,35 @@ export default function AdminDashboard() {
                   <input className="field-input" placeholder="e.g. Class Representative" value={editForm.position} onChange={e=>setEditForm({...editForm, position:e.target.value})}/>
                 </div>
               )}
+
+              {/* QR-encoded fields */}
+              <div style={{ borderTop:'0.5px solid var(--border)', paddingTop:'10px', marginTop:'2px' }}>
+                <p style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'10px' }}>
+                  🔲 QR-encoded details — stored but not printed on card face
+                </p>
+                <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                  <div className="field-group">
+                    <label className="field-label">Programme</label>
+                    <input className="field-input" placeholder="e.g. MBBS, Pharm.D" value={editForm.programme} onChange={e=>setEditForm({...editForm, programme:e.target.value})}/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Blood Type</label>
+                    <input className="field-input" placeholder="e.g. O+" value={editForm.blood_type} onChange={e=>setEditForm({...editForm, blood_type:e.target.value})}/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Student Email</label>
+                    <input className="field-input" type="email" placeholder="student@email.com" value={editForm.student_email} onChange={e=>setEditForm({...editForm, student_email:e.target.value})}/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Emergency Contact Name</label>
+                    <input className="field-input" placeholder="Full name" value={editForm.emergency_contact_name} onChange={e=>setEditForm({...editForm, emergency_contact_name:e.target.value})}/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Emergency Contact Phone</label>
+                    <input className="field-input" placeholder="+231 xxx xxxx" value={editForm.emergency_contact_phone} onChange={e=>setEditForm({...editForm, emergency_contact_phone:e.target.value})}/>
+                  </div>
+                </div>
+              </div>
               <div className="field-group">
                 <label className="field-label">Replace Photo (optional)</label>
                 <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('edit-photo-input').click()}>
@@ -547,9 +613,43 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   )}
+
+                  {/* QR-encoded fields */}
+                  <div style={{ borderTop:'0.5px solid var(--border)', paddingTop:'12px', marginTop:'4px' }}>
+                    <p style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'10px' }}>
+                      🔲 QR-encoded details — stored but not printed on card face
+                    </p>
+                    <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                      <div className="field-group">
+                        <label className="field-label">Programme</label>
+                        <input className="field-input" placeholder="e.g. MBBS, Pharm.D" value={manualForm.programme} onChange={e=>setManualForm({...manualForm, programme:e.target.value})}/>
+                      </div>
+                      <div className="field-group">
+                        <label className="field-label">Blood Type</label>
+                        <input className="field-input" placeholder="e.g. O+" value={manualForm.blood_type} onChange={e=>setManualForm({...manualForm, blood_type:e.target.value})}/>
+                      </div>
+                      <div className="field-group">
+                        <label className="field-label">Student Email</label>
+                        <input className="field-input" type="email" placeholder="student@email.com" value={manualForm.student_email} onChange={e=>setManualForm({...manualForm, student_email:e.target.value})}/>
+                      </div>
+                      <div className="field-group">
+                        <label className="field-label">Emergency Contact Name</label>
+                        <input className="field-input" placeholder="Full name" value={manualForm.emergency_contact_name} onChange={e=>setManualForm({...manualForm, emergency_contact_name:e.target.value})}/>
+                      </div>
+                      <div className="field-group">
+                        <label className="field-label">Emergency Contact Phone</label>
+                        <input className="field-input" placeholder="+231 xxx xxxx" value={manualForm.emergency_contact_phone} onChange={e=>setManualForm({...manualForm, emergency_contact_phone:e.target.value})}/>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="btn-row">
                     <button className="btn-gold" type="submit" disabled={manualSubmitting}>{manualSubmitting?'Adding...':'Add Student'}</button>
-                    <button className="btn-outline" type="button" onClick={()=>{setManualForm({student_id:'',full_name:'',year_level:'1st Year',position:''});setManualPhoto(null);setManualSig(null);setManualMsg(null)}}>Clear</button>
+                    <button className="btn-outline" type="button" onClick={()=>{
+                      setManualForm({student_id:'',full_name:'',year_level:'1st Year',position:'',
+                        programme:'',blood_type:'',student_email:'',emergency_contact_name:'',emergency_contact_phone:''})
+                      setManualPhoto(null);setManualSig(null);setManualMsg(null)
+                    }}>Clear</button>
                   </div>
                 </div>
                 {manualMsg && <div className={manualMsg.ok?'success-box':'error-box'} style={{ marginTop:'10px' }}>{manualMsg.text}</div>}
@@ -585,6 +685,23 @@ export default function AdminDashboard() {
         {/* ── STUDENTS ── */}
         {activeTab==='students' && !dataLoading && (
           <div>
+            {/* QR bulk controls */}
+            <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderRadius:'var(--radius)', padding:'12px', marginBottom:'14px' }}>
+              <div style={{ fontSize:'12px', fontWeight:'500', color:'var(--text)', marginBottom:'8px' }}>🔲 QR Code Management</div>
+              <div style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'10px' }}>
+                {students.filter(s=>s.qr_url).length} of {students.length} students have QR codes generated.
+              </div>
+              <div className="btn-row">
+                <button className="btn-gold" onClick={handleGenerateAllQR} disabled={qrGenerating} style={{ fontSize:'12px', padding:'7px 14px' }}>
+                  {qrGenerating ? 'Generating...' : '⚡ Generate missing QR codes'}
+                </button>
+                <button className="btn-outline" onClick={() => handleDownload('qr/export', 'LMSA_QR_Codes.zip')} disabled={downloading['qr/export']} style={{ fontSize:'12px', padding:'7px 14px' }}>
+                  {downloading['qr/export'] ? 'Exporting...' : '⬇ Export all as ZIP'}
+                </button>
+              </div>
+              {qrMsg && <div className={qrMsg.ok?'success-box':'error-box'} style={{ marginTop:'8px', fontSize:'12px' }}>{qrMsg.text}</div>}
+            </div>
+
             <div style={{ display:'flex', gap:'8px', marginBottom:'14px', alignItems:'center' }}>
               <input className="field-input" placeholder="Search by name or student ID..." value={search} onChange={e=>setSearch(e.target.value)} style={{ flex:1 }}/>
               <button className="btn-gold" onClick={()=>{setActiveTab('upload');setUploadMode('manual')}}>+ Add</button>
@@ -601,7 +718,18 @@ export default function AdminDashboard() {
                   : <div className="avatar">{getInitials(s.full_name)}</div>}
                 <div className="student-info">
                   <div className="student-name">{s.full_name}</div>
-                  <div className="student-meta">{s.student_id} · {s.year_level}{s.position ? ` · ${s.position}` : ''}</div>
+                  <div className="student-meta">
+                    {s.student_id} · {s.year_level}{s.position ? ` · ${s.position}` : ''}
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:'6px', marginTop:'2px' }}>
+                    {s.qr_url
+                      ? <span style={{ fontSize:'10px', color:'var(--success-text)', background:'var(--success-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--success-border)' }}>QR ✓</span>
+                      : <button style={{ fontSize:'10px', color:'var(--warn-text)', background:'var(--warn-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--warn-border)', cursor:'pointer' }}
+                          onClick={async()=>{ await handleGenerateQR(s.student_id) }}>
+                          Generate QR
+                        </button>
+                    }
+                  </div>
                   {issueNotes[s.student_id] && <div className="student-issue-note">{issueNotes[s.student_id].note}</div>}
                 </div>
                 {statusPill(s.status)}

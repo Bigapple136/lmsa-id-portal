@@ -29,9 +29,10 @@ export const CALIBRATED_LAYOUT = {
   position:   { x:0.0593, y:0.7231, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'left',   type:'text' },
   year_level: { x:0.0593, y:0.7749, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'left',   type:'text' },
   signature:  { x:0.5254, y:0.8386, width:0.3898, height:0.0896, type:'image' },
+  qr:         { x:0.0593, y:0.8187, width:0.2542, height:0.1394, type:'image' },
 }
 
-const FIELD_ORDER = ['photo', 'full_name', 'student_id', 'position', 'year_level', 'signature']
+const FIELD_ORDER = ['photo', 'full_name', 'student_id', 'position', 'year_level', 'signature', 'qr']
 
 export default function CardCanvas({ student, templateUrl, layout, maxWidth = 300 }) {
   const canvasRef = useRef(null)
@@ -93,6 +94,14 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
               if (cancelled) return
               ctx.drawImage(img, pos.x * W, pos.y * H, pos.width * W, pos.height * H)
             } catch { /* signature not available */ }
+
+          } else if (field === 'qr') {
+            if (!student.qr_url) continue
+            try {
+              const img = await loadImg(student.qr_url)
+              if (cancelled) return
+              ctx.drawImage(img, pos.x * W, pos.y * H, pos.width * W, pos.height * H)
+            } catch { /* QR not available yet */ }
 
           } else {
             const text = getFieldText(field, student)

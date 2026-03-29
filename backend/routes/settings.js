@@ -62,8 +62,13 @@ router.get('/download-excel', requireAdmin, async (req, res) => {
   const { data } = await supabase.from('portal_settings').select('value').eq('key', 'card_fields').maybeSingle()
   const fields = data?.value || DEFAULT_FIELDS
 
-  const columnOrder = ['student_id', 'full_name', 'year_level', 'position']
-  const activeCols = columnOrder.filter(k => fields[k]?.enabled !== false)
+  // Card face columns (filtered by toggle) + QR columns (always included)
+  const cardColumnOrder = ['student_id', 'full_name', 'year_level', 'position']
+  const qrColumns = ['programme', 'blood_type', 'student_email', 'emergency_contact_name', 'emergency_contact_phone']
+  const activeCols = [
+    ...cardColumnOrder.filter(k => fields[k]?.enabled !== false),
+    ...qrColumns
+  ]
   const YEAR_OPTIONS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 
   const workbook = new ExcelJS.Workbook()
@@ -72,23 +77,37 @@ router.get('/download-excel', requireAdmin, async (req, res) => {
 
   const sheet = workbook.addWorksheet('Students', { views: [{ state: 'frozen', ySplit: 1 }] })
   const COL_META = {
-    student_id: { header: 'student_id', width: 20, note: 'Required. Unique. e.g. AMD-2024-0001' },
-    full_name:  { header: 'full_name',  width: 28, note: 'Required. Full name as on enrollment form.' },
-    year_level: { header: 'year_level', width: 16, note: 'Required. Must match exactly: 1st Year … 6th Year' },
-    position:   { header: 'position',  width: 22, note: 'Optional. Institutional role e.g. Class Rep, Secretary.' },
+    student_id:             { header: 'student_id',             width: 20, note: 'Required. Unique. e.g. AMD-2024-0001', qr: false },
+    full_name:              { header: 'full_name',              width: 28, note: 'Required. Full name as on enrollment form.', qr: false },
+    year_level:             { header: 'year_level',             width: 16, note: 'Required. Must match exactly: 1st Year … 6th Year', qr: false },
+    position:               { header: 'position',               width: 22, note: 'Optional. Institutional role e.g. Class Rep, Secretary.', qr: false },
+    programme:              { header: 'programme',              width: 20, note: 'QR only. e.g. MBBS, Pharm.D', qr: true },
+    blood_type:             { header: 'blood_type',             width: 12, note: 'QR only. e.g. O+, AB-', qr: true },
+    student_email:          { header: 'student_email',          width: 28, note: 'QR only. Student email address.', qr: true },
+    emergency_contact_name: { header: 'emergency_contact_name', width: 28, note: 'QR only. Full name of emergency contact.', qr: true },
+    emergency_contact_phone:{ header: 'emergency_contact_phone',width: 22, note: 'QR only. e.g. +231 770 405785', qr: true },
   }
 
   sheet.columns = activeCols.map(k => ({ header: COL_META[k].header, key: k, width: COL_META[k].width }))
   const headerRow = sheet.getRow(1)
-  headerRow.eachCell(cell => {
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D1B2A' } }
-    cell.font = { bold: true, color: { argb: 'FFC9A84C' }, size: 11 }
+  headerRow.eachCell((cell, colNum) => {
+    const key = activeCols[colNum - 1]
+    const isQR = COL_META[key]?.qr
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isQR ? 'FF1A3A1A' : 'FF0D1B2A' } }
+    cell.font = { bold: true, color: { argb: isQR ? 'FF88CC88' : 'FFC9A84C' }, size: 11 }
     cell.alignment = { vertical: 'middle', horizontal: 'left' }
-    cell.border = { bottom: { style: 'thin', color: { argb: 'FFC9A84C' } } }
+    cell.border = { bottom: { style: 'thin', color: { argb: isQR ? 'FF88CC88' : 'FFC9A84C' } } }
   })
   headerRow.height = 22
 
-  const sample = { student_id: 'AMD-2024-0001', full_name: 'Josephine K. Freeman', year_level: '3rd Year', position: 'Class Representative' }
+  const sample = {
+    student_id: 'AMD-2024-0001', full_name: 'Josephine K. Freeman',
+    year_level: '3rd Year', position: 'Class Representative',
+    programme: 'MBBS', blood_type: 'O+',
+    student_email: 'josephine@email.com',
+    emergency_contact_name: 'Mary Freeman',
+    emergency_contact_phone: '+231 770 000000'
+  }
   const sampleRow = sheet.addRow(activeCols.map(k => sample[k] || ''))
   sampleRow.eachCell(cell => { cell.font = { italic: true, color: { argb: 'FF888780' } } })
 
@@ -105,9 +124,10 @@ router.get('/download-excel', requireAdmin, async (req, res) => {
 
   const instr = workbook.addWorksheet('Instructions')
   instr.columns = [
-    { header: 'Field', key: 'field', width: 18 },
+    { header: 'Field', key: 'field', width: 26 },
     { header: 'Required', key: 'req', width: 12 },
-    { header: 'Notes', key: 'notes', width: 60 },
+    { header: 'Type', key: 'type', width: 14 },
+    { header: 'Notes', key: 'notes', width: 55 },
   ]
   const instrHeader = instr.getRow(1)
   instrHeader.eachCell(cell => {
@@ -117,14 +137,20 @@ router.get('/download-excel', requireAdmin, async (req, res) => {
   instrHeader.height = 22
   activeCols.forEach(k => {
     const meta = COL_META[k]
-    instr.addRow({ field: meta.header, req: ['student_id','full_name','year_level'].includes(k) ? 'Yes' : 'No', notes: meta.note })
+    instr.addRow({
+      field: meta.header,
+      req: ['student_id','full_name','year_level'].includes(k) ? 'Yes' : 'No',
+      type: meta.qr ? 'QR code only' : 'Card face',
+      notes: meta.note
+    })
   })
   instr.addRow({})
-  instr.addRow({ field: 'Signature', req: 'No', notes: 'Upload signature PNGs (transparent bg, named by student_id) in the signatures/ folder of your ZIP.' })
+  instr.addRow({ field: 'signature', req: 'No', type: 'Card face', notes: 'Upload signature PNGs (transparent bg, named by student_id) in the signatures/ folder of your ZIP.' })
   instr.addRow({})
-  instr.addRow({ field: 'Instructions', req: '', notes: '1. Fill in data from row 3. Delete the sample row first.' })
-  instr.addRow({ field: '', req: '', notes: '2. Save as CSV before uploading to the portal.' })
-  instr.addRow({ field: '', req: '', notes: '3. Year Level must exactly match: ' + YEAR_OPTIONS.join(', ') })
+  instr.addRow({ field: 'NOTES', req: '', type: '', notes: 'Green-header columns are encoded in the QR code only — they do not appear on the printed card face.' })
+  instr.addRow({ field: '', req: '', type: '', notes: '1. Fill in data from row 3. Delete the sample row first.' })
+  instr.addRow({ field: '', req: '', type: '', notes: '2. Save as CSV before uploading to the portal.' })
+  instr.addRow({ field: '', req: '', type: '', notes: '3. Year Level must exactly match: ' + YEAR_OPTIONS.join(', ') })
 
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Student_Template.xlsx"')
