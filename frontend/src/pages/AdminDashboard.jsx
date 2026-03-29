@@ -27,6 +27,8 @@ export default function AdminDashboard() {
   const [activeTemplate, setActiveTemplate] = useState(null)
   const [stats, setStats] = useState({ total:0, confirmed:0, pending:0, issues:0 })
   const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 20
   const [dataLoading, setDataLoading] = useState(false)
 
   const [templateFile, setTemplateFile] = useState(null)
@@ -99,6 +101,7 @@ export default function AdminDashboard() {
     if (!res.ok) return
     const data = await res.json()
     setStudents(data)
+    setCurrentPage(1)
     setStats({
       total: data.length,
       confirmed: data.filter(s => s.status === 'confirmed').length,
@@ -176,7 +179,7 @@ export default function AdminDashboard() {
   async function handleDownload(endpoint, filename) {
     setDownloading(prev => ({ ...prev, [endpoint]: true }))
     try {
-      const res = await adminFetch(`/api/settings/${endpoint}`)
+      const res = await adminFetch(endpoint.startsWith('/api/') ? endpoint : `/api/settings/${endpoint}`)
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         alert(data.error || 'Download failed. Please try again.')
@@ -760,15 +763,15 @@ export default function AdminDashboard() {
                 <button className="btn-outline" onClick={handleRegenerateAllQR} disabled={qrGenerating} style={{ fontSize:'12px', padding:'7px 14px', borderColor:'#CC0000', color:'#CC0000' }}>
                   {qrGenerating ? 'Regenerating...' : '🔄 Regenerate all'}
                 </button>
-                <button className="btn-outline" onClick={() => handleDownload('qr/export', 'LMSA_QR_Codes.zip')} disabled={downloading['qr/export']} style={{ fontSize:'12px', padding:'7px 14px' }}>
-                  {downloading['qr/export'] ? 'Exporting...' : '⬇ Export all as ZIP'}
+                  <button className="btn-outline" onClick={() => handleDownload('/api/qr/export', 'LMSA_QR_Codes.zip')} disabled={downloading['/api/qr/export']} style={{ fontSize:'12px', padding:'7px 14px' }}>
+                  {downloading['/api/qr/export'] ? 'Exporting...' : '⬇ Export all as ZIP'}
                 </button>
               </div>
               {qrMsg && <div className={qrMsg.ok?'success-box':'error-box'} style={{ marginTop:'8px', fontSize:'12px' }}>{qrMsg.text}</div>}
             </div>
 
             <div style={{ display:'flex', gap:'8px', marginBottom:'14px', alignItems:'center' }}>
-              <input className="field-input" placeholder="Search by name or student ID..." value={search} onChange={e=>setSearch(e.target.value)} style={{ flex:1 }}/>
+              <input className="field-input" placeholder="Search by name or student ID..." value={search} onChange={e=>{setSearch(e.target.value);setCurrentPage(1)}} style={{ flex:1 }}/>
               <button className="btn-gold" onClick={()=>{setActiveTab('upload');setUploadMode('manual')}}>+ Add</button>
             </div>
             {filtered.length===0 && (
@@ -776,7 +779,21 @@ export default function AdminDashboard() {
                 {search?'No students match your search.':'No students added yet.'}
               </p>
             )}
-            {filtered.map(s => (
+            {(() => {
+              const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+              const safePage = Math.min(currentPage, totalPages)
+              const pageStart = (safePage - 1) * PAGE_SIZE
+              const pageEnd = safePage * PAGE_SIZE
+              const pageStudents = filtered.slice(pageStart, pageEnd)
+              const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1)
+              const visiblePages = pageNums.filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1)
+              const trimmedPages = visiblePages.reduce((acc, p, i) => {
+                if (i > 0 && p - visiblePages[i - 1] > 1) acc.push('…')
+                acc.push(p)
+                return acc
+              }, [])
+              return <>
+            {pageStudents.map(s => (
               <div className="student-row" key={s.id}>
                 {s.photo_url
                   ? <img src={s.photo_url} alt={s.full_name} style={{ width:'30px', height:'36px', borderRadius:'3px', objectFit:'cover', flexShrink:0 }}/>
@@ -808,6 +825,24 @@ export default function AdminDashboard() {
                 <button className="btn-edit" onClick={()=>openEdit(s)}>Edit</button>
               </div>
             ))}
+
+                {/* Pagination */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'4px', marginTop:'14px', flexWrap:'wrap' }}>
+                  <button onClick={()=>setCurrentPage(p=>Math.max(1,p-1))} disabled={safePage===1}
+                    style={{ padding:'4px 10px', fontSize:'12px', border:'0.5px solid var(--border)', borderRadius:'6px', background:'var(--bg)', cursor: safePage===1?'not-allowed':'pointer', opacity: safePage===1?0.4:1 }}>‹ Prev</button>
+                  {trimmedPages.map((p, i) =>
+                    p === '…'
+                      ? <span key={`ellipsis-${i}`} style={{ padding:'4px 4px', fontSize:'12px', color:'var(--muted)' }}>…</span>
+                      : <button key={p} onClick={()=>setCurrentPage(p)} style={{ padding:'4px 10px', fontSize:'12px', border:'0.5px solid', borderColor: safePage===p?'var(--gold)':'var(--border)', borderRadius:'6px', background: safePage===p?'var(--gold)':'var(--bg)', color: safePage===p?'#0D1B2A':'var(--text)', cursor:'pointer', fontWeight: safePage===p?'600':'400' }}>{p}</button>
+                  )}
+                  <button onClick={()=>setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={safePage===totalPages}
+                    style={{ padding:'4px 10px', fontSize:'12px', border:'0.5px solid var(--border)', borderRadius:'6px', background:'var(--bg)', cursor: safePage===totalPages?'not-allowed':'pointer', opacity: safePage===totalPages?0.4:1 }}>Next ›</button>
+                  <span style={{ fontSize:'11px', color:'var(--muted)', marginLeft:'6px' }}>
+                    {pageStart+1}–{Math.min(pageEnd, filtered.length)} of {filtered.length}
+                  </span>
+                </div>
+              </>
+            })()}
           </div>
         )}
       </div>

@@ -12,7 +12,7 @@ const supabase = createClient(
 
 const JSZip = require('jszip')
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.vercel.app'
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
 
 async function buildPayload(student) {
   return FRONTEND_URL + '/api/qr/html/' + encodeURIComponent(student.student_id)
@@ -285,7 +285,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
   <div class="profile-row">
     <div class="profile-photo-wrap">
       ${student.photo_url
-        ? `<img class="profile-photo" src="${student.photo_url}" alt="${name}"/>`
+        ? `<img class="profile-photo" src="${student.photo_url}" alt="${name}" crossorigin="anonymous"/>`
         : `<div class="profile-photo" style="display:flex;align-items:center;justify-content:center;font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:22px;color:rgba(255,255,255,0.7);background:linear-gradient(135deg,#00653c,#1e7f51)">${initials}</div>`
       }
       <div class="photo-badge">
@@ -354,7 +354,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
         <div class="qr-ref-title">Scan this card's QR code to verify identity</div>
         <div class="qr-ref-hint">Use any QR scanner app</div>
       </div>
-      <img src="${student.qr_url}" alt="QR Code" style="width:72px;height:72px"/>
+      <img src="${student.qr_url}" alt="QR Code" crossorigin="anonymous" style="width:72px;height:72px"/>
     </div>
   </div>` : ''}
 
