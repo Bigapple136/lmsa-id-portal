@@ -807,7 +807,19 @@ export default function AdminDashboard() {
                     {s.qr_url
                       ? <>
                           <span style={{ fontSize:'10px', color:'var(--success-text)', background:'var(--success-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--success-border)' }}>QR ✓</span>
-                          <a href={`${import.meta.env.VITE_API_URL || ''}/api/qr/html/${encodeURIComponent(s.student_id)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:'10px', color:'var(--gold)', textDecoration:'none', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--gold)' }}>View page</a>
+                          <button style={{ fontSize:'10px', color:'var(--gold)', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--gold)', cursor:'pointer' }}
+                            onClick={async()=>{
+                              try {
+                                const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/qr/verification-url/${encodeURIComponent(s.student_id)}`, {
+                                  headers: { Authorization: `Bearer ${session.access_token}` }
+                                });
+                                if (!res.ok) return;
+                                const { url } = await res.json();
+                                window.open(url, '_blank', 'noopener,noreferrer');
+                              } catch {}
+                            }}>
+                            View page
+                          </button>
                           <button style={{ fontSize:'10px', color:'#CC0000', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid #CC0000', cursor:'pointer' }}
                             onClick={async()=>{ await handleRegenerateQR(s.student_id) }}>
                             Regenerate

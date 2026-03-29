@@ -29,23 +29,66 @@ function validateTextLength(v, max = MAX_TEXT_LENGTH) { return !v || v.length <=
 function validateImageMime(m) { return ALLOWED_IMAGE_TYPES.includes(m) }
 function safeBasename(f) { return path.basename(f.replace(/\\/g, '/')) }
 
-async function uploadPhoto(buffer, mimeType, studentId) {
+function normaliseYearFolder(yearLevel) {
+  return (yearLevel || 'unknown').toLowerCase().replace(/\s+/g, '-')
+}
+
+async function uploadPhoto(buffer, mimeType, studentId, yearLevel) {
   const ext = mimeType === 'image/png' ? 'png' : 'jpg'
   const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
-  const filePath = `photos/${safeSid}_${Date.now()}.${ext}`
+  const folder = normaliseYearFolder(yearLevel)
+  const filePath = `photos/${folder}/${safeSid}.${ext}`
   const { error } = await supabase.storage.from('id-cards').upload(filePath, buffer, { contentType: mimeType, upsert: true })
   if (error) throw new Error(error.message)
   const { data: { publicUrl } } = supabase.storage.from('id-cards').getPublicUrl(filePath)
   return publicUrl
 }
 
-async function uploadSignature(buffer, studentId) {
+async function uploadSignature(buffer, studentId, yearLevel) {
   const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
-  const filePath = `signatures/${safeSid}_${Date.now()}.png`
+  const folder = normaliseYearFolder(yearLevel)
+  const filePath = `signatures/${folder}/${safeSid}.png`
   const { error } = await supabase.storage.from('id-cards').upload(filePath, buffer, { contentType: 'image/png', upsert: true })
   if (error) throw new Error(error.message)
   const { data: { publicUrl } } = supabase.storage.from('id-cards').getPublicUrl(filePath)
   return publicUrl
+}
+
+async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
+  if (oldYearLevel === newYearLevel) return
+  const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const oldFolder = normaliseYearFolder(oldYearLevel)
+  const newFolder = normaliseYearFolder(newYearLevel)
+
+  const oldPhotoPath = `photos/${oldFolder}/${safeSid}.jpg`
+  const oldPhotoPathPng = `photos/${oldFolder}/${safeSid}.png`
+  const oldSigPath = `signatures/${oldFolder}/${safeSid}.png`
+
+  const { data: photoData, error: photoErr } = await supabase.storage
+    .from('id-cards').download(oldPhotoPath).catch(() => null)
+    || await supabase.storage.from('id-cards').download(oldPhotoPathPng).catch(() => null)
+
+  if (photoData) {
+    const buffer = Buffer.from(await photoData.arrayBuffer())
+    const ext = oldPhotoPath ? 'jpg' : 'png'
+    const newPath = `photos/${newFolder}/${safeSid}.${ext}`
+    await supabase.storage.from('id-cards').upload(newPath, buffer, {
+      contentType: ext === 'jpg' ? 'image/jpeg' : 'image/png', upsert: true
+    })
+    const { data: { publicUrl } } = supabase.storage.from('id-cards').getPublicUrl(newPath)
+    await supabase.storage.from('id-cards').remove([oldPhotoPath, oldPhotoPathPng].filter(Boolean))
+    await supabase.from('students').update({ photo_url: publicUrl }).eq('student_id', studentId)
+  }
+
+  const { data: sigData } = await supabase.storage.from('id-cards').download(oldSigPath).catch(() => null)
+  if (sigData) {
+    const buffer = Buffer.from(await sigData.arrayBuffer())
+    const newPath = `signatures/${newFolder}/${safeSid}.png`
+    await supabase.storage.from('id-cards').upload(newPath, buffer, { contentType: 'image/png', upsert: true })
+    const { data: { publicUrl } } = supabase.storage.from('id-cards').getPublicUrl(newPath)
+    await supabase.storage.from('id-cards').remove([oldSigPath])
+    await supabase.from('students').update({ signature_url: publicUrl }).eq('student_id', studentId)
+  }
 }
 
 // ── PUBLIC ──
@@ -92,8 +135,8 @@ router.post('/', requireAdmin, upload.fields([
 
   const sid = student_id.trim()
   let photo_url = null, signature_url = null
-  if (req.files?.photo?.[0]) { try { photo_url = await uploadPhoto(req.files.photo[0].buffer, req.files.photo[0].mimetype, sid) } catch (err) { return res.status(400).json({ error: 'Photo upload failed: ' + err.message }) } }
-  if (req.files?.signature?.[0]) { try { signature_url = await uploadSignature(req.files.signature[0].buffer, sid) } catch (err) { return res.status(400).json({ error: 'Signature upload failed: ' + err.message }) } }
+  if (req.files?.photo?.[0]) { try { photo_url = await uploadPhoto(req.files.photo[0].buffer, req.files.photo[0].mimetype, sid, year_level) } catch (err) { return res.status(400).json({ error: 'Photo upload failed: ' + err.message }) } }
+  if (req.files?.signature?.[0]) { try { signature_url = await uploadSignature(req.files.signature[0].buffer, sid, year_level) } catch (err) { return res.status(400).json({ error: 'Signature upload failed: ' + err.message }) } }
 
   const { data, error } = await supabase.from('students').insert({
     student_id: sid, full_name: full_name.trim(), year_level,
@@ -155,8 +198,8 @@ router.post('/bulk', requireAdmin, upload.fields([
     const sid = r.student_id.trim()
     if (r.year_level && !validateYear(r.year_level.trim())) { console.warn(`Invalid year_level for ${sid} — skipped`); continue }
     let photo_url = null, signature_url = null
-    if (photoMap[sid]) { try { photo_url = await uploadPhoto(photoMap[sid].buffer, photoMap[sid].mimeType, sid) } catch {} }
-    if (signatureMap[sid]) { try { signature_url = await uploadSignature(signatureMap[sid], sid) } catch {} }
+    if (photoMap[sid]) { try { photo_url = await uploadPhoto(photoMap[sid].buffer, photoMap[sid].mimeType, sid, r.year_level?.trim()) } catch {} }
+    if (signatureMap[sid]) { try { signature_url = await uploadSignature(signatureMap[sid], sid, r.year_level?.trim()) } catch {} }
     rows.push({
       student_id: sid.slice(0, 50), full_name: r.full_name.trim().slice(0, MAX_TEXT_LENGTH),
       year_level: r.year_level.trim(), position: r.position?.trim().slice(0, MAX_TEXT_LENGTH) || null,
@@ -195,6 +238,16 @@ router.patch('/:studentId', requireAdmin, upload.fields([
   if (req.files?.signature?.[0] && req.files.signature[0].mimetype !== 'image/png')
     return res.status(400).json({ error: 'Signature must be PNG.' })
 
+  // Get current record to compare year_level
+  const { data: current, error: currentErr } = await supabase
+    .from('students').select('student_id, year_level, photo_url, signature_url')
+    .eq('student_id', req.params.studentId).maybeSingle()
+  if (currentErr || !current) return res.status(404).json({ error: 'Student not found.' })
+
+  const oldYearLevel = current.year_level
+  const newYearLevel = year_level || oldYearLevel
+  const yearLevelChanged = year_level && year_level !== oldYearLevel
+
   const updates = { status: 'pending' }
   if (full_name) updates.full_name = full_name.trim()
   if (year_level) updates.year_level = year_level
@@ -205,11 +258,26 @@ router.patch('/:studentId', requireAdmin, upload.fields([
   if (student_email !== undefined) updates.student_email = student_email?.trim() || null
   if (programme !== undefined) updates.programme = programme?.trim() || null
 
-  if (req.files?.photo?.[0]) { try { updates.photo_url = await uploadPhoto(req.files.photo[0].buffer, req.files.photo[0].mimetype, req.params.studentId) } catch (err) { return res.status(400).json({ error: 'Photo upload failed: ' + err.message }) } }
-  if (req.files?.signature?.[0]) { try { updates.signature_url = await uploadSignature(req.files.signature[0].buffer, req.params.studentId) } catch (err) { return res.status(400).json({ error: 'Signature upload failed: ' + err.message }) } }
+  if (req.files?.photo?.[0]) {
+    try { updates.photo_url = await uploadPhoto(req.files.photo[0].buffer, req.files.photo[0].mimetype, req.params.studentId, newYearLevel) }
+    catch (err) { return res.status(400).json({ error: 'Photo upload failed: ' + err.message }) }
+  }
+  if (req.files?.signature?.[0]) {
+    try { updates.signature_url = await uploadSignature(req.files.signature[0].buffer, req.params.studentId, newYearLevel) }
+    catch (err) { return res.status(400).json({ error: 'Signature upload failed: ' + err.message }) }
+  }
 
   const { data, error } = await supabase.from('students').update(updates).eq('student_id', req.params.studentId).select().single()
   if (error) return res.status(400).json({ error: error.message })
+
+  // Handle year level change — migrate files and QR
+  if (yearLevelChanged) {
+    try { await migrateStudentFiles(req.params.studentId, oldYearLevel, newYearLevel) } catch {}
+    try {
+      const { deleteQRFile } = require('./qr')
+      await deleteQRFile(req.params.studentId, oldYearLevel)
+    } catch {}
+  }
 
   // Regenerate QR after edit
   try { await getQRGenerator()(data) } catch {}

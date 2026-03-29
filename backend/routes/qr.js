@@ -1,6 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const QRCode = require('qrcode')
+const crypto = require('crypto')
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
 const { getQRFields } = require('./settings')
@@ -13,9 +14,24 @@ const supabase = createClient(
 const JSZip = require('jszip')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
+const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET || 'dev-secret-change-in-production'
+
+function signStudentToken(studentId) {
+  const payload = Buffer.from(studentId).toString('base64url')
+  const sig = crypto.createHmac('sha256', QR_SIGNING_SECRET).update(payload).digest('base64url')
+  return `${payload}.${sig}`
+}
+
+function verifyStudentToken(token) {
+  const [payload, sig] = (token || '').split('.')
+  if (!payload || !sig || !QR_SIGNING_SECRET) return null
+  const expected = crypto.createHmac('sha256', QR_SIGNING_SECRET).update(payload).digest('base64url')
+  return sig === expected ? Buffer.from(payload, 'base64url').toString() : null
+}
 
 async function buildPayload(student) {
-  return FRONTEND_URL + '/api/qr/html/' + encodeURIComponent(student.student_id)
+  const token = signStudentToken(student.student_id)
+  return `${FRONTEND_URL}/api/qr/html/${token}`
 }
 
 async function generateQRBuffer(student) {
@@ -51,7 +67,20 @@ async function saveQRUrl(studentId, url) {
     .eq('student_id', studentId)
 }
 
+function normaliseYearFolder(yearLevel) {
+  return (yearLevel || 'unknown').toLowerCase().replace(/\s+/g, '-')
+}
+
+async function deleteQRFile(studentId, yearLevel) {
+  const folder = normaliseYearFolder(yearLevel)
+  const path = `${folder}/${studentId}.png`
+  await supabase.storage.from('qr-codes').remove([path])
+}
+
 async function generateForStudent(student) {
+  if (student.year_level) {
+    await deleteQRFile(student.student_id, student.year_level)
+  }
   const buffer = await generateQRBuffer(student)
   const url = await uploadQR(buffer, student)
   await saveQRUrl(student.student_id, url)
@@ -136,10 +165,27 @@ router.post('/regenerate-all', requireAdmin, async (req, res) => {
   res.json({ generated, failed, total: students.length })
 })
 
+router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
+  try {
+    const { data: student, error } = await supabase
+      .from('students').select('student_id').eq('student_id', req.params.studentId).maybeSingle()
+    if (error || !student) return res.status(404).json({ error: 'Student not found.' })
+    const url = `${FRONTEND_URL}/api/qr/html/${signStudentToken(student.student_id)}`
+    res.json({ url })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 router.get('/html/:studentId', async (req, res) => {
+  const rawToken = req.params.studentId
+  const studentId = verifyStudentToken(rawToken)
+  if (!studentId)
+    return res.status(403).send('Invalid or tampered QR code. Please request a new ID card.')
+
   const { data: student, error } = await supabase
     .from('students').select('*')
-    .eq('student_id', req.params.studentId).maybeSingle()
+    .eq('student_id', studentId).maybeSingle()
 
   if (error || !student)
     return res.status(404).json({ error: 'Student not found.' })
@@ -408,3 +454,4 @@ router.get('/export', requireAdmin, async (req, res) => {
 
 module.exports = router
 module.exports.generateForStudent = generateForStudent
+module.exports.deleteQRFile = deleteQRFile
