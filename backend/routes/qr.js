@@ -321,7 +321,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-eyebrow"><span style="color:#AE535B">Student Doctor-In-Training</span></div>
+    <div class="hero-eyebrow"><span style="color:#ffffff">Student Doctor-In-Training</span></div>
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
         <div class="hero-name">${name}</div>
