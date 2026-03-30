@@ -452,16 +452,22 @@ End Sub`;
 
   XLSX.utils.book_append_sheet(workbook, instrWs, 'Instructions');
 
-  // Write XLSM
-  const outputPath = path.join(tmpDir, 'student_form_template.xlsm');
+  // Write XLSX (not XLSM — no real VBA binary, just embedded source code in Instructions)
+  const outputPath = path.join(tmpDir, 'student_form_template.xlsx');
 
-  const buf = XLSX.write(workbook, { bookType: 'xlsm', type: 'buffer' });
+  const buf = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
   const zip = await JSZip.loadAsync(buf);
 
   const sheet1Xml = await zip.file('xl/worksheets/sheet1.xml').async('string');
   const dvXml = `<dataValidations count="2"><dataValidation sqref="C6" type="list" allowBlank="1" showInputMessage="1" promptTitle="Year Level" prompt="Select from the dropdown."><formula1>"${YEAR_OPTIONS.join(',')}"</formula1></dataValidation><dataValidation sqref="C9" type="list" allowBlank="1" showInputMessage="1" promptTitle="Blood Type" prompt="Select from the dropdown."><formula1>"${BLOOD_OPTIONS.join(',')}"</formula1></dataValidation></dataValidations>`;
   const updatedXml = sheet1Xml.replace('</worksheet>', dvXml + '</worksheet>');
   zip.file('xl/worksheets/sheet1.xml', updatedXml);
+
+  const ctXml = await zip.file('[Content_Types].xml').async('string');
+  zip.file('[Content_Types].xml', ctXml.replace(/<Default Extension="bin"[^>]*\/>/g, ''));
+
+  const wbXml = await zip.file('xl/workbook.xml').async('string');
+  zip.file('xl/workbook.xml', wbXml.replace(' codeName="ThisWorkbook"', ''));
 
   const outBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   fs.writeFileSync(outputPath, outBuf);

@@ -89,14 +89,14 @@ router.put('/layout', requireAdmin, async (req, res) => {
 
 // ── ADMIN downloads ──
 router.get('/download-excel', requireAdmin, async (req, res) => {
-  const templatePath = path.join(__dirname, '..', 'templates', 'student_form_template.xlsm')
+  const templatePath = path.join(__dirname, '..', 'templates', 'student_form_template.xlsx')
 
   if (!fs.existsSync(templatePath)) {
     return res.status(500).json({ error: 'Template file not found. Run: node scripts/generate_template.js' })
   }
 
-  res.setHeader('Content-Type', 'application/vnd.ms-excel.sheet.macroEnabled.12')
-  res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Student_Template.xlsm"')
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Student_Template.xlsx"')
   res.sendFile(templatePath)
 })
 
