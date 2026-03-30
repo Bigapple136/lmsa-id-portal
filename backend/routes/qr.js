@@ -256,7 +256,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 .profile-meta{text-align:right;padding-bottom:6px}
 .profile-id-label{font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(24,29,25,0.5);margin-bottom:2px}
 .profile-id{font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:18px;color:#00653c;letter-spacing:-0.01em}
-.profile-id span{color:#CC0000}
+.profile-id span{color:#AE535B}
 
 /* bento grid */
 .bento{padding:20px 16px 0;display:flex;flex-direction:column;gap:12px}
@@ -321,7 +321,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 
   <!-- Hero -->
   <div class="hero">
-    <div class="hero-eyebrow"><span style="font-color:#AE535B">Student Doctor-In-Training</span></div>
+    <div class="hero-eyebrow"><span style="color:#AE535B">Student Doctor-In-Training</span></div>
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
         <div class="hero-name">${name}</div>
