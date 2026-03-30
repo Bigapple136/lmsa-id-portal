@@ -218,7 +218,7 @@ router.get('/html/:studentId', async (req, res) => {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co; frame-ancestors 'none'"/>
+<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co https://lmsa-id-portal.vercel.app"/>
 <title>${name} — LMSA ID Verification</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -420,7 +420,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 
     res.setHeader('Content-Type', 'text/html')
     res.setHeader('Content-Disposition', `inline; filename="QR_${student.student_id}.html"`)
-    res.setHeader('Content-Security-Policy', "img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co; frame-ancestors 'none'")
+    res.setHeader('Content-Security-Policy', "img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co https://lmsa-id-portal.vercel.app; frame-ancestors 'none'")
     res.send(html)
   } catch (err) {
     res.status(500).json({ error: 'Failed to generate QR page: ' + err.message })
