@@ -127,6 +127,39 @@ router.get('/:studentId', requireAdmin, async (req, res) => {
   res.json(data)
 })
 
+router.delete('/:studentId', requireAdmin, async (req, res) => {
+  const studentId = req.params.studentId
+
+  const { data: student, error: fetchErr } = await supabase
+    .from('students').select('student_id, year_level')
+    .eq('student_id', studentId).maybeSingle()
+
+  if (fetchErr) return res.status(500).json({ error: 'Failed to load student.' })
+  if (!student) return res.status(404).json({ error: 'Student not found.' })
+
+  const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const yearFolder = normaliseYearFolder(student.year_level)
+
+  const filesToRemove = [
+    `photos/${yearFolder}/${safeSid}.jpg`,
+    `photos/${yearFolder}/${safeSid}.png`,
+    `signatures/${yearFolder}/${safeSid}.png`,
+    `qr-codes/${yearFolder}/${studentId}.png`,
+  ]
+
+  await Promise.allSettled([
+    supabase.storage.from('id-cards').remove(filesToRemove.slice(0, 3)),
+    supabase.storage.from('qr-codes').remove([filesToRemove[3]]),
+  ])
+
+  await supabase.from('confirmations').delete().eq('student_id', studentId)
+
+  const { error: deleteErr } = await supabase.from('students').delete().eq('student_id', studentId)
+  if (deleteErr) return res.status(500).json({ error: 'Failed to delete student.' })
+
+  res.status(204).send()
+})
+
 // ── ADMIN: list all ──
 router.get('/', requireAdmin, async (req, res) => {
   const { data, error } = await supabase.from('students').select('*').order('created_at', { ascending: false })
