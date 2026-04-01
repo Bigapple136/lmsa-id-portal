@@ -858,17 +858,19 @@ export default function AdminDashboard() {
                           Generate QR
                         </button>
                     }
-                    <button style={{ fontSize:'10px', color:'#CC0000', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid #CC0000', cursor:'pointer' }}
-                      onClick={async()=>{
-                        if (!window.confirm('Delete this student record? This cannot be undone.')) return
-                        try {
-                          const res = await adminFetch(`/api/students/${encodeURIComponent(s.student_id)}`, { method:'DELETE' })
-                          if (!res.ok) { alert('Failed to delete student.'); return }
-                          setStudents(prev => prev.filter(st => st.id !== s.id))
-                        } catch { alert('Failed to delete student.') }
-                      }}>
-                      Delete
-                    </button>
+                    {s.student_id && (
+                      <button style={{ fontSize:'10px', color:'#CC0000', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid #CC0000', cursor:'pointer' }}
+                        onClick={async()=>{
+                          if (!window.confirm('Delete this student record? This cannot be undone.')) return
+                          try {
+                            const res = await adminFetch(`/api/students/${encodeURIComponent(s.student_id)}`, { method:'DELETE' })
+                            if (!res.ok) { alert('Failed to delete student.'); return }
+                            setStudents(prev => prev.filter(st => st.id !== s.id))
+                          } catch { alert('Failed to delete student.') }
+                        }}>
+                        Delete
+                      </button>
+                    )}
                   </div>
                   {issueNotes[s.student_id] && <div className="student-issue-note">{issueNotes[s.student_id].note}</div>}
                 </div>

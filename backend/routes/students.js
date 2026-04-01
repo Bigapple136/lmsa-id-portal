@@ -127,8 +127,9 @@ router.get('/:studentId', requireAdmin, async (req, res) => {
   res.json(data)
 })
 
-router.delete('/:studentId', requireAdmin, async (req, res) => {
+router.delete('/:studentId?', requireAdmin, async (req, res) => {
   const studentId = req.params.studentId
+  if (!studentId) return res.status(400).json({ error: 'student_id is required.' })
 
   const { data: student, error: fetchErr } = await supabase
     .from('students').select('student_id, year_level')
