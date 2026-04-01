@@ -960,3 +960,38 @@ a.about-contact-item:hover .about-contact-value { text-decoration: underline; }
 @media (max-width: 420px) {
   .download-row { flex-direction: column; }
 }
+
+/* ── Skeleton Shimmer ── */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-text { height: 12px; border-radius: 4px; }
+.skeleton-title { height: 20px; border-radius: 6px; }
+.skeleton-avatar { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; }
+.skeleton-row { height: 48px; margin-bottom: 4px; }
+.skeleton-card { height: 110px; border-radius: var(--radius); }
+
+/* ── Spinner ── */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

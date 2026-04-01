@@ -232,14 +232,25 @@ router.post('/bulk', requireAdmin, upload.fields([
   }
   if (!rows.length) return res.status(400).json({ error: 'No valid rows found.' })
 
-  const { data, error } = await supabase.from('students').upsert(rows, { onConflict: 'student_id' }).select()
+  const seen = new Set()
+  const deduped = []
+  const totalProvided = rows.length
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (!seen.has(rows[i].student_id)) {
+      seen.add(rows[i].student_id)
+      deduped.unshift(rows[i])
+    }
+  }
+  const duplicatesSkipped = totalProvided - deduped.length
+
+  const { data, error } = await supabase.from('students').upsert(deduped, { onConflict: 'student_id' }).select()
   if (error) return res.status(400).json({ error: error.message })
 
   // Auto-generate QR for each upserted student
   const qrGen = getQRGenerator()
   for (const student of data) { try { await qrGen(student) } catch {} }
 
-  res.json({ inserted: data.length, records: data })
+  res.json({ inserted: data.length, records: data, duplicates_skipped: duplicatesSkipped })
 })
 
 // ── ADMIN: edit student ──

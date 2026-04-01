@@ -473,7 +473,22 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-body">
-        {dataLoading && <div className="loading">Loading data...</div>}
+        {dataLoading && (
+          <div>
+            <div className="stats-grid">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="stat-box">
+                  <div className="skeleton skeleton-title" style={{marginBottom: 8}}/>
+                  <div className="skeleton skeleton-text" style={{width: '60%'}}/>
+                </div>
+              ))}
+            </div>
+            <div className="skeleton skeleton-row" style={{marginBottom: 14}}/>
+            {[1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="skeleton skeleton-row"/>
+            ))}
+          </div>
+        )}
 
         {/* ── OVERVIEW ── */}
         {activeTab==='overview' && !dataLoading && (

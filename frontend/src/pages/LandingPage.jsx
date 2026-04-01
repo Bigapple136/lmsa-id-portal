@@ -72,7 +72,7 @@ export default function LandingPage() {
           {error && <div className="error-box">{error}</div>}
 
           <button className="btn-primary" type="submit" disabled={loading}>
-            {loading ? 'Searching...' : 'View My ID Card'}
+            {loading ? <><span className="spinner" />Searching...</> : 'View My ID Card'}
           </button>
 
           <p className="landing-hint">

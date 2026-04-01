@@ -222,7 +222,21 @@ export default function PreviewPage() {
   if (loading) return (
     <div className="page-outer">
       <Navbar showLogin={false}/>
-      <div className="page-center"><div className="loading">Loading your card...</div></div>
+      <div className="page-center">
+        <div className="preview-card">
+          <div className="preview-topbar">
+            <div className="skeleton skeleton-text" style={{width: 60}}/>
+          </div>
+          <div style={{padding: 16}}>
+            <div className="skeleton skeleton-card" style={{marginBottom: 16}}/>
+            <div className="skeleton skeleton-title" style={{marginBottom: 12}}/>
+            <div className="skeleton skeleton-text" style={{marginBottom: 8, width: '80%'}}/>
+            <div className="skeleton skeleton-text" style={{marginBottom: 8, width: '65%'}}/>
+            <div className="skeleton skeleton-text" style={{marginBottom: 8, width: '50%'}}/>
+            <div className="skeleton skeleton-text" style={{width: '40%'}}/>
+          </div>
+        </div>
+      </div>
     </div>
   )
 
