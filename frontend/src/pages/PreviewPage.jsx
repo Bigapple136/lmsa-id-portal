@@ -12,7 +12,7 @@ const BLOOD_TYPES = ['A+','A-','B+','B-','AB+','AB-','O+','O-']
 const QR_FIELD_META = {
   blood_type: { label:'Blood Type' },
   programme: { label:'Programme' },
-  email: { label:'Email' },
+  student_email: { label:'Email' },
   emergency_contact_name: { label:'Emergency Contact Name' },
   emergency_contact_phone: { label:'Emergency Contact Phone' },
 }
@@ -309,6 +309,21 @@ export default function PreviewPage() {
 
                 <div className="divider"/>
 
+                <div className="section-title">QR Code details</div>
+                <p style={{ fontSize:'12px', color:'var(--muted)', marginBottom:'12px' }}>
+                  These details will appear when someone scans your ID card QR code. Please review carefully.
+                </p>
+                <div className="meta-table" style={{ marginBottom:'4px' }}>
+                  {enabledQrFields().map(field => (
+                    <div key={field} className="meta-row">
+                      <span className="meta-key">{QR_FIELD_META[field].label}</span>
+                      <span className="meta-val" style={{ color: student[field] ? 'var(--text)' : 'var(--muted)', fontStyle: student[field] ? 'normal' : 'italic' }}>
+                        {student[field] || '— not set'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
                 {student.status === 'photo_issue' ? (
                   <div className="info-box">
                     Your photo issue has been reported. LMSA will contact you to arrange a re-shoot.
@@ -588,7 +603,7 @@ function QrFieldRow({ field, currentValue, isWrong, correctionValue, onToggleWro
           ) : (
             <input
               className="field-input"
-              type={field === 'email' ? 'email' : field === 'emergency_contact_phone' ? 'tel' : 'text'}
+              type={field === 'student_email' ? 'email' : field === 'emergency_contact_phone' ? 'tel' : 'text'}
               value={correctionValue}
               onChange={e => onCorrectionChange(e.target.value)}
               placeholder={`Correct ${QR_FIELD_META[field].label.toLowerCase()}`}

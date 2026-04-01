@@ -214,7 +214,8 @@ router.post('/bulk', requireAdmin, upload.fields([
 
   const rows = []
   for (const r of records) {
-    const sid = r.student_id.trim()
+    const sid = r.student_id?.trim()
+    if (!sid) { console.warn('Skipping row with empty student_id'); continue }
     if (r.year_level && !validateYear(r.year_level.trim())) { console.warn(`Invalid year_level for ${sid} — skipped`); continue }
     let photo_url = null, signature_url = null
     if (photoMap[sid]) { try { photo_url = await uploadPhoto(photoMap[sid].buffer, photoMap[sid].mimeType, sid, r.year_level?.trim()) } catch {} }
@@ -327,7 +328,7 @@ router.patch('/:studentId/self-correct', async (req, res) => {
   if (corrections?.full_name && !validateTextLength(corrections.full_name)) return res.status(400).json({ error: 'full_name too long.' })
   if (corrections?.position && !validateTextLength(corrections.position)) return res.status(400).json({ error: 'position too long.' })
 
-  const VALID_QR_FIELDS = ['blood_type', 'programme', 'email', 'emergency_contact_name', 'emergency_contact_phone']
+  const VALID_QR_FIELDS = ['blood_type', 'programme', 'student_email', 'emergency_contact_name', 'emergency_contact_phone']
   if (qr_corrections) {
     for (const key of Object.keys(qr_corrections)) {
       if (!VALID_QR_FIELDS.includes(key)) return res.status(400).json({ error: `Invalid QR field: ${key}` })

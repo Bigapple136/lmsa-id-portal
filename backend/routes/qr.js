@@ -206,7 +206,7 @@ router.get('/html/:studentId', async (req, res) => {
 
     const showBloodType   = qrFields.blood_type?.enabled              && bloodType
     const showProgramme   = qrFields.programme?.enabled               && programme
-    const showEmail      = qrFields.student_email?.enabled           && email
+    const showEmail      = qrFields.student_email?.enabled            && email
     const showEmerName   = qrFields.emergency_contact_name?.enabled   && emergName
     const showEmerPhone  = qrFields.emergency_contact_phone?.enabled  && emergPhone
     const showEmerCard   = showEmerName || showEmerPhone
