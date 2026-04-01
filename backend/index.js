@@ -12,14 +12,44 @@ const qrRouter = require('./routes/qr')
 
 const app = express()
 
-app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
-
-const allowedOrigin = process.env.ALLOWED_ORIGIN || '*'
-app.use(cors({
-  origin: allowedOrigin,
-  methods: ['GET','POST','PATCH','PUT','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  frameguard: { action: 'deny' },
+  noSniff: true,
+  xssFilter: true,
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      fontSrc: ["'self'"],
+      connectSrc: ["'self'", 'https://*.supabase.co'],
+      frameAncestors: ["'none'"],
+      formAction: ["'self'"],
+    },
+  },
 }))
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : []
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.length === 0) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}
+
+app.use(cors(corsOptions))
 
 app.use(express.json({ limit: '50kb' }))
 
@@ -43,5 +73,5 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }))
 const PORT = process.env.PORT || 4000
 app.listen(PORT, () => {
   console.log(`LMSA ID Portal backend running on port ${PORT}`)
-  console.log(`CORS origin: ${allowedOrigin}`)
+  console.log(`CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'all (dev mode)'}`)
 })
