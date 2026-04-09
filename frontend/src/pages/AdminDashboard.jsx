@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { adminFetch, adminJson, adminForm } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
@@ -19,6 +20,7 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
+  const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('overview')
   const [uploadMode, setUploadMode] = useState('csv')
@@ -470,6 +472,11 @@ export default function AdminDashboard() {
             {tab.charAt(0).toUpperCase()+tab.slice(1)}
           </button>
         ))}
+        <button
+          className={`admin-tab ${activeTab==='admins'?'active':''}`}
+          onClick={()=>navigate('/admin/admins')}>
+          Admins
+        </button>
       </div>
 
       <div className="admin-body">

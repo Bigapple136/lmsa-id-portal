@@ -466,6 +466,15 @@ body {
 
 .topbar-logo { font-size: 15px; font-weight: 600; color: var(--gold); }
 .topbar-sub { font-size: 11px; color: #8899AA; margin-top: 2px; }
+.admin-topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-title { font-size: 15px; font-weight: 600; color: #fff; }
+.admin-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
 
 .admin-tabs {
   display: flex;

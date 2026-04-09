@@ -9,6 +9,7 @@ const templatesRouter = require('./routes/templates')
 const confirmationsRouter = require('./routes/confirmations')
 const settingsRouter = require('./routes/settings')
 const qrRouter = require('./routes/qr')
+const adminsRouter = require('./routes/admins')
 
 const app = express()
 
@@ -66,6 +67,7 @@ app.use('/api/confirmations', confirmationsRouter)
 app.use('/api/templates', templatesRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/qr', qrRouter)
+app.use('/api/admins', adminsRouter)
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }))
