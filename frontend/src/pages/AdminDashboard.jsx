@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { adminFetch, adminJson, adminForm } from '../lib/api'
+import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
@@ -16,6 +16,7 @@ const FIELD_META = {
 
 export default function AdminDashboard() {
   const [session, setSession] = useState(null)
+  const [userRole, setUserRole] = useState(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
@@ -82,6 +83,16 @@ export default function AdminDashboard() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (session === null) return // still loading
+    if (!session) navigate('/admin/login')
+  }, [session])
+
+  useEffect(() => {
+    if (!session) return
+    authMe().then(res => res.ok && res.json().then(d => setUserRole(d.role || 'admin')))
+  }, [session])
 
   useEffect(() => { if (session) loadAll() }, [session])
 

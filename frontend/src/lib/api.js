@@ -46,3 +46,8 @@ export async function adminJson(path, method, body) {
 export async function adminForm(path, method, formData) {
   return adminFetch(path, { method, body: formData })
 }
+
+// Get current user info
+export async function authMe() {
+  return adminFetch('/api/auth/me')
+}
