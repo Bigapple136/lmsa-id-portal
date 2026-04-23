@@ -62,12 +62,22 @@ app.use('/api', generalLimiter)
 app.use('/api/students/lookup', lookupLimiter)
 app.use('/api/confirmations', confirmLimiter)
 
+const { createClient } = require('@supabase/supabase-js')
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+)
+
 app.use('/api/students', studentsRouter)
 app.use('/api/confirmations', confirmationsRouter)
 app.use('/api/templates', templatesRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/qr', qrRouter)
 app.use('/api/admins', adminsRouter)
+
+app.get('/api/auth/me', requireAdmin, async (req, res) => {
+  res.json({ id: req.user.id, email: req.user.email, role: req.userRole })
+})
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }))

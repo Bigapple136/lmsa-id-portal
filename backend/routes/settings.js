@@ -11,6 +11,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+function requireFullAdmin(req, res, next) {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
+  }
+  next()
+}
+
 const DEFAULT_FIELDS = {
   full_name:  { label: 'Full Name',  enabled: true,  locked: false },
   student_id: { label: 'Student ID', enabled: true,  locked: true  },
@@ -61,17 +68,13 @@ router.get('/layout', async (req, res) => {
 })
 
 // ── ADMIN writes ──
-router.put('/fields', requireAdmin, async (req, res) => {
-  const incoming = req.body
-  if (incoming.student_id) incoming.student_id.enabled = true
-  const { data, error } = await supabase.from('portal_settings')
-    .upsert({ key: 'card_fields', value: incoming, updated_at: new Date().toISOString() })
-    .select().single()
-  if (error) return res.status(400).json({ error: error.message })
+router.put('/fields', requireAdmin, requireFullAdmin, async (req, res) => {
+  const { data, error } = await supabase.from('settings').upsert({ key: 'fields', value: req.body }).select('value').single()
+  if (error) return res.status(500).json({ error: error.message })
   res.json(data.value)
 })
 
-router.put('/qr-fields', requireAdmin, async (req, res) => {
+router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data, error } = await supabase.from('portal_settings')
     .upsert({ key: 'qr_fields', value: req.body, updated_at: new Date().toISOString() })
     .select().single()
@@ -79,7 +82,7 @@ router.put('/qr-fields', requireAdmin, async (req, res) => {
   res.json(data.value)
 })
 
-router.put('/layout', requireAdmin, async (req, res) => {
+router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data, error } = await supabase.from('portal_settings')
     .upsert({ key: 'card_layout', value: req.body, updated_at: new Date().toISOString() })
     .select().single()

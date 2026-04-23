@@ -9,6 +9,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+function requireFullAdmin(req, res, next) {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
+  }
+  next()
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }
@@ -35,7 +42,7 @@ router.get('/', requireAdmin, async (req, res) => {
 })
 
 // ADMIN: upload new template
-router.post('/', requireAdmin, upload.single('file'), async (req, res) => {
+router.post('/', requireAdmin, requireFullAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' })
 
   const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg']

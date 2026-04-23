@@ -11,6 +11,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+function requireFullAdmin(req, res, next) {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
+  }
+  next()
+}
+
 const JSZip = require('jszip')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
@@ -88,7 +95,7 @@ async function generateForStudent(student) {
   return url
 }
 
-router.post('/generate/:studentId', requireAdmin, async (req, res) => {
+router.post('/generate/:studentId', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data: student, error } = await supabase
     .from('students').select('*')
     .eq('student_id', req.params.studentId).maybeSingle()
@@ -104,7 +111,7 @@ router.post('/generate/:studentId', requireAdmin, async (req, res) => {
   }
 })
 
-router.post('/generate-all', requireAdmin, async (req, res) => {
+router.post('/generate-all', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data: students, error } = await supabase
     .from('students').select('*')
     .is('qr_url', null)
@@ -125,7 +132,7 @@ router.post('/generate-all', requireAdmin, async (req, res) => {
   res.json({ generated, failed, total: students.length })
 })
 
-router.post('/regenerate/:studentId', requireAdmin, async (req, res) => {
+router.post('/regenerate/:studentId', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data: student, error } = await supabase
     .from('students').select('*')
     .eq('student_id', req.params.studentId).maybeSingle()
@@ -144,7 +151,7 @@ router.post('/regenerate/:studentId', requireAdmin, async (req, res) => {
   }
 })
 
-router.post('/regenerate-all', requireAdmin, async (req, res) => {
+router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data: students, error } = await supabase
     .from('students').select('*')
 
@@ -428,7 +435,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
   }
 })
 
-router.get('/export', requireAdmin, async (req, res) => {
+router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data: students, error } = await supabase
     .from('students').select('student_id, full_name, year_level, qr_url')
     .not('qr_url', 'is', null)

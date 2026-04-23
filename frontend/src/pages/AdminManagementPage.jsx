@@ -12,6 +12,7 @@ export default function AdminManagementPage() {
 
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
+  const [role, setRole] = useState('support_admin')
   const [submitting, setSubmitting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
 
@@ -47,7 +48,7 @@ export default function AdminManagementPage() {
       const res = await adminFetch('/api/admins', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), name: name.trim() || undefined })
+        body: JSON.stringify({ email: email.trim(), name: name.trim() || undefined, role })
       })
       const data = await res.json()
       if (!res.ok) { setInviteMsg(data.error || 'Failed to invite admin.'); return }
@@ -71,6 +72,21 @@ export default function AdminManagementPage() {
       setAdmins(prev => prev.filter(a => a.id !== id))
     } catch {
       alert('Failed to remove admin.')
+    }
+  }
+
+  async function handleRoleChange(id, newRole) {
+    try {
+      const res = await adminFetch(`/api/admins/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole })
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || 'Failed to update role.'); return }
+      setAdmins(prev => prev.map(a => a.id === id ? { ...a, role: newRole } : a))
+    } catch {
+      alert('Failed to update role.')
     }
   }
 
@@ -109,6 +125,13 @@ export default function AdminManagementPage() {
               <input className="field-input" type="email" placeholder="jane@example.com" value={email}
                 onChange={e => setEmail(e.target.value)} required autoComplete="off"/>
             </div>
+            <div className="field-group" style={{ flex:'0 0 140px' }}>
+              <label className="field-label">Role</label>
+              <select className="field-input" value={role} onChange={e => setRole(e.target.value)}>
+                <option value="support_admin">Support Admin</option>
+                <option value="admin">Full Admin</option>
+              </select>
+            </div>
             <div style={{ display:'flex', alignItems:'flex-end', flexShrink:0 }}>
               <button className="btn-gold" type="submit" disabled={submitting}>
                 {submitting ? 'Sending...' : 'Send Invite'}
@@ -132,15 +155,16 @@ export default function AdminManagementPage() {
             <div className="error-box">{error}</div>
           ) : (
             <div className="meta-table">
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr auto', gap:'8px', padding:'10px 12px',
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
                 borderBottom:'2px solid var(--border)', marginBottom:'4px' }}>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Name</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Email</span>
+                <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Role</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Added</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Action</span>
               </div>
               {admins.map(a => (
-                <div key={a.id} style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr auto', gap:'8px', padding:'10px 12px',
+                <div key={a.id} style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
                   borderBottom:'1px solid var(--border)', alignItems:'center' }}>
                   <span style={{ fontSize:'13px', fontWeight:500, color:'var(--text)' }}>
                     {a.name || <span style={{ color:'var(--muted)', fontStyle:'italic' }}>—</span>}
@@ -150,6 +174,18 @@ export default function AdminManagementPage() {
                     )}
                   </span>
                   <span style={{ fontSize:'13px', color:'var(--text)' }}>{a.email}</span>
+                  <span style={{ fontSize:'12px' }}>
+                    {a.id === currentUserId ? (
+                      <span style={{ color:'var(--muted)' }}>{a.role || 'admin'}</span>
+                    ) : (
+                      <select value={a.role || 'support_admin'} onChange={e => handleRoleChange(a.id, e.target.value)}
+                        style={{ fontSize:'12px', padding:'2px 6px', borderRadius:'4px', border:'0.5px solid var(--border)',
+                          background:'var(--bg)', color:'var(--text)' }}>
+                        <option value="support_admin">Support Admin</option>
+                        <option value="admin">Full Admin</option>
+                      </select>
+                    )}
+                  </span>
                   <span style={{ fontSize:'12px', color:'var(--muted)' }}>{formatDate(a.created_at)}</span>
                   <span>
                     {a.id === currentUserId ? (

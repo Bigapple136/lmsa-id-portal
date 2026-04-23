@@ -15,6 +15,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+function requireFullAdmin(req, res, next) {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
+  }
+  next()
+}
+
 // Lazy-load QR generator to avoid circular dep issues
 function getQRGenerator() {
   return require('./qr').generateForStudent
@@ -127,7 +134,7 @@ router.get('/:studentId', requireAdmin, async (req, res) => {
   res.json(data)
 })
 
-router.delete('/:studentId?', requireAdmin, async (req, res) => {
+router.delete('/:studentId?', requireAdmin, requireFullAdmin, async (req, res) => {
   const studentId = req.params.studentId
   if (!studentId) return res.status(400).json({ error: 'student_id is required.' })
 

@@ -472,7 +472,7 @@ export default function AdminDashboard() {
       <div className="admin-topbar">
         <div>
           <div className="topbar-logo">LMSA ID Portal</div>
-          <div className="topbar-sub">GoldWay Admin Dashboard</div>
+          <div className="topbar-sub">GoldWay Admin Dashboard{userRole === 'support_admin' && ' · Support Admin'}</div>
         </div>
         <button className="btn-outline-light" onClick={()=>supabase.auth.signOut()}>Sign out</button>
       </div>
@@ -483,11 +483,13 @@ export default function AdminDashboard() {
             {tab.charAt(0).toUpperCase()+tab.slice(1)}
           </button>
         ))}
-        <button
-          className={`admin-tab ${activeTab==='admins'?'active':''}`}
-          onClick={()=>navigate('/admin/admins')}>
-          Admins
-        </button>
+        {userRole === 'admin' && (
+          <button
+            className={`admin-tab ${activeTab==='admins'?'active':''}`}
+            onClick={()=>navigate('/admin/admins')}>
+            Admins
+          </button>
+        )}
       </div>
 
       <div className="admin-body">
@@ -783,7 +785,8 @@ export default function AdminDashboard() {
         {/* ── STUDENTS ── */}
         {activeTab==='students' && !dataLoading && (
           <div>
-            {/* QR bulk controls */}
+            {/* QR bulk controls - admin only */}
+            {userRole === 'admin' && (
             <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderRadius:'var(--radius)', padding:'12px', marginBottom:'14px' }}>
               <div style={{ fontSize:'12px', fontWeight:'500', color:'var(--text)', marginBottom:'8px' }}>🔲 QR Code Management</div>
               <div style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'10px' }}>
@@ -802,6 +805,7 @@ export default function AdminDashboard() {
               </div>
               {qrMsg && <div className={qrMsg.ok?'success-box':'error-box'} style={{ marginTop:'8px', fontSize:'12px' }}>{qrMsg.text}</div>}
             </div>
+            )}
 
             <div style={{ display:'flex', gap:'8px', marginBottom:'14px', alignItems:'center' }}>
               <input className="field-input" placeholder="Search by name or student ID..." value={search} onChange={e=>{setSearch(e.target.value);setCurrentPage(1)}} style={{ flex:1 }}/>
@@ -866,17 +870,20 @@ export default function AdminDashboard() {
                             }}>
                             View page
                           </button>
+                          {userRole === 'admin' && (
                           <button style={{ fontSize:'10px', color:'#CC0000', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid #CC0000', cursor:'pointer' }}
                             onClick={async()=>{ await handleRegenerateQR(s.student_id) }}>
                             Regenerate
                           </button>
+                          )}
                         </>
-                      : <button style={{ fontSize:'10px', color:'var(--warn-text)', background:'var(--warn-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--warn-border)', cursor:'pointer' }}
-                          onClick={async()=>{ await handleGenerateQR(s.student_id) }}>
-                          Generate QR
-                        </button>
-                    }
-                    {s.student_id && (
+                      : userRole === 'admin' && (
+                          <button style={{ fontSize:'10px', color:'var(--warn-text)', background:'var(--warn-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--warn-border)', cursor:'pointer' }}
+                            onClick={async()=>{ await handleGenerateQR(s.student_id) }}>
+                            Generate QR
+                          </button>
+                    )}
+                    {s.student_id && userRole === 'admin' && (
                       <button style={{ fontSize:'10px', color:'#CC0000', background:'transparent', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid #CC0000', cursor:'pointer' }}
                         onClick={async()=>{
                           if (!window.confirm('Delete this student record? This cannot be undone.')) return
