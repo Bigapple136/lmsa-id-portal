@@ -58,10 +58,12 @@ app.use(express.json({ limit: '50kb' }))
 const generalLimiter = rateLimit({ windowMs: 15*60*1000, max: 200, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests.' } })
 const lookupLimiter = rateLimit({ windowMs: 15*60*1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many lookup attempts.' } })
 const confirmLimiter = rateLimit({ windowMs: 15*60*1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many confirmation attempts.' } })
+const authLimiter = rateLimit({ windowMs: 20*60*1000, max: 5, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many authentication attempts. Please try again in 20 minutes.' } })
 
 app.use('/api', generalLimiter)
 app.use('/api/students/lookup', lookupLimiter)
 app.use('/api/confirmations', confirmLimiter)
+app.use('/api/auth/me', authLimiter)
 
 const { createClient } = require('@supabase/supabase-js')
 const supabase = createClient(
