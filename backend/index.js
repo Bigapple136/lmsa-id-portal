@@ -4,6 +4,7 @@ const cors = require('cors')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
 
+const { requireAdmin } = require('./middleware/auth')
 const studentsRouter = require('./routes/students')
 const templatesRouter = require('./routes/templates')
 const confirmationsRouter = require('./routes/confirmations')
