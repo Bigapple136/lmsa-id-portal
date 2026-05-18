@@ -77,6 +77,11 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
   if (!submission) return res.status(404).json({ error: 'Submission not found.' })
   if (submission.status !== 'pending') return res.status(400).json({ error: `Submission already ${submission.status}.` })
 
+  const { data: existing } = await supabase.from('students').select('student_id').eq('student_id', submission.student_id).maybeSingle()
+  if (existing) {
+    return res.status(409).json({ error: `Student ID ${submission.student_id} already exists in the students table.` })
+  }
+
   const { data: student, error: insertErr } = await supabase.from('students').insert({
     student_id: submission.student_id,
     full_name: submission.full_name,

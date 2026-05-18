@@ -9,6 +9,8 @@ export default function StudentSubmissionForm() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [fieldsConfig, setFieldsConfig] = useState(null)
+  const [qrFieldsConfig, setQrFieldsConfig] = useState(null)
   const [form, setForm] = useState({
     student_id: '', full_name: '', year_level: '1st Year', position: '',
     programme: '', blood_type: '', student_email: '',
@@ -16,13 +18,25 @@ export default function StudentSubmissionForm() {
   })
 
   useEffect(() => {
-    apiFetch('/api/submissions/status').then(r => r.json()).then(d => {
-      setEnabled(d.enabled)
+    async function init() {
+      try {
+        const [statusRes, fieldsRes, qrFieldsRes] = await Promise.all([
+          apiFetch('/api/submissions/status'),
+          apiFetch('/api/settings/fields'),
+          apiFetch('/api/settings/qr-fields'),
+        ])
+        const [statusData, fieldsData, qrFieldsData] = await Promise.all([
+          statusRes.json(), fieldsRes.json(), qrFieldsRes.json(),
+        ])
+        setEnabled(statusData.enabled)
+        setFieldsConfig(fieldsData)
+        setQrFieldsConfig(qrFieldsData)
+      } catch {
+        setEnabled(false)
+      }
       setLoading(false)
-    }).catch(() => {
-      setEnabled(false)
-      setLoading(false)
-    })
+    }
+    init()
   }, [])
 
   async function handleSubmit(e) {
@@ -93,6 +107,14 @@ export default function StudentSubmissionForm() {
     )
   }
 
+  const showPosition = fieldsConfig?.position?.enabled === true
+  const showProgramme = qrFieldsConfig?.programme?.enabled === true
+  const showBloodType = qrFieldsConfig?.blood_type?.enabled === true
+  const showStudentEmail = qrFieldsConfig?.student_email?.enabled === true
+  const showEmergencyContactName = qrFieldsConfig?.emergency_contact_name?.enabled === true
+  const showEmergencyContactPhone = qrFieldsConfig?.emergency_contact_phone?.enabled === true
+  const hasAdditionalFields = showProgramme || showBloodType || showStudentEmail || showEmergencyContactName || showEmergencyContactPhone
+
   return (
     <div className="page-center">
       <div className="landing-card">
@@ -123,44 +145,58 @@ export default function StudentSubmissionForm() {
               </select>
             </div>
 
-            <div className="field-group">
-              <label className="field-label">Position (optional)</label>
-              <input className="field-input" placeholder="e.g. Class Representative"
-                value={form.position} onChange={e => setForm({...form, position: e.target.value})} />
-            </div>
+            {showPosition && (
+              <div className="field-group">
+                <label className="field-label">Position (optional)</label>
+                <input className="field-input" placeholder="e.g. Class Representative"
+                  value={form.position} onChange={e => setForm({...form, position: e.target.value})} />
+              </div>
+            )}
 
-            <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
-              <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                Additional details
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div className="field-group">
-                  <label className="field-label">Programme</label>
-                  <input className="field-input" placeholder="e.g. MBBS, Pharm.D"
-                    value={form.programme} onChange={e => setForm({...form, programme: e.target.value})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Blood Type</label>
-                  <input className="field-input" placeholder="e.g. O+"
-                    value={form.blood_type} onChange={e => setForm({...form, blood_type: e.target.value})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Student Email</label>
-                  <input className="field-input" type="email" placeholder="student@email.com"
-                    value={form.student_email} onChange={e => setForm({...form, student_email: e.target.value})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Emergency Contact Name</label>
-                  <input className="field-input" placeholder="Full name"
-                    value={form.emergency_contact_name} onChange={e => setForm({...form, emergency_contact_name: e.target.value})} />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Emergency Contact Phone</label>
-                  <input className="field-input" placeholder="+231 xxx xxxx"
-                    value={form.emergency_contact_phone} onChange={e => setForm({...form, emergency_contact_phone: e.target.value})} />
+            {hasAdditionalFields && (
+              <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
+                <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                  Additional details
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {showProgramme && (
+                    <div className="field-group">
+                      <label className="field-label">Programme</label>
+                      <input className="field-input" placeholder="e.g. MBBS, Pharm.D"
+                        value={form.programme} onChange={e => setForm({...form, programme: e.target.value})} />
+                    </div>
+                  )}
+                  {showBloodType && (
+                    <div className="field-group">
+                      <label className="field-label">Blood Type</label>
+                      <input className="field-input" placeholder="e.g. O+"
+                        value={form.blood_type} onChange={e => setForm({...form, blood_type: e.target.value})} />
+                    </div>
+                  )}
+                  {showStudentEmail && (
+                    <div className="field-group">
+                      <label className="field-label">Student Email</label>
+                      <input className="field-input" type="email" placeholder="student@email.com"
+                        value={form.student_email} onChange={e => setForm({...form, student_email: e.target.value})} />
+                    </div>
+                  )}
+                  {showEmergencyContactName && (
+                    <div className="field-group">
+                      <label className="field-label">Emergency Contact Name</label>
+                      <input className="field-input" placeholder="Full name"
+                        value={form.emergency_contact_name} onChange={e => setForm({...form, emergency_contact_name: e.target.value})} />
+                    </div>
+                  )}
+                  {showEmergencyContactPhone && (
+                    <div className="field-group">
+                      <label className="field-label">Emergency Contact Phone</label>
+                      <input className="field-input" placeholder="+231 xxx xxxx"
+                        value={form.emergency_contact_phone} onChange={e => setForm({...form, emergency_contact_phone: e.target.value})} />
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {error && <div className="error-box" style={{ marginTop: '12px' }}>{error}</div>}
