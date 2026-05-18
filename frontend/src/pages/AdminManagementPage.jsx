@@ -154,9 +154,9 @@ export default function AdminManagementPage() {
           ) : error ? (
             <div className="error-box">{error}</div>
           ) : (
-            <div className="meta-table" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', maxWidth:'100%' }}>
+            <div className="meta-table" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', width:'100%' }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
-                borderBottom:'2px solid var(--border)', marginBottom:'4px', minWidth:'480px' }}>
+                borderBottom:'2px solid var(--border)', marginBottom:'4px' }}>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Name</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Email</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Role</span>
@@ -165,7 +165,7 @@ export default function AdminManagementPage() {
               </div>
               {admins.map(a => (
                 <div key={a.id} style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
-                  borderBottom:'1px solid var(--border)', alignItems:'center', minWidth:'480px' }}>
+                  borderBottom:'1px solid var(--border)', alignItems:'center' }}>
                   <span style={{ fontSize:'13px', fontWeight:500, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {a.name || <span style={{ color:'var(--muted)', fontStyle:'italic' }}>—</span>}
                     {a.id === currentUserId && (
@@ -174,19 +174,19 @@ export default function AdminManagementPage() {
                     )}
                   </span>
                   <span style={{ fontSize:'13px', color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.email}</span>
-                  <span style={{ fontSize:'12px' }}>
+                  <span style={{ fontSize:'12px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {a.id === currentUserId ? (
                       <span style={{ color:'var(--muted)' }}>{a.role || 'admin'}</span>
                     ) : (
                       <select value={a.role || 'support_admin'} onChange={e => handleRoleChange(a.id, e.target.value)}
                         style={{ fontSize:'12px', padding:'2px 6px', borderRadius:'4px', border:'0.5px solid var(--border)',
-                          background:'var(--bg)', color:'var(--text)' }}>
+                          background:'var(--bg)', color:'var(--text)', maxWidth:'100%' }}>
                         <option value="support_admin">Support Admin</option>
                         <option value="admin">Full Admin</option>
                       </select>
                     )}
                   </span>
-                  <span style={{ fontSize:'12px', color:'var(--muted)' }}>{formatDate(a.created_at)}</span>
+                  <span style={{ fontSize:'12px', color:'var(--muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{formatDate(a.created_at)}</span>
                   <span>
                     {a.id === currentUserId ? (
                       <span style={{ fontSize:'11px', color:'var(--muted)' }}>—</span>
