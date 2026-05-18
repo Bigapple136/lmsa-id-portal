@@ -156,7 +156,7 @@ export default function AdminManagementPage() {
           ) : (
             <div className="meta-table" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', maxWidth:'100%' }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
-                borderBottom:'2px solid var(--border)', marginBottom:'4px' }}>
+                borderBottom:'2px solid var(--border)', marginBottom:'4px', minWidth:'480px' }}>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Name</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Email</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Role</span>
@@ -165,15 +165,15 @@ export default function AdminManagementPage() {
               </div>
               {admins.map(a => (
                 <div key={a.id} style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
-                  borderBottom:'1px solid var(--border)', alignItems:'center' }}>
-                  <span style={{ fontSize:'13px', fontWeight:500, color:'var(--text)' }}>
+                  borderBottom:'1px solid var(--border)', alignItems:'center', minWidth:'480px' }}>
+                  <span style={{ fontSize:'13px', fontWeight:500, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                     {a.name || <span style={{ color:'var(--muted)', fontStyle:'italic' }}>—</span>}
                     {a.id === currentUserId && (
                       <span style={{ marginLeft:'6px', fontSize:'10px', background:'var(--gold)', color:'#fff',
-                        padding:'1px 6px', borderRadius:'10px', fontWeight:600 }}>You</span>
+                        padding:'1px 6px', borderRadius:'10px', fontWeight:600, whiteSpace:'nowrap' }}>You</span>
                     )}
                   </span>
-                  <span style={{ fontSize:'13px', color:'var(--text)' }}>{a.email}</span>
+                  <span style={{ fontSize:'13px', color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.email}</span>
                   <span style={{ fontSize:'12px' }}>
                     {a.id === currentUserId ? (
                       <span style={{ color:'var(--muted)' }}>{a.role || 'admin'}</span>
