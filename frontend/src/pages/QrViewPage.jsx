@@ -56,11 +56,11 @@ export default function QrViewPage() {
 
           <div style={{ padding: '24px', textAlign: 'center' }}>
             {student.qr_url ? (
-              <div style={{ display: 'inline-block', border: '4px solid #0D1B2A', borderRadius: '8px', padding: '8px', background: '#fff' }}>
-                <img src={student.qr_url} alt="QR Code" style={{ display: 'block', width: '280px', height: '280px' }} />
+              <div style={{ display: 'inline-block', border: '4px solid #0D1B2A', borderRadius: '8px', padding: '8px', background: '#fff', maxWidth: '100%' }}>
+                <img src={student.qr_url} alt="QR Code" style={{ display: 'block', width: '280px', maxWidth: '100%', height: 'auto', aspectRatio: '1/1' }} />
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '4px solid #0D1B2A', borderRadius: '8px', padding: '24px', background: '#f5f5f5', width: '296px', height: '296px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '4px solid #0D1B2A', borderRadius: '8px', padding: '24px', background: '#f5f5f5', width: '100%', maxWidth: '296px', margin: '0 auto', aspectRatio: '1/1' }}>
                 <div style={{ fontSize: '32px' }}>🔲</div>
                 <div style={{ fontSize: '12px', color: '#888' }}>QR code not generated yet.</div>
               </div>

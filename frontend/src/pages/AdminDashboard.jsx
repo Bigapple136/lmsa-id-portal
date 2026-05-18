@@ -1029,7 +1029,7 @@ export default function AdminDashboard() {
                   <div className="student-meta">
                     {s.student_id} · {s.year_level}{s.position ? ` · ${s.position}` : ''}
                   </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:'6px', marginTop:'2px' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'6px', marginTop:'2px', flexWrap:'wrap' }}>
                     {s.qr_url
                       ? <>
                           <span style={{ fontSize:'10px', color:'var(--success-text)', background:'var(--success-bg)', padding:'1px 7px', borderRadius:'20px', border:'0.5px solid var(--success-border)' }}>QR ✓</span>
