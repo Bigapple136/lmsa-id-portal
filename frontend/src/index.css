@@ -454,6 +454,9 @@ body {
 .admin-wrapper {
   min-height: 100vh;
   background: var(--bg);
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .admin-topbar {
@@ -512,6 +515,8 @@ body {
   max-width: 680px;
   margin: 0 auto;
   padding: 20px 24px;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 /* ── Stats grid ── */
@@ -588,9 +593,9 @@ body {
   text-transform: uppercase;
 }
 
-.student-info { flex: 1; }
-.student-name { font-size: 13px; color: var(--text); font-weight: 500; }
-.student-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.student-info { flex: 1; min-width: 0; overflow-wrap: break-word; word-wrap: break-word; }
+.student-name { font-size: 13px; color: var(--text); font-weight: 500; overflow-wrap: break-word; word-wrap: break-word; }
+.student-meta { font-size: 11px; color: var(--muted); margin-top: 2px; overflow-wrap: break-word; word-wrap: break-word; }
 
 /* ── Pills ── */
 .pill {
@@ -628,6 +633,7 @@ body {
   display: flex;
   gap: 8px;
   margin-bottom: 14px;
+  flex-wrap: wrap;
 }
 
 .mode-btn {
@@ -997,6 +1003,9 @@ a.about-contact-item:hover .about-contact-value { text-decoration: underline; }
   font-weight: 500;
   color: var(--text);
   flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .field-toggle-badge {
