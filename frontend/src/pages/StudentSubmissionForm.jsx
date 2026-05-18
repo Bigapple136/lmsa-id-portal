@@ -119,7 +119,7 @@ export default function StudentSubmissionForm() {
     <div className="page-center">
       <div className="landing-card">
         <div className="landing-header">
-          <h1 className="landing-title" style={{ fontSize: '1.1rem' }}>Student Details Form</h1>
+          <h1 className="landing-title">Student Details Form</h1>
           <p className="landing-desc">Submit your information for your ID card</p>
         </div>
 
@@ -155,7 +155,7 @@ export default function StudentSubmissionForm() {
 
             {hasAdditionalFields && (
               <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
-                <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>
                   Additional details
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
