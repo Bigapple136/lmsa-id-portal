@@ -477,6 +477,9 @@ body {
   border-radius: var(--radius);
   padding: 20px;
   margin-bottom: 16px;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 .admin-tabs {

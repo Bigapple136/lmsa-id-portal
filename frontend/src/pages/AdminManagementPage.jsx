@@ -154,9 +154,9 @@ export default function AdminManagementPage() {
           ) : error ? (
             <div className="error-box">{error}</div>
           ) : (
-            <div className="meta-table" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+            <div className="meta-table" style={{ overflowX:'auto', WebkitOverflowScrolling:'touch', maxWidth:'100%' }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
-                borderBottom:'2px solid var(--border)', marginBottom:'4px', minWidth:'500px' }}>
+                borderBottom:'2px solid var(--border)', marginBottom:'4px' }}>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Name</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Email</span>
                 <span style={{ fontSize:'11px', fontWeight:600, color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Role</span>
@@ -165,7 +165,7 @@ export default function AdminManagementPage() {
               </div>
               {admins.map(a => (
                 <div key={a.id} style={{ display:'grid', gridTemplateColumns:'1fr 1.5fr 1fr 1fr auto', gap:'8px', padding:'10px 12px',
-                  borderBottom:'1px solid var(--border)', alignItems:'center', minWidth:'500px' }}>
+                  borderBottom:'1px solid var(--border)', alignItems:'center' }}>
                   <span style={{ fontSize:'13px', fontWeight:500, color:'var(--text)' }}>
                     {a.name || <span style={{ color:'var(--muted)', fontStyle:'italic' }}>—</span>}
                     {a.id === currentUserId && (
