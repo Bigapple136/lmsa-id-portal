@@ -5,6 +5,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminManagementPage from './pages/AdminManagementPage'
 import AboutPage from './pages/AboutPage'
 import QrViewPage from './pages/QrViewPage'
+import StudentSubmissionForm from './pages/StudentSubmissionForm'
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/admins" element={<AdminManagementPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/submit" element={<StudentSubmissionForm />} />
       </Routes>
     </BrowserRouter>
   )

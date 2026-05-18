@@ -142,6 +142,21 @@ router.get('/download-image-folder', requireAdmin, async (req, res) => {
   res.send(buffer)
 })
 
+// ── Submission form toggle ──
+router.get('/submission-form', requireAdmin, async (req, res) => {
+  const { data } = await supabase.from('portal_settings').select('value').eq('key', 'submission_form').maybeSingle()
+  res.json(data?.value || { enabled: false })
+})
+
+router.put('/submission-form', requireAdmin, requireFullAdmin, async (req, res) => {
+  const { enabled } = req.body
+  const { data, error } = await supabase.from('portal_settings')
+    .upsert({ key: 'submission_form', value: { enabled: enabled === true }, updated_at: new Date().toISOString() })
+    .select().single()
+  if (error) return res.status(400).json({ error: error.message })
+  res.json(data.value)
+})
+
 async function getQRFields() {
   const { data } = await supabase.from('portal_settings')
     .select('value').eq('key', 'qr_fields').maybeSingle()

@@ -19,6 +19,15 @@ export async function apiFetch(path, options = {}) {
   return res
 }
 
+// Public fetch with JSON body
+export async function apiJson(path, method, body) {
+  return apiFetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+}
+
 // Admin fetch — automatically attaches the session token
 export async function adminFetch(path, options = {}) {
   const authHeaders = await getAuthHeaders()

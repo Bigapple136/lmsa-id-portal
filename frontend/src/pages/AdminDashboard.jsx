@@ -78,6 +78,13 @@ export default function AdminDashboard() {
   const [qrGenerating, setQrGenerating] = useState(false)
   const [qrMsg, setQrMsg] = useState(null)
 
+  // Submission form state
+  const [submissions, setSubmissions] = useState([])
+  const [submissionsFilter, setSubmissionsFilter] = useState('pending')
+  const [submissionFormEnabled, setSubmissionFormEnabled] = useState(false)
+  const [submissionsLoading, setSubmissionsLoading] = useState(false)
+  const [submissionMsg, setSubmissionMsg] = useState(null)
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
@@ -105,7 +112,7 @@ export default function AdminDashboard() {
 
   async function loadAll() {
     setDataLoading(true)
-    await Promise.all([loadStudents(), loadTemplate(), loadFields(), loadQrFields(), loadLayout()])
+    await Promise.all([loadStudents(), loadTemplate(), loadFields(), loadQrFields(), loadLayout(), loadSubmissions(), loadSubmissionForm()])
     setDataLoading(false)
   }
 
@@ -166,6 +173,22 @@ export default function AdminDashboard() {
   async function loadLayout() {
     const res = await adminFetch('/api/settings/layout')
     if (res.ok) setCardLayout(await res.json())
+  }
+
+  async function loadSubmissions() {
+    setSubmissionsLoading(true)
+    const statusParam = submissionsFilter !== 'all' ? `?status=${submissionsFilter}` : ''
+    const res = await adminFetch(`/api/submissions${statusParam}`)
+    if (res.ok) setSubmissions(await res.json())
+    setSubmissionsLoading(false)
+  }
+
+  async function loadSubmissionForm() {
+    const res = await adminFetch('/api/settings/submission-form')
+    if (res.ok) {
+      const data = await res.json()
+      setSubmissionFormEnabled(data.enabled)
+    }
   }
 
   async function saveLayout(layout) {
@@ -331,6 +354,57 @@ export default function AdminDashboard() {
     setTimeout(() => setQrMsg(null), 6000)
   }
 
+  // ── Submission handlers ──
+  async function handleToggleSubmissionForm() {
+    const newState = !submissionFormEnabled
+    const res = await adminJson('/api/settings/submission-form', 'PUT', { enabled: newState })
+    if (res.ok) {
+      setSubmissionFormEnabled(newState)
+      setSubmissionMsg({ ok: true, text: newState ? 'Form enabled. Share the link with students.' : 'Form disabled.' })
+    } else {
+      setSubmissionMsg({ ok: false, text: 'Failed to update form settings.' })
+    }
+    setTimeout(() => setSubmissionMsg(null), 3000)
+  }
+
+  async function handleApproveSubmission(id) {
+    const res = await adminFetch(`/api/submissions/${id}/approve`, { method: 'POST' })
+    const data = await res.json()
+    if (res.ok) {
+      setSubmissionMsg({ ok: true, text: 'Student approved and record created.' })
+      loadSubmissions()
+      loadStudents()
+    } else {
+      setSubmissionMsg({ ok: false, text: data.error || 'Approval failed.' })
+    }
+    setTimeout(() => setSubmissionMsg(null), 3000)
+  }
+
+  async function handleRejectSubmission(id) {
+    const notes = prompt('Reason for rejection (optional):')
+    const res = await adminJson(`/api/submissions/${id}/reject`, 'PATCH', { admin_notes: notes || '' })
+    const data = await res.json()
+    if (res.ok) {
+      setSubmissionMsg({ ok: true, text: 'Submission rejected.' })
+      loadSubmissions()
+    } else {
+      setSubmissionMsg({ ok: false, text: data.error || 'Rejection failed.' })
+    }
+    setTimeout(() => setSubmissionMsg(null), 3000)
+  }
+
+  async function handleDeleteSubmission(id) {
+    if (!window.confirm('Delete this submission? This cannot be undone.')) return
+    const res = await adminFetch(`/api/submissions/${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      setSubmissions(prev => prev.filter(s => s.id !== id))
+      setSubmissionMsg({ ok: true, text: 'Submission deleted.' })
+    } else {
+      setSubmissionMsg({ ok: false, text: 'Failed to delete submission.' })
+    }
+    setTimeout(() => setSubmissionMsg(null), 3000)
+  }
+
   function getInitials(name) {
     return name.split(' ').map(n => n[0]).filter(Boolean).slice(0,2).join('').toUpperCase()
   }
@@ -478,9 +552,9 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-tabs">
-        {['overview','upload','layout','students'].map(tab => (
-          <button key={tab} className={`admin-tab ${activeTab===tab?'active':''}`} onClick={()=>setActiveTab(tab)}>
-            {tab.charAt(0).toUpperCase()+tab.slice(1)}
+        {['overview','upload','layout','students','submissions'].map(tab => (
+          <button key={tab} className={`admin-tab ${activeTab===tab?'active':''}`} onClick={()=>{setActiveTab(tab);if(tab==='submissions')loadSubmissions()}}>
+            {tab === 'submissions' ? 'Submission Form' : tab.charAt(0).toUpperCase()+tab.slice(1)}
           </button>
         ))}
         {userRole === 'admin' && (
@@ -779,6 +853,121 @@ export default function AdminDashboard() {
               initialLayout={cardLayout}
               onSave={saveLayout}
             />
+          </div>
+        )}
+
+        {/* ── SUBMISSION FORM ── */}
+        {activeTab==='submissions' && !dataLoading && (
+          <div>
+            <div className="section-title">Submission Form Settings</div>
+            <div style={{ background:'var(--white)', border:'0.5px solid var(--border)', borderRadius:'var(--radius)', padding:'14px', marginBottom:'14px' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+                <div>
+                  <div style={{ fontSize:'13px', fontWeight:'500' }}>Form Status</div>
+                  <div style={{ fontSize:'11px', color:'var(--muted)', marginTop:'2px' }}>
+                    {submissionFormEnabled ? 'Students can submit their details' : 'Form is closed to submissions'}
+                  </div>
+                </div>
+                <button
+                  className={`btn-${submissionFormEnabled?'outline':'gold'}`}
+                  onClick={handleToggleSubmissionForm}
+                  style={{ fontSize:'12px', padding:'7px 14px' }}
+                >
+                  {submissionFormEnabled ? 'Disable Form' : 'Enable Form'}
+                </button>
+              </div>
+              {submissionFormEnabled && (
+                <div style={{ background:'var(--bg)', borderRadius:'var(--radius)', padding:'10px 12px', fontSize:'12px' }}>
+                  <div style={{ color:'var(--muted)', marginBottom:'4px' }}>Share this link with students:</div>
+                  <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
+                    <code style={{ flex:1, padding:'6px 10px', background:'var(--white)', border:'0.5px solid var(--border)', borderRadius:'4px', fontSize:'12px', wordBreak:'break-all' }}>
+                      {window.location.origin}/submit
+                    </code>
+                    <button className="btn-gold" style={{ fontSize:'11px', padding:'5px 10px', whiteSpace:'nowrap' }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/submit`)
+                        setSubmissionMsg({ ok: true, text: 'Link copied!' })
+                        setTimeout(() => setSubmissionMsg(null), 2000)
+                      }}>
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="section-title">Submissions</div>
+            <div className="mode-toggle">
+              {['pending','approved','rejected','all'].map(f => (
+                <button key={f} className={`mode-btn ${submissionsFilter===f?'active':''}`}
+                  onClick={()=>{setSubmissionsFilter(f);setTimeout(loadSubmissions,0)}}
+                  style={{ textTransform:'capitalize' }}>
+                  {f}
+                </button>
+              ))}
+            </div>
+            {submissionMsg && <div className={submissionMsg.ok?'success-box':'error-box'} style={{ marginBottom:'10px', fontSize:'12px' }}>{submissionMsg.text}</div>}
+            {submissionsLoading ? (
+              <div>
+                {[1,2,3].map(i => <div key={i} className="skeleton skeleton-row"/>)}
+              </div>
+            ) : submissions.length === 0 ? (
+              <p style={{ fontSize:'13px', color:'var(--muted)', padding:'12px 0' }}>No {submissionsFilter} submissions.</p>
+            ) : (
+              <div>
+                {submissions.map(s => (
+                  <div key={s.id} className="student-row">
+                    <div className="avatar">{s.full_name.split(' ').map(n=>n[0]).filter(Boolean).slice(0,2).join('').toUpperCase()}</div>
+                    <div className="student-info">
+                      <div className="student-name">{s.full_name}</div>
+                      <div className="student-meta">
+                        {s.student_id} · {s.year_level}{s.position ? ` · ${s.position}` : ''}
+                      </div>
+                      <div className="student-meta" style={{ fontSize:'10px', marginTop:'1px' }}>
+                        Submitted {new Date(s.created_at).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+                        {s.reviewed_at && ` · Reviewed ${new Date(s.reviewed_at).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'})}`}
+                      </div>
+                      {s.admin_notes && <div className="student-issue-note">Note: {s.admin_notes}</div>}
+                    </div>
+                    <span className={`pill ${s.status==='pending'?'pill-gray':s.status==='approved'?'pill-green':'pill-amber'}`}>
+                      {s.status}
+                    </span>
+                    <div style={{ display:'flex', gap:'4px', flexShrink:0 }}>
+                      {s.status === 'pending' && (
+                        <>
+                          <button className="btn-gold" style={{ fontSize:'10px', padding:'4px 8px' }}
+                            onClick={() => handleApproveSubmission(s.id)}>Approve</button>
+                          <button className="btn-outline" style={{ fontSize:'10px', padding:'4px 8px', borderColor:'var(--error-text)', color:'var(--error-text)' }}
+                            onClick={() => handleRejectSubmission(s.id)}>Reject</button>
+                        </>
+                      )}
+                      <button className="btn-outline" style={{ fontSize:'10px', padding:'4px 8px' }}
+                        onClick={() => handleDeleteSubmission(s.id)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop:'14px' }}>
+              <button className="btn-gold" style={{ fontSize:'12px', padding:'7px 14px' }}
+                onClick={async () => {
+                  try {
+                    const res = await adminFetch('/api/submissions/export')
+                    if (!res.ok) { alert('Export failed.'); return }
+                    const blob = await res.blob()
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = 'LMSA_Student_Submissions.docx'
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                  } catch { alert('Export failed.') }
+                }}>
+                ⬇ Export Approved as Word (.docx)
+              </button>
+            </div>
           </div>
         )}
 
