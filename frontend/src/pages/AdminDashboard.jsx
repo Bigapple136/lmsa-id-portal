@@ -999,6 +999,16 @@ export default function AdminDashboard() {
             </div>
             )}
 
+            <div style={{ background:'var(--bg)', border:'0.5px solid var(--border)', borderRadius:'var(--radius)', padding:'12px', marginBottom:'14px' }}>
+              <div style={{ fontSize:'12px', fontWeight:'500', color:'var(--text)', marginBottom:'8px' }}>📋 Photoshoot Roster</div>
+              <div style={{ fontSize:'11px', color:'var(--muted)', marginBottom:'10px' }}>
+                Export a printable roster with student names, ID numbers, and signature spaces for the photoshoot session.
+              </div>
+              <button className="btn-outline" onClick={() => handleDownload('/api/students/export/photoshoot', 'LMSA_Photoshoot_Roster.pdf')} disabled={downloading['/api/students/export/photoshoot']} style={{ fontSize:'12px', padding:'7px 14px' }}>
+                {downloading['/api/students/export/photoshoot'] ? 'Exporting...' : '⬇ Export Photoshoot Roster (PDF)'}
+              </button>
+            </div>
+
             <div style={{ display:'flex', gap:'8px', marginBottom:'14px', alignItems:'center' }}>
               <input className="field-input" placeholder="Search by name or student ID..." value={search} onChange={e=>{setSearch(e.target.value);setCurrentPage(1)}} style={{ flex:1 }}/>
               <button className="btn-gold" onClick={()=>{setActiveTab('upload');setUploadMode('manual')}}>+ Add</button>

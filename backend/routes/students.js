@@ -4,6 +4,7 @@ const multer = require('multer')
 const { parse } = require('csv-parse/sync')
 const JSZip = require('jszip')
 const path = require('path')
+const PDFDocument = require('pdfkit')
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
 const { email, maxLength, firstError } = require('../middleware/validate')
@@ -420,6 +421,108 @@ router.patch('/:studentId/self-correct', async (req, res) => {
   const { data, error } = await supabase.from('students').select('*').eq('student_id', studentId).single()
   if (error) return res.status(400).json({ error: error.message })
   res.json(data)
+})
+
+// ── ADMIN: export photoshoot roster as PDF ──
+router.get('/export/photoshoot', requireAdmin, async (req, res) => {
+  const { data, error } = await supabase.from('students').select('student_id, full_name, year_level').order('year_level').order('full_name')
+  if (error) return res.status(500).json({ error: error.message })
+  if (!data?.length) return res.status(404).json({ error: 'No students found.' })
+
+  const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 50, left: 50, right: 50 } })
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Photoshoot_Roster.pdf"')
+  doc.pipe(res)
+
+  const L = 50, R = 562, W = 512
+  const colNum = 25, colName = 187, colId = 130, colSign = W - colNum - colName - colId
+  const rowH = 44, signH = 32
+
+  function header() {
+    doc.fontSize(16).font('Helvetica-Bold').text('LMSA ID Card Photoshoot Roster', L, null, { align: 'center', width: W })
+    doc.fontSize(9).font('Helvetica').fillColor('#666')
+      .text(`Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, { align: 'center', width: W })
+      .fillColor('#000')
+    doc.moveDown(1.2)
+  }
+
+  function tableHeader(y) {
+    doc.fontSize(8).font('Helvetica-Bold').fillColor('#444')
+    let x = L
+    doc.text('#', x, y + 6, { width: colNum, align: 'center' }); x += colNum
+    doc.text('Name', x, y + 6, { width: colName, align: 'left' }); x += colName
+    doc.text('Student ID', x, y + 6, { width: colId, align: 'left' }); x += colId
+    doc.text('Signature', x + 4, y + 6, { width: colSign - 8, align: 'center' })
+    doc.fillColor('#000')
+    x = L
+    const yy = y + 22
+    doc.moveTo(x, yy).lineTo(R, yy).stroke('#ccc')
+  }
+
+  function studentRow(student, idx, y) {
+    let x = L
+    doc.fontSize(9).font('Helvetica').fillColor('#000')
+    doc.text(String(idx + 1), x, y + 6, { width: colNum, align: 'center' }); x += colNum
+    doc.text(student.full_name, x, y + 6, { width: colName, align: 'left' }); x += colName
+    doc.text(student.student_id, x, y + 6, { width: colId, align: 'left' }); x += colId
+
+    const signLeft = x + 4, signTop = y + 6, signW = colSign - 8
+    doc.rect(signLeft, signTop, signW, signH).stroke('#999')
+    doc.fontSize(7).fillColor('#aaa').text('Sign here', signLeft, signTop + signH / 2 - 4, { width: signW, align: 'center' })
+    doc.fillColor('#000')
+
+    const ly = y + rowH - 1
+    doc.moveTo(L, ly).lineTo(R, ly).stroke('#eee')
+  }
+
+  let yPos
+  function startPage() {
+    doc.addPage()
+    header()
+    yPos = doc.y + 6
+    tableHeader(yPos)
+    yPos += 26
+  }
+
+  header()
+  yPos = doc.y + 6
+
+  const yearOrder = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
+  const grouped = {}
+  for (const s of data) {
+    if (!grouped[s.year_level]) grouped[s.year_level] = []
+    grouped[s.year_level].push(s)
+  }
+
+  for (const year of yearOrder) {
+    const students = grouped[year]
+    if (!students?.length) continue
+
+    if (yPos + 30 > 700) startPage()
+
+    doc.fontSize(12).font('Helvetica-Bold').fillColor('#1E3A5A')
+    doc.text(`${year} — ${students.length} student(s)`, L, yPos)
+    yPos += 18
+
+    if (yPos + 30 > 700) { tableHeader(doc.y); doc.y += 26; yPos = doc.y }
+    else { tableHeader(yPos); yPos += 26 }
+
+    for (let i = 0; i < students.length; i++) {
+      if (yPos + rowH > 730) {
+        startPage()
+        doc.fontSize(12).font('Helvetica-Bold').fillColor('#1E3A5A')
+        doc.text(`${year} — ${students.length} student(s) (continued)`, L, yPos)
+        yPos += 18
+        tableHeader(yPos)
+        yPos += 26
+      }
+      studentRow(students[i], i, yPos)
+      yPos += rowH
+    }
+    yPos += 6
+  }
+
+  doc.end()
 })
 
 module.exports = router
