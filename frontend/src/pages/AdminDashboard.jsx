@@ -371,13 +371,16 @@ export default function AdminDashboard() {
     const res = await adminFetch(`/api/submissions/${id}/approve`, { method: 'POST' })
     const data = await res.json()
     if (res.ok) {
-      setSubmissionMsg({ ok: true, text: 'Student approved and record created.' })
+      const msg = data.name_warning
+        ? { ok: true, text: 'Student approved. ' + data.name_warning, warn: true }
+        : { ok: true, text: 'Student approved and record created.' }
+      setSubmissionMsg(msg)
       loadSubmissions()
       loadStudents()
     } else {
       setSubmissionMsg({ ok: false, text: data.error || 'Approval failed.' })
     }
-    setTimeout(() => setSubmissionMsg(null), 3000)
+    setTimeout(() => setSubmissionMsg(null), 5000)
   }
 
   async function handleRejectSubmission(id) {
@@ -906,7 +909,7 @@ export default function AdminDashboard() {
                 </button>
               ))}
             </div>
-            {submissionMsg && <div className={submissionMsg.ok?'success-box':'error-box'} style={{ marginBottom:'10px', fontSize:'12px' }}>{submissionMsg.text}</div>}
+            {submissionMsg && <div className={submissionMsg.warn?'info-box':submissionMsg.ok?'success-box':'error-box'} style={{ marginBottom:'10px', fontSize:'13px' }}>{submissionMsg.text}</div>}
             {submissionsLoading ? (
               <div>
                 {[1,2,3].map(i => <div key={i} className="skeleton skeleton-row"/>)}

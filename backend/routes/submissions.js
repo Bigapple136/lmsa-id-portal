@@ -94,10 +94,25 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
   if (!submission) return res.status(404).json({ error: 'Submission not found.' })
   if (submission.status !== 'pending') return res.status(400).json({ error: `Submission already ${submission.status}.` })
 
-  const { data: existing } = await supabase.from('students').select('student_id').eq('student_id', submission.student_id).maybeSingle()
-  if (existing) {
+  const [existingResult, exactNameResult, fuzzyNameResult] = await Promise.all([
+    supabase.from('students').select('student_id').eq('student_id', submission.student_id).maybeSingle(),
+    supabase.from('students').select('student_id, full_name').ilike('full_name', submission.full_name.trim()).neq('student_id', submission.student_id).limit(1),
+    (() => {
+      const words = submission.full_name.trim().split(/\s+/).filter(Boolean)
+      if (words.length < 2) return Promise.resolve({ data: [] })
+      const lastName = words[words.length - 1]
+      return supabase.from('students').select('student_id, full_name').ilike('full_name', `%${lastName}%`).neq('student_id', submission.student_id).limit(3)
+    })(),
+  ])
+
+  if (existingResult?.data) {
     return res.status(409).json({ error: `Student ID ${submission.student_id} already exists in the students table.` })
   }
+
+  const nameMatches = []
+  if (exactNameResult?.data?.length) nameMatches.push(...exactNameResult.data)
+  if (fuzzyNameResult?.data?.length) nameMatches.push(...fuzzyNameResult.data)
+  const uniqueMatches = [...new Map(nameMatches.map(m => [m.student_id, m])).values()].filter(m => m.student_id !== submission.student_id)
 
   const { data: student, error: insertErr } = await supabase.from('students').insert({
     student_id: submission.student_id,
@@ -126,7 +141,12 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
   }).eq('id', req.params.id)
 
   if (updateErr) return res.status(500).json({ error: updateErr.message })
-  res.json({ student, message: 'Student approved and record created.' })
+
+  const result = { student, message: 'Student approved and record created.' }
+  if (uniqueMatches.length) {
+    result.name_warning = `Similar name found for ${uniqueMatches.map(m => `"${m.full_name}" (${m.student_id})`).join(', ')}. Verify this is not a duplicate.`
+  }
+  res.json(result)
 })
 
 // Admin: Reject submission
