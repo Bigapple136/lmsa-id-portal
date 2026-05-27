@@ -115,15 +115,15 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
   const uniqueMatches = [...new Map(nameMatches.map(m => [m.student_id, m])).values()].filter(m => m.student_id !== submission.student_id)
 
   const { data: student, error: insertErr } = await supabase.from('students').insert({
-    student_id: submission.student_id,
-    full_name: submission.full_name,
+    student_id: submission.student_id.trim(),
+    full_name: submission.full_name.trim(),
     year_level: submission.year_level,
-    position: submission.position,
-    programme: submission.programme,
-    blood_type: submission.blood_type,
-    student_email: submission.student_email,
-    emergency_contact_name: submission.emergency_contact_name,
-    emergency_contact_phone: submission.emergency_contact_phone,
+    position: submission.position?.trim() || null,
+    programme: submission.programme?.trim() || null,
+    blood_type: submission.blood_type?.trim() || null,
+    student_email: submission.student_email?.trim() || null,
+    emergency_contact_name: submission.emergency_contact_name?.trim() || null,
+    emergency_contact_phone: submission.emergency_contact_phone?.trim() || null,
     status: 'pending',
   }).select().single()
 
