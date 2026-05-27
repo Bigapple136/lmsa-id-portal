@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: lmsa-id-portal-backend
+    runtime: image
+    repo: https://github.com/Bigapple136/lmsa-id-portal
+    branch: main
+    dockerfilePath: Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: QR_BASE_URL
+        sync: false
+      - key: DOCC_QR_CODE
+        sync: false

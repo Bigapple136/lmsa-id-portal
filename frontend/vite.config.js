@@ -7,5 +7,16 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:4000'
     }
-  }
+  },
+  build: {
+    sourcemap: false,
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+        },
+      },
+    },
+  },
 })
