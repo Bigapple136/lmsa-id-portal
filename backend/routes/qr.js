@@ -303,12 +303,9 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 .footer-org{font-family:'Manrope',Arial,sans-serif;font-weight:700;font-size:13px;color:#00653c;margin-bottom:4px}
 .footer-meta{font-size:10px;color:rgba(24,29,25,0.4);letter-spacing:0.04em}
 
-/* watermark */
-.watermark{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);white-space:nowrap;pointer-events:none;z-index:1;user-select:none;font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:28px;color:rgba(0,0,0,0.04);letter-spacing:0.05em;text-transform:uppercase}
-
 /* print */
 @media print{
-  .topbar,.qr-ref,.footer,.watermark,.no-print{display:none!important}
+  .topbar,.qr-ref,.footer,.no-print{display:none!important}
   body{background:#fff;padding:0}
   .hero{background:#00653c!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .profile-photo{border-color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -319,9 +316,6 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 </style>
 </head>
 <body>
-
-<!-- Watermark -->
-<div class="watermark">LMSA Official Portal</div>
 
 <!-- Fixed topbar -->
 <header class="topbar">
