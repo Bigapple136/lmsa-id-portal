@@ -6,6 +6,7 @@ const JSZip = require('jszip')
 const path = require('path')
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
+const { email, maxLength, firstError } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
@@ -123,6 +124,8 @@ router.get('/preview/:token', async (req, res) => {
 })
 
 router.get('/preview-url/:studentId', requireAdmin, async (req, res) => {
+  const sidErr = maxLength(req.params.studentId, 50, 'studentId')
+  if (sidErr) return res.status(400).json({ error: sidErr })
   const token = signStudentToken(req.params.studentId)
   res.json({ url: `${FRONTEND_URL}/preview/${token}` })
 })
@@ -137,6 +140,8 @@ router.get('/:studentId', requireAdmin, async (req, res) => {
 router.delete('/:studentId?', requireAdmin, requireFullAdmin, async (req, res) => {
   const studentId = req.params.studentId
   if (!studentId) return res.status(400).json({ error: 'student_id is required.' })
+  const sidErr = maxLength(studentId, 50, 'studentId')
+  if (sidErr) return res.status(400).json({ error: sidErr })
 
   const { data: student, error: fetchErr } = await supabase
     .from('students').select('student_id, year_level')
@@ -188,6 +193,8 @@ router.post('/', requireAdmin, upload.fields([
     return res.status(400).json({ error: `year_level must be one of: ${ALLOWED_YEARS.join(', ')}` })
   if (!validateTextLength(student_id, 50) || !validateTextLength(full_name) || !validateTextLength(position) || !validateTextLength(programme))
     return res.status(400).json({ error: 'A field value is too long.' })
+  const emailErr = student_email ? email(student_email) : null
+  if (emailErr) return res.status(400).json({ error: emailErr })
   if (req.files?.photo?.[0] && !validateImageMime(req.files.photo[0].mimetype))
     return res.status(400).json({ error: 'Photo must be JPG or PNG.' })
   if (req.files?.signature?.[0] && req.files.signature[0].mimetype !== 'image/png')
@@ -299,6 +306,9 @@ router.post('/bulk', requireAdmin, upload.fields([
 router.patch('/:studentId', requireAdmin, upload.fields([
   { name: 'photo', maxCount: 1 }, { name: 'signature', maxCount: 1 }
 ]), async (req, res) => {
+  const sidErr = maxLength(req.params.studentId, 50, 'studentId')
+  if (sidErr) return res.status(400).json({ error: sidErr })
+
   const { full_name, year_level, position, blood_type,
           emergency_contact_name, emergency_contact_phone, student_email, programme } = req.body
 

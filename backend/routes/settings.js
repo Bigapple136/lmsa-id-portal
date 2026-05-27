@@ -5,6 +5,7 @@ const path = require('path')
 const fs = require('fs')
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
+const { isBoolean, isObject, checkFieldsConfig, checkLayoutConfig, firstError } = require('../middleware/validate')
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -69,12 +70,19 @@ router.get('/layout', async (req, res) => {
 
 // ── ADMIN writes ──
 router.put('/fields', requireAdmin, requireFullAdmin, async (req, res) => {
-  const { data, error } = await supabase.from('settings').upsert({ key: 'fields', value: req.body }).select('value').single()
+  const cfgErr = checkFieldsConfig(req.body)
+  if (cfgErr) return res.status(400).json({ error: cfgErr })
+
+  const { data, error } = await supabase.from('portal_settings')
+    .upsert({ key: 'card_fields', value: req.body, updated_at: new Date().toISOString() }).select().single()
   if (error) return res.status(500).json({ error: error.message })
   res.json(data.value)
 })
 
 router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
+  const cfgErr = checkFieldsConfig(req.body)
+  if (cfgErr) return res.status(400).json({ error: cfgErr })
+
   const { data, error } = await supabase.from('portal_settings')
     .upsert({ key: 'qr_fields', value: req.body, updated_at: new Date().toISOString() })
     .select().single()
@@ -83,6 +91,9 @@ router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
 })
 
 router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
+  const cfgErr = checkLayoutConfig(req.body)
+  if (cfgErr) return res.status(400).json({ error: cfgErr })
+
   const { data, error } = await supabase.from('portal_settings')
     .upsert({ key: 'card_layout', value: req.body, updated_at: new Date().toISOString() })
     .select().single()
@@ -149,9 +160,11 @@ router.get('/submission-form', requireAdmin, async (req, res) => {
 })
 
 router.put('/submission-form', requireAdmin, requireFullAdmin, async (req, res) => {
-  const { enabled } = req.body
+  const boolErr = isBoolean(req.body.enabled, 'enabled')
+  if (boolErr) return res.status(400).json({ error: boolErr })
+
   const { data, error } = await supabase.from('portal_settings')
-    .upsert({ key: 'submission_form', value: { enabled: enabled === true }, updated_at: new Date().toISOString() })
+    .upsert({ key: 'submission_form', value: { enabled: req.body.enabled === true }, updated_at: new Date().toISOString() })
     .select().single()
   if (error) return res.status(400).json({ error: error.message })
   res.json(data.value)

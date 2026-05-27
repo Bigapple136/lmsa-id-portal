@@ -4,6 +4,7 @@ const QRCode = require('qrcode')
 const crypto = require('crypto')
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
+const { maxLength } = require('../middleware/validate')
 const { getQRFields } = require('./settings')
 
 const supabase = createClient(
@@ -96,6 +97,9 @@ async function generateForStudent(student) {
 }
 
 router.post('/generate/:studentId', requireAdmin, requireFullAdmin, async (req, res) => {
+  const sidErr = maxLength(req.params.studentId, 50, 'studentId')
+  if (sidErr) return res.status(400).json({ error: sidErr })
+
   const { data: student, error } = await supabase
     .from('students').select('*')
     .eq('student_id', req.params.studentId).maybeSingle()
@@ -133,6 +137,9 @@ router.post('/generate-all', requireAdmin, requireFullAdmin, async (req, res) =>
 })
 
 router.post('/regenerate/:studentId', requireAdmin, requireFullAdmin, async (req, res) => {
+  const sidErr = maxLength(req.params.studentId, 50, 'studentId')
+  if (sidErr) return res.status(400).json({ error: sidErr })
+
   const { data: student, error } = await supabase
     .from('students').select('*')
     .eq('student_id', req.params.studentId).maybeSingle()
@@ -174,6 +181,9 @@ router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) 
 })
 
 router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
+  const sidErr = maxLength(req.params.studentId, 50, 'studentId')
+  if (sidErr) return res.status(400).json({ error: sidErr })
+
   try {
     const { data: student, error } = await supabase
       .from('students').select('student_id').eq('student_id', req.params.studentId).maybeSingle()

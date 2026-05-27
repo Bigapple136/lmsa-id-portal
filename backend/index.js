@@ -59,10 +59,14 @@ app.use(express.json({ limit: '50kb' }))
 const generalLimiter = rateLimit({ windowMs: 15*60*1000, max: 200, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests.' } })
 const lookupLimiter = rateLimit({ windowMs: 15*60*1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many lookup attempts.' } })
 const confirmLimiter = rateLimit({ windowMs: 15*60*1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many confirmation attempts.' } })
+const submissionLimiter = rateLimit({ windowMs: 15*60*1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many submissions. Please try again later.' } })
+const qrBulkLimiter = rateLimit({ windowMs: 15*60*1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many QR bulk operations. Please try again later.' } })
 
 app.use('/api', generalLimiter)
 app.use('/api/students/lookup', lookupLimiter)
 app.use('/api/confirmations', confirmLimiter)
+app.use('/api/submissions', (req, res, next) => { if (req.method === 'POST') return submissionLimiter(req, res, next); next() })
+app.use(['/api/qr/generate-all', '/api/qr/regenerate-all'], qrBulkLimiter)
 
 const { createClient } = require('@supabase/supabase-js')
 const supabase = createClient(

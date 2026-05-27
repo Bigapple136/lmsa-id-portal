@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
+const { uuid, firstError } = require('../middleware/validate')
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -111,6 +112,9 @@ router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
 })
 
 router.delete('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
+  const idErr = uuid(req.params.id, 'Admin ID')
+  if (idErr) return res.status(400).json({ error: idErr })
+
   const targetId = req.params.id
 
   if (req.user.id === targetId)

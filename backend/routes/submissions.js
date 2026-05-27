@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
+const { required, maxLength, email, uuid, enumValue, firstError } = require('../middleware/validate')
 const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType } = require('docx')
 
 const supabase = createClient(
@@ -34,12 +35,16 @@ router.post('/', async (req, res) => {
 
   const { student_id, full_name, year_level, position, programme, blood_type, student_email, emergency_contact_name, emergency_contact_phone } = req.body
 
-  if (!student_id || !full_name || !year_level) {
-    return res.status(400).json({ error: 'student_id, full_name, and year_level are required.' })
-  }
-  if (!ALLOWED_YEARS.includes(year_level)) {
-    return res.status(400).json({ error: `year_level must be one of: ${ALLOWED_YEARS.join(', ')}` })
-  }
+  const err = firstError(
+    required(student_id, 'student_id'), required(full_name, 'full_name'), required(year_level, 'year_level'),
+    maxLength(student_id, 50, 'student_id'), maxLength(full_name, 200, 'full_name'),
+    maxLength(position, 200, 'position'), maxLength(programme, 200, 'programme'),
+    maxLength(blood_type, 20, 'blood_type'), maxLength(student_email, 200, 'student_email'),
+    maxLength(emergency_contact_name, 200, 'emergency_contact_name'), maxLength(emergency_contact_phone, 30, 'emergency_contact_phone'),
+    enumValue(year_level, ALLOWED_YEARS, 'year_level'),
+    student_email ? email(student_email) : null,
+  )
+  if (err) return res.status(400).json({ error: err })
 
   const { data: existing } = await supabase
     .from('student_submissions').select('id, status').eq('student_id', student_id.trim()).in('status', ['pending', 'approved']).maybeSingle()
@@ -80,6 +85,9 @@ router.get('/', requireAdmin, async (req, res) => {
 
 // Admin: Approve submission
 router.post('/:id/approve', requireAdmin, async (req, res) => {
+  const idErr = uuid(req.params.id, 'Submission ID')
+  if (idErr) return res.status(400).json({ error: idErr })
+
   const { data: submission, error: fetchErr } = await supabase
     .from('student_submissions').select('*').eq('id', req.params.id).maybeSingle()
   if (fetchErr) return res.status(500).json({ error: fetchErr.message })
@@ -123,7 +131,13 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
 
 // Admin: Reject submission
 router.patch('/:id/reject', requireAdmin, async (req, res) => {
+  const idErr = uuid(req.params.id, 'Submission ID')
+  if (idErr) return res.status(400).json({ error: idErr })
+
   const { admin_notes } = req.body
+  const notesErr = maxLength(admin_notes, 1000, 'admin_notes')
+  if (notesErr) return res.status(400).json({ error: notesErr })
+
   const { data: submission, error: fetchErr } = await supabase
     .from('student_submissions').select('*').eq('id', req.params.id).maybeSingle()
   if (fetchErr) return res.status(500).json({ error: fetchErr.message })
@@ -143,6 +157,9 @@ router.patch('/:id/reject', requireAdmin, async (req, res) => {
 
 // Admin: Delete submission
 router.delete('/:id', requireAdmin, async (req, res) => {
+  const idErr = uuid(req.params.id, 'Submission ID')
+  if (idErr) return res.status(400).json({ error: idErr })
+
   const { error } = await supabase.from('student_submissions').delete().eq('id', req.params.id)
   if (error) return res.status(500).json({ error: error.message })
   res.status(204).send()
