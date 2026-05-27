@@ -6,6 +6,7 @@ const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year'
 export default function StudentSubmissionForm() {
   const [enabled, setEnabled] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [confirming, setConfirming] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
@@ -39,10 +40,15 @@ export default function StudentSubmissionForm() {
     init()
   }, [])
 
-  async function handleSubmit(e) {
+  function handleSubmit(e) {
     e.preventDefault()
-    setSubmitting(true)
     setError('')
+    setConfirming(true)
+  }
+
+  async function doSubmit() {
+    setConfirming(false)
+    setSubmitting(true)
 
     const res = await apiFetch('/api/submissions', {
       method: 'POST',
@@ -207,6 +213,86 @@ export default function StudentSubmissionForm() {
             </button>
           </div>
         </form>
+
+        {confirming && (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex',
+            alignItems:'center', justifyContent:'center', zIndex:1000, padding:'16px' }}
+            onClick={() => setConfirming(false)}>
+            <div style={{ background:'var(--white)', borderRadius:'var(--radius-lg)',
+              maxWidth:'400px', width:'100%', padding:'24px', maxHeight:'90vh', overflowY:'auto' }}
+              onClick={e => e.stopPropagation()}>
+              <h3 style={{ fontSize:'16px', fontWeight:600, marginBottom:'16px', color:'var(--text)' }}>
+                Verify Your Details
+              </h3>
+              <p style={{ fontSize:'13px', color:'var(--muted)', marginBottom:'16px', lineHeight:1.5 }}>
+                Please review your information carefully before submitting. You will not be able to edit this submission after it is sent.
+              </p>
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'20px' }}>
+                <div>
+                  <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Full Name</span>
+                  <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.full_name}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Student ID</span>
+                  <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.student_id}</div>
+                </div>
+                <div>
+                  <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Year / Level</span>
+                  <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.year_level}</div>
+                </div>
+                {showPosition && form.position && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Position</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.position}</div>
+                  </div>
+                )}
+                {showProgramme && form.programme && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Programme</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.programme}</div>
+                  </div>
+                )}
+                {showBloodType && form.blood_type && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Blood Type</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.blood_type}</div>
+                  </div>
+                )}
+                {showStudentEmail && form.student_email && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Student Email</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.student_email}</div>
+                  </div>
+                )}
+                {showEmergencyContactName && form.emergency_contact_name && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Emergency Contact</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.emergency_contact_name}</div>
+                  </div>
+                )}
+                {showEmergencyContactPhone && form.emergency_contact_phone && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Emergency Phone</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.emergency_contact_phone}</div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display:'flex', gap:'10px' }}>
+                <button onClick={() => setConfirming(false)}
+                  style={{ flex:1, padding:'10px', border:'0.5px solid var(--border)',
+                    borderRadius:'var(--radius)', background:'var(--bg)', color:'var(--text)',
+                    cursor:'pointer', fontSize:'14px', fontWeight:500 }}>
+                  Edit
+                </button>
+                <button onClick={doSubmit}
+                  style={{ flex:1, padding:'10px', background:'var(--gold)', color:'var(--navy)',
+                    border:'none', borderRadius:'var(--radius)', cursor:'pointer', fontSize:'14px', fontWeight:600 }}>
+                  Confirm &amp; Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

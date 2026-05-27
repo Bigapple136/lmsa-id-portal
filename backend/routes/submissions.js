@@ -41,6 +41,15 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: `year_level must be one of: ${ALLOWED_YEARS.join(', ')}` })
   }
 
+  const { data: existing } = await supabase
+    .from('student_submissions').select('id, status').eq('student_id', student_id.trim()).in('status', ['pending', 'approved']).maybeSingle()
+  if (existing) {
+    const msg = existing.status === 'approved'
+      ? 'A submission for this Student ID has already been approved. Contact your admin if updates are needed.'
+      : 'A submission for this Student ID is already pending review. Please wait for admin approval.'
+    return res.status(409).json({ error: msg })
+  }
+
   const { data, error } = await supabase.from('student_submissions').insert({
     student_id: student_id.trim(),
     full_name: full_name.trim(),
