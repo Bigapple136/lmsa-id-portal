@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { apiFetch } from '../lib/api'
 
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
+const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 export default function StudentSubmissionForm() {
   const [enabled, setEnabled] = useState(null)
@@ -98,16 +99,9 @@ export default function StudentSubmissionForm() {
           <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>
             Your details have been submitted successfully. An admin will review your information shortly.
           </p>
-          <button className="btn-gold" onClick={() => {
-            setSubmitted(false)
-            setForm({
-              student_id: '', full_name: '', year_level: '1st Year', position: '',
-              programme: '', blood_type: '', student_email: '',
-              emergency_contact_name: '', emergency_contact_phone: '',
-            })
-          }}>
-            Submit another
-          </button>
+          <p style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 500 }}>
+            You may now close this tab.
+          </p>
         </div>
       </div>
     )
@@ -175,8 +169,11 @@ export default function StudentSubmissionForm() {
                   {showBloodType && (
                     <div className="field-group">
                       <label className="field-label">Blood Type</label>
-                      <input className="field-input" placeholder="e.g. O+"
-                        value={form.blood_type} onChange={e => setForm({...form, blood_type: e.target.value})} />
+                      <select className="field-input" value={form.blood_type}
+                        onChange={e => setForm({...form, blood_type: e.target.value})}>
+                        <option value="">— Select —</option>
+                        {BLOOD_TYPES.map(b => <option key={b}>{b}</option>)}
+                      </select>
                     </div>
                   )}
                   {showStudentEmail && (
