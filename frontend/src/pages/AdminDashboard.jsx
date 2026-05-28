@@ -352,50 +352,6 @@ export default function AdminDashboard() {
     setEditPhoto(null); setEditSig(null); setEditMsg(null)
   }
 
-  async function processPhoto(file) {
-    try {
-      const TARGET_RATIO = 3 / 4
-      const W = 450
-      const H = 600
-
-      const img = await new Promise((resolve, reject) => {
-        const i = new Image()
-        i.onload = () => { URL.revokeObjectURL(i.src); resolve(i) }
-        i.onerror = () => { URL.revokeObjectURL(i.src); reject() }
-        i.src = URL.createObjectURL(file)
-      })
-
-      const imgRatio = img.naturalWidth / img.naturalHeight
-      let sx, sy, sw, sh
-
-      if (imgRatio > TARGET_RATIO) {
-        sh = img.naturalHeight
-        sw = sh * TARGET_RATIO
-        sx = (img.naturalWidth - sw) / 2
-        sy = 0
-      } else {
-        sw = img.naturalWidth
-        sh = sw / TARGET_RATIO
-        sx = 0
-        sy = (img.naturalHeight - sh) / 2
-      }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = W
-      canvas.height = H
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H)
-
-      return new Promise(resolve => {
-        canvas.toBlob(blob => {
-          resolve(new File([blob], file.name.replace(/\.\w+$/, '.png'), { type: 'image/png' }))
-        }, 'image/png', 0.92)
-      })
-    } catch {
-      return file
-    }
-  }
-
   async function handleEditSave(e) {
     e.preventDefault(); setEditSubmitting(true); setEditMsg(null)
     const form = new FormData()
@@ -619,7 +575,7 @@ export default function AdminDashboard() {
               <div className="field-group">
                 <label className="field-label">Replace Photo (optional)</label>
                 <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('edit-photo-input').click()}>
-                  <input id="edit-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={async e=>{if(e.target.files[0])setEditPhoto(await processPhoto(e.target.files[0]))}}/>
+                  <input id="edit-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>{if(e.target.files[0])setEditPhoto(e.target.files[0])}}/>
                   {editStudent.photo_url && !editPhoto
                     ? <div style={{ display:'flex', alignItems:'center', gap:'10px' }}><img src={editStudent.photo_url} alt="" style={{ width:'36px', height:'44px', objectFit:'cover', borderRadius:'3px' }}/><span className="upload-text">Current photo · <span className="upload-link">Replace</span></span></div>
                     : editPhoto ? <p className="upload-selected">📷 {editPhoto.name}</p>
@@ -877,7 +833,7 @@ export default function AdminDashboard() {
                   <div className="field-group">
                     <label className="field-label">Student Photo</label>
                     <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('manual-photo-input').click()}>
-                      <input id="manual-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={async e=>{if(e.target.files[0])setManualPhoto(await processPhoto(e.target.files[0]))}}/>
+                      <input id="manual-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>{if(e.target.files[0])setManualPhoto(e.target.files[0])}}/>
                       {manualPhoto ? <p className="upload-selected">📷 {manualPhoto.name}</p>
                         : <p className="upload-text">Upload photo (optional) · <span className="upload-link">browse</span></p>}
                     </div>
