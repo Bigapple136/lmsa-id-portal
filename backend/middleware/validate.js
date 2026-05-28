@@ -63,6 +63,7 @@ function checkLayoutConfig(value) {
   const valueErr = isObject(value)
   if (valueErr) return valueErr
   for (const [key, item] of Object.entries(value)) {
+    if (!item || typeof item !== 'object') continue
     const itemErr = isObject(item)
     if (itemErr) return `Layout item "${key}" must be an object.`
     if (item.type && !['text', 'image'].includes(item.type)) return `Layout item "${key}".type must be 'text' or 'image'.`

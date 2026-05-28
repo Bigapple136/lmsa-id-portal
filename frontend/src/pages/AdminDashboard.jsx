@@ -247,7 +247,10 @@ export default function AdminDashboard() {
 
   async function saveLayout(layout) {
     const res = await adminJson('/api/settings/layout', 'PUT', layout)
-    if (!res.ok) throw new Error('Save failed')
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || 'Save failed')
+    }
     const saved = await res.json()
     setCardLayout(saved)
   }
