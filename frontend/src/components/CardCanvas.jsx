@@ -24,10 +24,10 @@ function getFieldText(field, student) {
 // All values are fractional (0–1) relative to card width/height
 export const CALIBRATED_LAYOUT = {
   photo:      { x:0.1271, y:0.1673, width:0.7458, height:0.3287, type:'image' },
-  full_name:  { x:0.5,    y:0.5896, fontSize:0.0678, color:'#1A1A1A', bold:true,  textAlign:'center', type:'text' },
-  student_id: { x:0.2441, y:0.6614, fontSize:0.0576, color:'#CC0000', bold:false, textAlign:'left',   type:'text' },
-  position:   { x:0.0593, y:0.7231, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'left',   type:'text' },
-  year_level: { x:0.0593, y:0.7749, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'left',   type:'text' },
+  full_name:  { x:0.5,    y:0.5896, fontSize:0.0678, color:'#1A1A1A', bold:true,  textAlign:'center', type:'text', maxWidth:0.88 },
+  student_id: { x:0.2441, y:0.6614, fontSize:0.0576, color:'#CC0000', bold:false, textAlign:'left',   type:'text', maxWidth:0.50 },
+  position:   { x:0.0593, y:0.7231, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'left',   type:'text', maxWidth:0.50 },
+  year_level: { x:0.0593, y:0.7749, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'left',   type:'text', maxWidth:0.50 },
   signature:  { x:0.5254, y:0.8386, width:0.3898, height:0.0896, type:'image' },
   qr:         { x:0.0593, y:0.8187, width:0.2542, height:0.1394, type:'image' },
 }
@@ -107,11 +107,19 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
             const text = getFieldText(field, student)
             if (!text) continue
 
-            const fontSize = Math.round((pos.fontSize || 0.04) * W)
+            let fontSize = Math.round((pos.fontSize || 0.04) * W)
             const weight = pos.bold ? 'bold ' : ''
             ctx.font = `${weight}${fontSize}px Arial, sans-serif`
             ctx.fillStyle = pos.color || '#000000'
             ctx.textBaseline = 'top'
+
+            if (pos.maxWidth) {
+              const maxPx = pos.maxWidth * W
+              while (ctx.measureText(text).width > maxPx && fontSize > 6) {
+                fontSize--
+                ctx.font = `${weight}${fontSize}px Arial, sans-serif`
+              }
+            }
 
             const align = pos.textAlign || 'left'
             ctx.textAlign = align

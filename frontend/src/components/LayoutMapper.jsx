@@ -14,10 +14,10 @@ const FIELD_META = {
 
 const DEFAULT_LAYOUT = {
   photo:      { x:0.06, y:0.08, width:0.40, height:0.30, type:'image' },
-  full_name:  { x:0.06, y:0.42, fontSize:0.050, color:'#1A1A2E', bold:true,  type:'text' },
-  student_id: { x:0.06, y:0.53, fontSize:0.038, color:'#C9A84C', bold:false, type:'text' },
-  year_level: { x:0.06, y:0.61, fontSize:0.035, color:'#444444', bold:false, type:'text' },
-  position:   { x:0.06, y:0.68, fontSize:0.032, color:'#666666', bold:false, type:'text' },
+  full_name:  { x:0.06, y:0.42, fontSize:0.050, color:'#1A1A2E', bold:true,  type:'text', maxWidth:0.88 },
+  student_id: { x:0.06, y:0.53, fontSize:0.038, color:'#C9A84C', bold:false, type:'text', maxWidth:0.50 },
+  year_level: { x:0.06, y:0.61, fontSize:0.035, color:'#444444', bold:false, type:'text', maxWidth:0.50 },
+  position:   { x:0.06, y:0.68, fontSize:0.032, color:'#666666', bold:false, type:'text', maxWidth:0.50 },
   signature:  { x:0.06, y:0.82, width:0.55,   height:0.08, type:'image' },
   qr:         { x:0.68, y:0.78, width:0.26,   height:0.16, type:'image' },
 }
@@ -150,13 +150,13 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
               <div
                 key={field}
                 onPointerDown={e => startDrag(e, field)}
-                style={{
-                  position:'absolute',
-                  left:`${pos.x * 100}%`,
-                  top:`${pos.y * 100}%`,
-                  width: isImg ? `${pos.width * 100}%` : 'auto',
-                  height: isImg ? `${pos.height * 100}%` : 'auto',
-                  minWidth: isImg ? undefined : '34px',
+                  style={{
+                    position:'absolute',
+                    left:`${pos.x * 100}%`,
+                    top:`${pos.y * 100}%`,
+                    width: isImg ? `${pos.width * 100}%` : pos.maxWidth ? `${pos.maxWidth * 100}%` : 'auto',
+                    height: isImg ? `${pos.height * 100}%` : 'auto',
+                    minWidth: isImg ? undefined : '34px',
                   background: bg + 'CC',
                   border:`${isSel ? 2 : 1}px ${isSel ? 'solid' : 'dashed'} ${color}`,
                   borderRadius:'3px',
@@ -247,6 +247,13 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
                     value={sel.color || '#000000'}
                     onChange={e => set(selected, 'color', e.target.value)}
                     style={{ width:'100%', height:'32px', padding:'2px', border:'0.5px solid var(--border)', borderRadius:'6px', cursor:'pointer' }}/>
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Max Width (%)</label>
+                  <input type="number" className="field-input" style={{ fontSize:'12px', padding:'5px 8px' }}
+                    min="10" max="100" step="1"
+                    value={Math.round((sel.maxWidth || 1) * 100)}
+                    onChange={e => set(selected, 'maxWidth', parseFloat(e.target.value) / 100)}/>
                 </div>
                 <div style={{ gridColumn:'1/-1', display:'flex', alignItems:'center', gap:'8px' }}>
                   <input type="checkbox"
