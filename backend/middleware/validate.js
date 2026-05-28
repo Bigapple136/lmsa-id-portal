@@ -47,9 +47,11 @@ function isObject(value, name = 'Body') {
 }
 
 function checkFieldsConfig(value) {
-  if (!isObject(value)) return 'Body must be a JSON object.'
+  const valueErr = isObject(value)
+  if (valueErr) return valueErr
   for (const [key, field] of Object.entries(value)) {
-    if (!isObject(field)) return `Field "${key}" must be an object.`
+    const fieldErr = isObject(field)
+    if (fieldErr) return `Field "${key}" must be an object.`
     if (field.enabled !== undefined && typeof field.enabled !== 'boolean') return `Field "${key}".enabled must be a boolean.`
     if (field.locked !== undefined && typeof field.locked !== 'boolean') return `Field "${key}".locked must be a boolean.`
     if (field.label !== undefined && typeof field.label !== 'string') return `Field "${key}".label must be a string.`
@@ -58,9 +60,11 @@ function checkFieldsConfig(value) {
 }
 
 function checkLayoutConfig(value) {
-  if (!isObject(value)) return 'Body must be a JSON object.'
+  const valueErr = isObject(value)
+  if (valueErr) return valueErr
   for (const [key, item] of Object.entries(value)) {
-    if (!isObject(item)) return `Layout item "${key}" must be an object.`
+    const itemErr = isObject(item)
+    if (itemErr) return `Layout item "${key}" must be an object.`
     if (item.type && !['text', 'image'].includes(item.type)) return `Layout item "${key}".type must be 'text' or 'image'.`
     if (item.x !== undefined && typeof item.x !== 'number') return `Layout item "${key}".x must be a number.`
     if (item.y !== undefined && typeof item.y !== 'number') return `Layout item "${key}".y must be a number.`

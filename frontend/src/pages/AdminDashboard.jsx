@@ -216,7 +216,7 @@ export default function AdminDashboard() {
     const res = await adminJson('/api/settings/qr-fields', 'PUT', qrFields)
     setQrFieldsSaving(false)
     if (res.ok) setQrFieldsMsg({ ok: true, text: 'QR field settings saved.' })
-    else setQrFieldsMsg({ ok: false, text: 'Failed to save QR settings.' })
+    else setQrFieldsMsg({ ok: false, text: (await res.json().catch(() => ({}))).error || 'Failed to save QR settings.' })
     setTimeout(() => setQrFieldsMsg(null), 2500)
   }
 
@@ -257,7 +257,7 @@ export default function AdminDashboard() {
     const res = await adminJson('/api/settings/fields', 'PUT', fields)
     setFieldsSaving(false)
     if (res.ok) setFieldsMsg({ ok: true, text: 'Field settings saved.' })
-    else setFieldsMsg({ ok: false, text: 'Failed to save settings.' })
+    else setFieldsMsg({ ok: false, text: (await res.json().catch(() => ({}))).error || 'Failed to save settings.' })
     setTimeout(() => setFieldsMsg(null), 2500)
   }
 
