@@ -7,6 +7,8 @@ export default function Navbar({ showLogin = true }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const isAbout = location.pathname === '/about'
+  const isTerms = location.pathname === '/terms'
+  const isPrivacy = location.pathname === '/privacy'
 
   return (
     <nav className="navbar">
@@ -25,6 +27,18 @@ export default function Navbar({ showLogin = true }) {
             onClick={() => navigate('/about')}
           >
             About
+          </button>
+          <button
+            className={`navbar-link ${isTerms ? 'active' : ''}`}
+            onClick={() => navigate('/terms')}
+          >
+            Terms
+          </button>
+          <button
+            className={`navbar-link ${isPrivacy ? 'active' : ''}`}
+            onClick={() => navigate('/privacy')}
+          >
+            Privacy
           </button>
 
           {showLogin && (
@@ -57,6 +71,18 @@ export default function Navbar({ showLogin = true }) {
             onClick={() => { navigate('/about'); setMenuOpen(false) }}
           >
             About
+          </button>
+          <button
+            className="navbar-mobile-link"
+            onClick={() => { navigate('/terms'); setMenuOpen(false) }}
+          >
+            Terms
+          </button>
+          <button
+            className="navbar-mobile-link"
+            onClick={() => { navigate('/privacy'); setMenuOpen(false) }}
+          >
+            Privacy
           </button>
           {showLogin && (
             <button

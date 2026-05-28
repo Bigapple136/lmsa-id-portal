@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 import { apiFetch } from '../lib/api'
 
 export default function LandingPage() {
@@ -81,6 +82,7 @@ export default function LandingPage() {
         </form>
       </div>
       </div>
+      <Footer />
     </div>
   )
 }

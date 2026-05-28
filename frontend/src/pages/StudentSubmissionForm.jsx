@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Footer from '../components/Footer'
 import { apiFetch } from '../lib/api'
 
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
@@ -8,6 +9,7 @@ export default function StudentSubmissionForm() {
   const [enabled, setEnabled] = useState(null)
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState(false)
+  const [agreed, setAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
@@ -274,6 +276,14 @@ export default function StudentSubmissionForm() {
                   </div>
                 )}
               </div>
+              <div style={{ marginBottom:'16px', display:'flex', alignItems:'flex-start', gap:'8px' }}>
+                <input type="checkbox" id="agree-tos" checked={agreed}
+                  onChange={e => setAgreed(e.target.checked)}
+                  style={{ marginTop:'3px', accentColor:'var(--gold)', cursor:'pointer', flexShrink:0 }}/>
+                <label htmlFor="agree-tos" style={{ fontSize:'12px', color:'var(--muted)', lineHeight:1.5, cursor:'pointer' }}>
+                  I agree to the <button onClick={() => window.open('/terms', '_blank')} style={{ background:'none', border:'none', color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px', padding:0 }}>Terms of Service</button> and <button onClick={() => window.open('/privacy', '_blank')} style={{ background:'none', border:'none', color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px', padding:0 }}>Privacy Policy</button>
+                </label>
+              </div>
               <div style={{ display:'flex', gap:'10px' }}>
                 <button onClick={() => setConfirming(false)}
                   style={{ flex:1, padding:'10px', border:'0.5px solid var(--border)',
@@ -281,9 +291,9 @@ export default function StudentSubmissionForm() {
                     cursor:'pointer', fontSize:'14px', fontWeight:500 }}>
                   Edit
                 </button>
-                <button onClick={doSubmit}
+                <button onClick={doSubmit} disabled={!agreed}
                   style={{ flex:1, padding:'10px', background:'var(--gold)', color:'var(--navy)',
-                    border:'none', borderRadius:'var(--radius)', cursor:'pointer', fontSize:'14px', fontWeight:600 }}>
+                    border:'none', borderRadius:'var(--radius)', cursor: agreed ? 'pointer' : 'not-allowed', fontSize:'14px', fontWeight:600, opacity: agreed ? 1 : 0.5 }}>
                   Confirm &amp; Submit
                 </button>
               </div>
@@ -291,6 +301,7 @@ export default function StudentSubmissionForm() {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   )
 }
