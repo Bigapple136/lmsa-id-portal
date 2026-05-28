@@ -83,7 +83,21 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
               ctx.beginPath()
               ctx.rect(px, py, pw, ph)
               ctx.clip()
-              ctx.drawImage(img, px, py, pw, ph)
+              const imgRatio = img.naturalWidth / img.naturalHeight
+              const fieldRatio = pw / ph
+              let sx, sy, sw, sh
+              if (imgRatio > fieldRatio) {
+                sh = img.naturalHeight
+                sw = img.naturalHeight * fieldRatio
+                sx = (img.naturalWidth - sw) / 2
+                sy = 0
+              } else {
+                sw = img.naturalWidth
+                sh = img.naturalWidth / fieldRatio
+                sx = 0
+                sy = (img.naturalHeight - sh) / 2
+              }
+              ctx.drawImage(img, sx, sy, sw, sh, px, py, pw, ph)
               ctx.restore()
             } catch { /* photo not available — placeholder already on template */ }
 
