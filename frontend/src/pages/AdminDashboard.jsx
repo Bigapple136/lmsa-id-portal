@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
+import PhotoCropperModal from '../components/PhotoCropperModal'
 
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 
@@ -49,7 +50,8 @@ export default function AdminDashboard() {
   const [manualSig, setManualSig] = useState(null)
   const [manualSubmitting, setManualSubmitting] = useState(false)
   const [manualMsg, setManualMsg] = useState(null)
-
+  const [cropperFile, setCropperFile] = useState(null)
+  const [cropperTarget, setCropperTarget] = useState(null) // 'manual' | 'edit'
   const [editStudent, setEditStudent] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [editPhoto, setEditPhoto] = useState(null)
@@ -295,6 +297,26 @@ export default function AdminDashboard() {
     setEditPhoto(null); setEditSig(null); setEditMsg(null)
   }
 
+  function handleOpenCropper(file, target) {
+    setCropperFile(file)
+    setCropperTarget(target)
+  }
+
+  function handleCropComplete(croppedFile) {
+    if (cropperTarget === 'manual') {
+      setManualPhoto(croppedFile)
+    } else if (cropperTarget === 'edit') {
+      setEditPhoto(croppedFile)
+    }
+    setCropperFile(null)
+    setCropperTarget(null)
+  }
+
+  function handleCancelCrop() {
+    setCropperFile(null)
+    setCropperTarget(null)
+  }
+
   async function handleEditSave(e) {
     e.preventDefault(); setEditSubmitting(true); setEditMsg(null)
     const form = new FormData()
@@ -517,7 +539,7 @@ export default function AdminDashboard() {
               <div className="field-group">
                 <label className="field-label">Replace Photo (optional)</label>
                 <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('edit-photo-input').click()}>
-                  <input id="edit-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>setEditPhoto(e.target.files[0])}/>
+                  <input id="edit-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>{if(e.target.files[0])handleOpenCropper(e.target.files[0],'edit')}}/>
                   {editStudent.photo_url && !editPhoto
                     ? <div style={{ display:'flex', alignItems:'center', gap:'10px' }}><img src={editStudent.photo_url} alt="" style={{ width:'36px', height:'44px', objectFit:'cover', borderRadius:'3px' }}/><span className="upload-text">Current photo · <span className="upload-link">Replace</span></span></div>
                     : editPhoto ? <p className="upload-selected">📷 {editPhoto.name}</p>
@@ -775,7 +797,7 @@ export default function AdminDashboard() {
                   <div className="field-group">
                     <label className="field-label">Student Photo</label>
                     <div className="upload-zone" style={{ padding:'12px' }} onClick={()=>document.getElementById('manual-photo-input').click()}>
-                      <input id="manual-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>setManualPhoto(e.target.files[0])}/>
+                      <input id="manual-photo-input" type="file" accept=".jpg,.jpeg,.png" hidden onChange={e=>{if(e.target.files[0])handleOpenCropper(e.target.files[0],'manual')}}/>
                       {manualPhoto ? <p className="upload-selected">📷 {manualPhoto.name}</p>
                         : <p className="upload-text">Upload photo (optional) · <span className="upload-link">browse</span></p>}
                     </div>
@@ -826,6 +848,7 @@ export default function AdminDashboard() {
                       setManualForm({student_id:'',full_name:'',year_level:'1st Year',position:'',
                         programme:'',blood_type:'',student_email:'',emergency_contact_name:'',emergency_contact_phone:''})
                       setManualPhoto(null);setManualSig(null);setManualMsg(null)
+                      setCropperFile(null);setCropperTarget(null)
                     }}>Clear</button>
                   </div>
                 </div>
@@ -1126,6 +1149,14 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {cropperFile && (
+        <PhotoCropperModal
+          file={cropperFile}
+          onCrop={handleCropComplete}
+          onCancel={handleCancelCrop}
+        />
+      )}
     </div>
   )
 }
