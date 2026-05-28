@@ -199,7 +199,38 @@ body {
 
 .btn-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+}
+
+/* Session timeout modal */
+.session-timeout-modal {
+  max-width: 360px;
+  text-align: center;
+  padding: 28px 24px;
+}
+
+.session-timeout-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.session-timeout-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.session-timeout-text {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.session-timeout-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .btn-print {

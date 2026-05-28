@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 import PhotoCropperModal from '../components/PhotoCropperModal'
+import SessionTimeout from '../components/SessionTimeout'
 
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 
@@ -1149,6 +1150,8 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      <SessionTimeout />
 
       {cropperFile && (
         <PhotoCropperModal

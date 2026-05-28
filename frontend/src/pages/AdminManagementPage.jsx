@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { adminFetch } from '../lib/api'
+import SessionTimeout from '../components/SessionTimeout'
 
 export default function AdminManagementPage() {
   const navigate = useNavigate()
@@ -206,6 +207,7 @@ export default function AdminManagementPage() {
           )}
         </div>
       </div>
+      <SessionTimeout />
     </div>
   )
 }
