@@ -354,9 +354,9 @@ export default function AdminDashboard() {
 
   async function processPhoto(file) {
     try {
-      const TARGET_RATIO = 7 / 9
-      const W = 413
-      const H = 531
+      const TARGET_RATIO = 3 / 4
+      const W = 450
+      const H = 600
 
       const img = await new Promise((resolve, reject) => {
         const i = new Image()
