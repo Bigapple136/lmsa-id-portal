@@ -88,6 +88,57 @@ export default function AdminDashboard() {
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
   const [submissionMsg, setSubmissionMsg] = useState(null)
 
+  const DRAFT_KEY = 'admin_dashboard_draft'
+
+  // Restore draft from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      if (saved.manualForm?.student_id || saved.manualForm?.full_name) {
+        setManualForm(saved.manualForm)
+        setActiveTab(saved.activeTab || 'upload')
+        setUploadMode(saved.uploadMode || 'manual')
+        setUploadMsg({ ok: true, text: 'Draft restored from your previous session.' })
+        setTimeout(() => setUploadMsg(null), 4000)
+      }
+    } catch {}
+    sessionStorage.removeItem(DRAFT_KEY)
+  }, [])
+
+  // Save form text to sessionStorage when tab goes to background
+  useEffect(() => {
+    function saveDraft() {
+      if (document.visibilityState !== 'hidden') return
+      const hasDraft = manualForm.student_id || manualForm.full_name ||
+        Object.values(editForm).some(v => v)
+      if (hasDraft) {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+          manualForm, uploadMode, activeTab,
+        }))
+      } else {
+        sessionStorage.removeItem(DRAFT_KEY)
+      }
+    }
+    document.addEventListener('visibilitychange', saveDraft)
+    return () => document.removeEventListener('visibilitychange', saveDraft)
+  }, [manualForm, editForm, uploadMode, activeTab])
+
+  // Warn before leaving with unsaved data
+  useEffect(() => {
+    function onBeforeUnload(e) {
+      const hasDraft = manualForm.student_id || manualForm.full_name ||
+        Object.values(editForm).some(v => v)
+      if (hasDraft) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [manualForm, editForm])
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
@@ -282,6 +333,7 @@ export default function AdminDashboard() {
       setManualForm({ student_id:'', full_name:'', year_level:'1st Year', position:'',
         programme:'', blood_type:'', student_email:'', emergency_contact_name:'', emergency_contact_phone:'' })
       setManualPhoto(null); setManualSig(null)
+      sessionStorage.removeItem(DRAFT_KEY)
       loadStudents()
     } else setManualMsg({ ok: false, text: data.error || 'Could not add student.' })
   }
@@ -336,6 +388,7 @@ export default function AdminDashboard() {
     setEditSubmitting(false)
     if (res.ok) {
       setEditMsg({ ok: true, text: 'Student updated. QR code regenerated.' })
+      sessionStorage.removeItem(DRAFT_KEY)
       loadStudents()
       setTimeout(() => setEditStudent(null), 1200)
     } else setEditMsg({ ok: false, text: data.error || 'Update failed.' })
