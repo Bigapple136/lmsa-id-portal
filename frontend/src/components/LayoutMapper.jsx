@@ -14,10 +14,10 @@ const FIELD_META = {
 
 const DEFAULT_LAYOUT = {
   photo:      { x:0.06, y:0.08, width:0.40, height:0.30, type:'image' },
-  full_name:  { x:0.06, y:0.42, fontSize:0.050, color:'#1A1A2E', bold:true,  type:'text', maxWidth:0.88 },
-  student_id: { x:0.06, y:0.53, fontSize:0.038, color:'#C9A84C', bold:false, type:'text', maxWidth:0.50 },
-  year_level: { x:0.06, y:0.61, fontSize:0.035, color:'#444444', bold:false, type:'text', maxWidth:0.50 },
-  position:   { x:0.06, y:0.68, fontSize:0.032, color:'#666666', bold:false, type:'text', maxWidth:0.50 },
+  full_name:  { x:0.5,   y:0.42, fontSize:0.050, color:'#1A1A2E', bold:true,  textAlign:'center', type:'text', maxWidth:0.88 },
+  student_id: { x:0.06,  y:0.53, fontSize:0.038, color:'#C9A84C', bold:false, type:'text', maxWidth:0.50 },
+  year_level: { x:0.06,  y:0.61, fontSize:0.035, color:'#444444', bold:false, type:'text', maxWidth:0.50 },
+  position:   { x:0.5,   y:0.68, fontSize:0.032, color:'#666666', bold:false, textAlign:'center', type:'text', maxWidth:0.70 },
   signature:  { x:0.06, y:0.82, width:0.55,   height:0.08, type:'image' },
   qr:         { x:0.68, y:0.78, width:0.26,   height:0.16, type:'image' },
 }
