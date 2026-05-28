@@ -118,6 +118,7 @@ export default function StudentSubmissionForm() {
   const hasAdditionalFields = showProgramme || showBloodType || showStudentEmail || showEmergencyContactName || showEmergencyContactPhone
 
   return (
+    <div className="page-outer">
     <div className="page-center">
       <div className="landing-card">
         <div className="landing-header">
@@ -301,6 +302,7 @@ export default function StudentSubmissionForm() {
           </div>
         )}
       </div>
+    </div>
       <Footer />
     </div>
   )
