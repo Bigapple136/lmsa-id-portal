@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS portal_settings (
 
 INSERT INTO portal_settings (key, value) VALUES
   ('card_fields', '{"full_name":{"enabled":true},"student_id":{"enabled":true},"year_level":{"enabled":true},"position":{"enabled":false},"photo":{"enabled":true},"signature":{"enabled":true}}'::jsonb),
-  ('qr_fields', '{"programme":{"enabled":true},"blood_type":{"enabled":true},"student_email":{"enabled":true},"emergency_contact":{"enabled":false}}'::jsonb),
+  ('qr_fields', '{"programme":{"label":"Programme","enabled":true},"blood_type":{"label":"Blood Type","enabled":true},"student_email":{"label":"Student Email","enabled":false},"emergency_contact_name":{"label":"Emergency Contact Name","enabled":true},"emergency_contact_phone":{"label":"Emergency Contact Phone","enabled":true}}'::jsonb),
   ('card_layout', '{"primaryColor":"#1A365D","secondaryColor":"#E2E8F0","fontFamily":"Inter","logoPosition":"top-left"}'::jsonb),
   ('submission_form', '{"enabled":false}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
