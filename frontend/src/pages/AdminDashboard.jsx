@@ -229,9 +229,10 @@ export default function AdminDashboard() {
     if (res.ok) setCardLayout(await res.json())
   }
 
-  async function loadSubmissions() {
+  async function loadSubmissions(statusFilter) {
     setSubmissionsLoading(true)
-    const statusParam = submissionsFilter !== 'all' ? `?status=${submissionsFilter}` : ''
+    const filter = statusFilter ?? submissionsFilter
+    const statusParam = filter !== 'all' ? `?status=${filter}` : ''
     const res = await adminFetch(`/api/submissions${statusParam}`)
     if (res.ok) setSubmissions(await res.json())
     setSubmissionsLoading(false)
@@ -983,7 +984,7 @@ export default function AdminDashboard() {
             <div className="mode-toggle">
               {['pending','approved','rejected','all'].map(f => (
                 <button key={f} className={`mode-btn ${submissionsFilter===f?'active':''}`}
-                  onClick={()=>{setSubmissionsFilter(f);setTimeout(loadSubmissions,0)}}
+                  onClick={()=>{setSubmissionsFilter(f);setTimeout(() => loadSubmissions(f), 0)}}
                   style={{ textTransform:'capitalize' }}>
                   {f}
                 </button>
