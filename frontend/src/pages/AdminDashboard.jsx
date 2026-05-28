@@ -150,10 +150,12 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!session) return
-    authMe().then(res => res.ok && res.json().then(d => setUserRole(d.role || 'admin')))
+    const init = async () => {
+      await authMe().then(res => res.ok && res.json().then(d => setUserRole(d.role || 'admin')))
+      await loadAll()
+    }
+    init()
   }, [session])
-
-  useEffect(() => { if (session) loadAll() }, [session])
 
   async function login(e) {
     e.preventDefault(); setLoginLoading(true); setLoginError('')
@@ -162,9 +164,30 @@ export default function AdminDashboard() {
     setLoginLoading(false)
   }
 
+  async function eachLimit(tasks, limit) {
+    const results = []
+    let i = 0
+    async function worker() {
+      while (i < tasks.length) {
+        const idx = i++
+        results[idx] = await tasks[idx]()
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker))
+    return results
+  }
+
   async function loadAll() {
     setDataLoading(true)
-    await Promise.all([loadStudents(), loadTemplate(), loadFields(), loadQrFields(), loadLayout(), loadSubmissions(), loadSubmissionForm()])
+    await eachLimit([
+      loadStudents,
+      loadTemplate,
+      loadFields,
+      loadQrFields,
+      loadLayout,
+      loadSubmissions,
+      loadSubmissionForm
+    ], 3)
     setDataLoading(false)
   }
 
