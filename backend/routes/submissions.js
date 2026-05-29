@@ -3,7 +3,6 @@ const router = express.Router()
 const { createClient } = require('@supabase/supabase-js')
 const { requireAdmin } = require('../middleware/auth')
 const { required, maxLength, email, uuid, enumValue, firstError } = require('../middleware/validate')
-const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, AlignmentType } = require('docx')
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -183,101 +182,6 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   const { error } = await supabase.from('student_submissions').delete().eq('id', req.params.id)
   if (error) return res.status(500).json({ error: error.message })
   res.status(204).send()
-})
-
-// Admin: Export approved submissions as Word document
-router.get('/export', requireAdmin, async (req, res) => {
-  const { data, error } = await supabase.from('student_submissions')
-    .select('*').eq('status', 'approved').order('year_level').order('full_name')
-  if (error) return res.status(500).json({ error: error.message })
-
-  const grouped = {}
-  for (const row of data) {
-    if (!grouped[row.year_level]) grouped[row.year_level] = []
-    grouped[row.year_level].push(row)
-  }
-
-  const yearOrder = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
-  const children = []
-
-  children.push(
-    new Paragraph({
-      text: 'LMSA ID Portal — Student Data for Photoshoot',
-      heading: 'Heading1',
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-    }),
-    new Paragraph({
-      text: `Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-    })
-  )
-
-  for (const year of yearOrder) {
-    const students = grouped[year]
-    if (!students || students.length === 0) continue
-
-    children.push(
-      new Paragraph({
-        text: `${year} — ${students.length} student(s)`,
-        heading: 'Heading2',
-        spacing: { before: 400, after: 200 },
-      })
-    )
-
-    const tableRows = [
-      new TableRow({
-        tableHeader: true,
-        children: ['#', 'Student ID', 'Full Name', 'Position', 'Programme', 'Blood Type', 'Email', 'Emergency Contact', 'Phone', 'Photo', 'Signature'].map(header =>
-          new TableCell({
-            children: [new Paragraph({ text: header, bold: true, size: 18 })],
-            shading: { fill: '#1E3A5A', color: '#FFFFFF', type: 'clear' },
-          })
-        ),
-      }),
-    ]
-
-    students.forEach((s, i) => {
-      tableRows.push(
-        new TableRow({
-          children: [
-            [String(i + 1), s.student_id, s.full_name, s.position || '—', s.programme || '—', s.blood_type || '—',
-             s.student_email || '—', s.emergency_contact_name || '—', s.emergency_contact_phone || '—', '', ''].map(cell =>
-              new TableCell({
-                children: [new Paragraph({ text: cell, size: 18 })],
-              })
-            ),
-          ],
-        })
-      )
-    })
-
-    children.push(
-      new Table({
-        rows: tableRows,
-        width: { size: 100, type: WidthType.PERCENTAGE },
-      })
-    )
-  }
-
-  if (children.length === 2) {
-    children.push(new Paragraph({ text: 'No approved submissions yet.', spacing: { before: 400 } }))
-  }
-
-  const doc = new Document({
-    sections: [{ children }],
-    styles: {
-      default: {
-        document: { run: { size: 22, font: 'Calibri' } },
-      },
-    },
-  })
-
-  const buffer = await Packer.toBuffer(doc)
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-  res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Student_Submissions.docx"')
-  res.send(buffer)
 })
 
 module.exports = router

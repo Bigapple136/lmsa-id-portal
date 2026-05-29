@@ -436,7 +436,7 @@ router.get('/export/photoshoot', requireAdmin, async (req, res) => {
 
   const L = 50, R = 562, W = 512
   const colNum = 25, colName = 187, colId = 130, colSign = W - colNum - colName - colId
-  const rowH = 44, signH = 32
+  const rowH = 64, signH = 55
 
   function header() {
     doc.fontSize(16).font('Helvetica-Bold').text('LMSA ID Card Photoshoot Roster', L, null, { align: 'center', width: W })

@@ -1032,26 +1032,6 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
-            <div style={{ marginTop:'14px' }}>
-              <button className="btn-gold" style={{ fontSize:'12px', padding:'7px 14px' }}
-                onClick={async () => {
-                  try {
-                    const res = await adminFetch('/api/submissions/export')
-                    if (!res.ok) { alert('Export failed.'); return }
-                    const blob = await res.blob()
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = 'LMSA_Student_Submissions.docx'
-                    document.body.appendChild(a)
-                    a.click()
-                    document.body.removeChild(a)
-                    URL.revokeObjectURL(url)
-                  } catch { alert('Export failed.') }
-                }}>
-                ⬇ Export Approved as Word (.docx)
-              </button>
-            </div>
           </div>
         )}
 
