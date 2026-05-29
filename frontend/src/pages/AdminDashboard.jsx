@@ -638,9 +638,9 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-tabs">
-        {['overview','upload','layout','students','submissions'].map(tab => (
+        {['overview','upload','layout','students','submissions','settings'].map(tab => (
           <button key={tab} className={`admin-tab ${activeTab===tab?'active':''}`} onClick={()=>{setActiveTab(tab);if(tab==='submissions')loadSubmissions()}}>
-            {tab === 'submissions' ? 'Submission Form' : tab.charAt(0).toUpperCase()+tab.slice(1)}
+            {tab === 'settings' ? 'Settings' : tab === 'submissions' ? 'Submission Form' : tab.charAt(0).toUpperCase()+tab.slice(1)}
           </button>
         ))}
         {userRole === 'admin' && (
@@ -710,49 +710,6 @@ export default function AdminDashboard() {
         {/* ── UPLOAD ── */}
         {activeTab==='upload' && !dataLoading && (
           <div>
-
-            {/* Field toggle panel */}
-            <div className="section-title">Card field settings <span className="new-badge">Template config</span></div>
-            <p className="section-desc">Toggle which fields appear on the ID card. This also controls the columns in the downloadable Excel template and the structure of the image folder.</p>
-            {fields && (
-              <div className="field-toggle-panel">
-                {Object.entries(FIELD_META).map(([key, meta]) => (
-                  <div key={key} className={`field-toggle-row ${fields[key]?.enabled ? 'on' : ''} ${meta.locked ? 'locked' : ''}`} onClick={()=>toggleField(key)}>
-                    <div className="field-toggle-check">{fields[key]?.enabled ? '✓' : ''}</div>
-                    <div className="field-toggle-label">{meta.label}</div>
-                    {meta.locked && <span className="field-toggle-badge">Always on</span>}
-                  </div>
-                ))}
-                <div style={{ marginTop:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
-                  <button className="btn-gold" onClick={saveFields} disabled={fieldsSaving} style={{ padding:'7px 16px', fontSize:'13px' }}>
-                    {fieldsSaving ? 'Saving...' : 'Save field settings'}
-                  </button>
-                  {fieldsMsg && <span style={{ fontSize:'12px', color: fieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{fieldsMsg.text}</span>}
-                </div>
-              </div>
-            )}
-
-            {/* QR field toggles */}
-            <div className="section-title" style={{ marginTop:'18px' }}>QR code fields <span className="new-badge">QR</span></div>
-            <p className="section-desc">Toggle which extra fields are encoded into the QR code. Enabled fields are included in the QR payload and appear on the QR verification page.</p>
-            {qrFields && (
-              <div className="field-toggle-panel">
-                {Object.entries(qrFields).map(([key, meta]) => (
-                  <div key={key} className={`field-toggle-row ${meta.enabled ? 'on' : ''}`} onClick={() => toggleQrField(key)}>
-                    <div className="field-toggle-check">{meta.enabled ? '✓' : ''}</div>
-                    <div className="field-toggle-label">{meta.label}</div>
-                  </div>
-                ))}
-                <div style={{ marginTop:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
-                  <button className="btn-gold" onClick={saveQrFields} disabled={qrFieldsSaving} style={{ padding:'7px 16px', fontSize:'13px' }}>
-                    {qrFieldsSaving ? 'Saving...' : 'Save QR fields'}
-                  </button>
-                  {qrFieldsMsg && <span style={{ fontSize:'12px', color: qrFieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{qrFieldsMsg.text}</span>}
-                </div>
-              </div>
-            )}
-
-            <div className="divider"/>
 
             {/* Downloads */}
             <div className="section-title">Download templates</div>
@@ -945,43 +902,6 @@ export default function AdminDashboard() {
         {/* ── SUBMISSION FORM ── */}
         {activeTab==='submissions' && !dataLoading && (
           <div>
-            <div className="section-title">Submission Form Settings</div>
-            <div style={{ background:'var(--white)', border:'0.5px solid var(--border)', borderRadius:'var(--radius)', padding:'14px', marginBottom:'14px' }}>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
-                <div>
-                  <div style={{ fontSize:'13px', fontWeight:'500' }}>Form Status</div>
-                  <div style={{ fontSize:'11px', color:'var(--muted)', marginTop:'2px' }}>
-                    {submissionFormEnabled ? 'Students can submit their details' : 'Form is closed to submissions'}
-                  </div>
-                </div>
-                <button
-                  className={`btn-${submissionFormEnabled?'outline':'gold'}`}
-                  onClick={handleToggleSubmissionForm}
-                  style={{ fontSize:'12px', padding:'7px 14px' }}
-                >
-                  {submissionFormEnabled ? 'Disable Form' : 'Enable Form'}
-                </button>
-              </div>
-              {submissionFormEnabled && (
-                <div style={{ background:'var(--bg)', borderRadius:'var(--radius)', padding:'10px 12px', fontSize:'12px' }}>
-                  <div style={{ color:'var(--muted)', marginBottom:'4px' }}>Share this link with students:</div>
-                  <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
-                    <code style={{ flex:1, padding:'6px 10px', background:'var(--white)', border:'0.5px solid var(--border)', borderRadius:'4px', fontSize:'12px', wordBreak:'break-all' }}>
-                      {window.location.origin}/submit
-                    </code>
-                    <button className="btn-gold" style={{ fontSize:'11px', padding:'5px 10px', whiteSpace:'nowrap' }}
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/submit`)
-                        setSubmissionMsg({ ok: true, text: 'Link copied!' })
-                        setTimeout(() => setSubmissionMsg(null), 2000)
-                      }}>
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             <div className="section-title">Submissions</div>
             <div className="mode-toggle">
               {['pending','approved','rejected','all'].map(f => (
@@ -1034,6 +954,94 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ── SETTINGS ── */}
+        {activeTab==='settings' && !dataLoading && (
+          <div>
+
+            {/* Card field toggles */}
+            <div className="section-title">Card field settings <span className="new-badge">Template config</span></div>
+            <p className="section-desc">Toggle which fields appear on the ID card. This also controls the columns in the downloadable Excel template and the structure of the image folder.</p>
+            {fields && (
+              <div className="field-toggle-panel">
+                {Object.entries(FIELD_META).map(([key, meta]) => (
+                  <div key={key} className={`field-toggle-row ${fields[key]?.enabled ? 'on' : ''} ${meta.locked ? 'locked' : ''}`} onClick={()=>toggleField(key)}>
+                    <div className="field-toggle-check">{fields[key]?.enabled ? '✓' : ''}</div>
+                    <div className="field-toggle-label">{meta.label}</div>
+                    {meta.locked && <span className="field-toggle-badge">Always on</span>}
+                  </div>
+                ))}
+                <div style={{ marginTop:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
+                  <button className="btn-gold" onClick={saveFields} disabled={fieldsSaving} style={{ padding:'7px 16px', fontSize:'13px' }}>
+                    {fieldsSaving ? 'Saving...' : 'Save field settings'}
+                  </button>
+                  {fieldsMsg && <span style={{ fontSize:'12px', color: fieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{fieldsMsg.text}</span>}
+                </div>
+              </div>
+            )}
+
+            {/* QR field toggles */}
+            <div className="section-title" style={{ marginTop:'18px' }}>QR code fields <span className="new-badge">QR</span></div>
+            <p className="section-desc">Toggle which extra fields are encoded into the QR code. Enabled fields are included in the QR payload and appear on the QR verification page.</p>
+            {qrFields && (
+              <div className="field-toggle-panel">
+                {Object.entries(qrFields).map(([key, meta]) => (
+                  <div key={key} className={`field-toggle-row ${meta.enabled ? 'on' : ''}`} onClick={() => toggleQrField(key)}>
+                    <div className="field-toggle-check">{meta.enabled ? '✓' : ''}</div>
+                    <div className="field-toggle-label">{meta.label}</div>
+                  </div>
+                ))}
+                <div style={{ marginTop:'10px', display:'flex', alignItems:'center', gap:'10px' }}>
+                  <button className="btn-gold" onClick={saveQrFields} disabled={qrFieldsSaving} style={{ padding:'7px 16px', fontSize:'13px' }}>
+                    {qrFieldsSaving ? 'Saving...' : 'Save QR fields'}
+                  </button>
+                  {qrFieldsMsg && <span style={{ fontSize:'12px', color: qrFieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)' }}>{qrFieldsMsg.text}</span>}
+                </div>
+              </div>
+            )}
+
+            <div className="divider"/>
+
+            {/* Submission form status */}
+            <div className="section-title">Submission form status</div>
+            <div style={{ background:'var(--white)', border:'0.5px solid var(--border)', borderRadius:'var(--radius)', padding:'14px' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }}>
+                <div>
+                  <div style={{ fontSize:'13px', fontWeight:'500' }}>Form Status</div>
+                  <div style={{ fontSize:'11px', color:'var(--muted)', marginTop:'2px' }}>
+                    {submissionFormEnabled ? 'Students can submit their details' : 'Form is closed to submissions'}
+                  </div>
+                </div>
+                <button
+                  className={`btn-${submissionFormEnabled?'outline':'gold'}`}
+                  onClick={handleToggleSubmissionForm}
+                  style={{ fontSize:'12px', padding:'7px 14px' }}
+                >
+                  {submissionFormEnabled ? 'Disable Form' : 'Enable Form'}
+                </button>
+              </div>
+              {submissionFormEnabled && (
+                <div style={{ background:'var(--bg)', borderRadius:'var(--radius)', padding:'10px 12px', fontSize:'12px' }}>
+                  <div style={{ color:'var(--muted)', marginBottom:'4px' }}>Share this link with students:</div>
+                  <div style={{ display:'flex', gap:'8px', alignItems:'center' }}>
+                    <code style={{ flex:1, padding:'6px 10px', background:'var(--white)', border:'0.5px solid var(--border)', borderRadius:'4px', fontSize:'12px', wordBreak:'break-all' }}>
+                      {window.location.origin}/submit
+                    </code>
+                    <button className="btn-gold" style={{ fontSize:'11px', padding:'5px 10px', whiteSpace:'nowrap' }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/submit`)
+                        setSubmissionMsg({ ok: true, text: 'Link copied!' })
+                        setTimeout(() => setSubmissionMsg(null), 2000)
+                      }}>
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
