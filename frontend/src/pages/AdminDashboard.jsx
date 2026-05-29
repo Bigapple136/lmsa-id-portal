@@ -58,6 +58,7 @@ export default function AdminDashboard() {
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [editMsg, setEditMsg] = useState(null)
   const [issueNotes, setIssueNotes] = useState({})
+  const [yearFilter, setYearFilter] = useState('all')
 
   // Field toggle state
   const [fields, setFields] = useState(null)
@@ -502,8 +503,9 @@ export default function AdminDashboard() {
   }
 
   const filtered = students.filter(s =>
-    s.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    s.student_id.toLowerCase().includes(search.toLowerCase())
+    (yearFilter === 'all' || s.year_level === yearFilter) &&
+    (s.full_name.toLowerCase().includes(search.toLowerCase()) ||
+     s.student_id.toLowerCase().includes(search.toLowerCase()))
   )
 
   const recentActivity = [...students]
@@ -1072,6 +1074,10 @@ export default function AdminDashboard() {
 
             <div style={{ display:'flex', gap:'8px', marginBottom:'14px', alignItems:'center' }}>
               <input className="field-input" placeholder="Search by name or student ID..." value={search} onChange={e=>{setSearch(e.target.value);setCurrentPage(1)}} style={{ flex:1 }}/>
+              <select className="field-input" value={yearFilter} onChange={e=>{setYearFilter(e.target.value);setCurrentPage(1)}} style={{ width:'auto', minWidth:'130px', fontSize:'13px' }}>
+                <option value="all">All Classes</option>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
               <button className="btn-gold" onClick={()=>{setActiveTab('upload');setUploadMode('manual')}}>+ Add</button>
             </div>
             {filtered.length===0 && (
