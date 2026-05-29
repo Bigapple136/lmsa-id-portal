@@ -131,7 +131,7 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
   try {
     const { generateForStudent } = require('./qr')
     await generateForStudent(student)
-  } catch {}
+  } catch (err) { console.warn('[Submission QR] Failed for', student.student_id, err.message) }
 
   const { error: updateErr } = await supabase.from('student_submissions').update({
     status: 'approved',

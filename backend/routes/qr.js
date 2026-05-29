@@ -21,9 +21,9 @@ function requireFullAdmin(req, res, next) {
 
 const JSZip = require('jszip')
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
-const BACKEND_URL = process.env.BACKEND_URL || FRONTEND_URL
-const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET || 'dev-secret-change-in-production'
+const FRONTEND_URL = process.env.FRONTEND_URL
+const BACKEND_URL = process.env.BACKEND_URL
+const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET
 
 function signStudentToken(studentId) {
   const payload = Buffer.from(studentId).toString('base64url')
@@ -128,7 +128,8 @@ router.post('/generate-all', requireAdmin, requireFullAdmin, async (req, res) =>
     try {
       await generateForStudent(student)
       generated++
-    } catch {
+    } catch (err) {
+      console.warn('[QR Gen] Failed for', student.student_id, err.message)
       failed++
     }
   }
@@ -172,7 +173,8 @@ router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) 
     try {
       await generateForStudent(student)
       generated++
-    } catch {
+    } catch (err) {
+      console.warn('[QR Regenerate] Failed for', student.student_id, err.message)
       failed++
     }
   }
@@ -460,7 +462,7 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
       const yearFolder = (s.year_level || 'unknown')
         .toLowerCase().replace(/\s+/g, '-')
       root.folder(yearFolder).file(`${s.student_id}.png`, buffer)
-    } catch { /* skip failed fetch */ }
+    } catch (err) { console.warn('[QR Export] Failed to fetch', s.student_id, err.message) }
   }
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })

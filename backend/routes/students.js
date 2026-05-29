@@ -10,7 +10,7 @@ const { requireAdmin } = require('../middleware/auth')
 const { email, maxLength, firstError } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://lmsa-id-portal.onrender.com'
+const FRONTEND_URL = process.env.FRONTEND_URL
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -218,7 +218,7 @@ router.post('/', requireAdmin, upload.fields([
   if (error) return res.status(400).json({ error: error.message })
 
   // Auto-generate QR
-  try { await getQRGenerator()(data) } catch { /* non-fatal */ }
+  try { await getQRGenerator()(data) } catch (err) { console.error('[QR] Auto-generate failed for', data.student_id, err.message) }
 
   res.status(201).json(data)
 })
@@ -267,8 +267,8 @@ router.post('/bulk', requireAdmin, upload.fields([
     if (!sid) { console.warn('Skipping row with empty student_id'); continue }
     if (r.year_level && !validateYear(r.year_level.trim())) { console.warn(`Invalid year_level for ${sid} — skipped`); continue }
     let photo_url = null, signature_url = null
-    if (photoMap[sid]) { try { photo_url = await uploadPhoto(photoMap[sid].buffer, photoMap[sid].mimeType, sid, r.year_level?.trim()) } catch {} }
-    if (signatureMap[sid]) { try { signature_url = await uploadSignature(signatureMap[sid], sid, r.year_level?.trim()) } catch {} }
+    if (photoMap[sid]) { try { photo_url = await uploadPhoto(photoMap[sid].buffer, photoMap[sid].mimeType, sid, r.year_level?.trim()) } catch (err) { console.warn('[Bulk] Photo upload failed for', sid, err.message) } }
+    if (signatureMap[sid]) { try { signature_url = await uploadSignature(signatureMap[sid], sid, r.year_level?.trim()) } catch (err) { console.warn('[Bulk] Signature upload failed for', sid, err.message) } }
     rows.push({
       student_id: sid.slice(0, 50), full_name: r.full_name.trim().slice(0, MAX_TEXT_LENGTH),
       year_level: r.year_level.trim(), position: r.position?.trim().slice(0, MAX_TEXT_LENGTH) || null,
@@ -298,7 +298,7 @@ router.post('/bulk', requireAdmin, upload.fields([
 
   // Auto-generate QR for each upserted student
   const qrGen = getQRGenerator()
-  for (const student of data) { try { await qrGen(student) } catch {} }
+  for (const student of data) { try { await qrGen(student) } catch (err) { console.warn('[Bulk QR] Failed for', student.student_id, err.message) } }
 
   res.json({ inserted: data.length, records: data, duplicates_skipped: duplicatesSkipped })
 })
@@ -355,15 +355,15 @@ router.patch('/:studentId', requireAdmin, upload.fields([
 
   // Handle year level change — migrate files and QR
   if (yearLevelChanged) {
-    try { await migrateStudentFiles(req.params.studentId, oldYearLevel, newYearLevel) } catch {}
+    try { await migrateStudentFiles(req.params.studentId, oldYearLevel, newYearLevel) } catch (err) { console.warn('[Migrate] File migration failed for', req.params.studentId, err.message) }
     try {
       const { deleteQRFile } = require('./qr')
       await deleteQRFile(req.params.studentId, oldYearLevel)
-    } catch {}
+    } catch (err) { console.warn('[Migrate] QR deletion failed for', req.params.studentId, err.message) }
   }
 
   // Regenerate QR after edit
-  try { await getQRGenerator()(data) } catch {}
+  try { await getQRGenerator()(data) } catch (err) { console.warn('[QR] Regenerate failed for', data.student_id, err.message) }
 
   res.json(data)
 })
@@ -415,7 +415,7 @@ router.patch('/:studentId/self-correct', async (req, res) => {
   if (notes.length) {
     await supabase.from('confirmations').insert({ student_id: studentId, action: 'self_corrected', note: notes.join(' | ').slice(0, MAX_NOTE_LENGTH) })
     const { data: updated } = await supabase.from('students').select('*').eq('student_id', studentId).single()
-    if (updated) { try { await getQRGenerator()(updated) } catch {} }
+    if (updated) { try { await getQRGenerator()(updated) } catch (err) { console.warn('[Self-correct QR] Failed for', updated.student_id, err.message) } }
   }
 
   const { data, error } = await supabase.from('students').select('*').eq('student_id', studentId).single()

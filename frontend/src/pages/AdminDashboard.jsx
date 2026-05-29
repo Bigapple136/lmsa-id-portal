@@ -102,7 +102,7 @@ export default function AdminDashboard() {
         setUploadMsg({ ok: true, text: 'Draft restored from your previous session.' })
         setTimeout(() => setUploadMsg(null), 4000)
       }
-    } catch {}
+    } catch (err) { console.warn('[Draft] Failed to restore draft', err) }
     sessionStorage.removeItem(DRAFT_KEY)
   }, [])
 
@@ -1130,7 +1130,7 @@ export default function AdminDashboard() {
                                 if (!res.ok) return;
                                 const { url } = await res.json();
                                 window.open(url, '_blank', 'noopener,noreferrer');
-                              } catch {}
+                              } catch (err) { console.warn('[Preview] Failed to open preview', err) }
                             }}>
                             View preview
                           </button>
@@ -1143,7 +1143,7 @@ export default function AdminDashboard() {
                                 if (!res.ok) return;
                                 const { url } = await res.json();
                                 window.open(url, '_blank', 'noopener,noreferrer');
-                              } catch {}
+                              } catch (err) { console.warn('[QR Page] Failed to open verification page', err) }
                             }}>
                             View page
                           </button>
