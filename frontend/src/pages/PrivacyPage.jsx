@@ -6,155 +6,136 @@ export default function PrivacyPage() {
     <div className="legal-page">
       <Navbar showLogin={true} />
       <div className="legal-container">
-        <div className="legal-brand">GoldWay — Creative Design &amp; Production Services</div>
+        <div className="legal-brand">LMSA ID Portal — Operated by GoldWay Creative Design &amp; Production Services</div>
         <h1 className="legal-title">Privacy Policy</h1>
-        <p className="legal-effective">Effective date: May 28, 2026</p>
+        <p className="legal-effective">Effective date: May 29, 2026</p>
 
         <p className="legal-intro">
-          GoldWay is committed to protecting the privacy of students and institutions who use its services and the LMSA ID Portal. This Privacy Policy explains what information we collect, how we use it, and your rights in relation to it.
+          GoldWay takes your privacy seriously. This Privacy Policy explains what personal information the LMSA ID Portal collects, why it is collected, how it is kept safe, and your rights in relation to it. It is written in plain language so every student can understand it.
         </p>
 
         <table className="legal-table">
           <tbody>
-            <tr><td className="legal-td-label">Data Controller</td><td>GoldWay Creative Design &amp; Production Services</td></tr>
-            <tr><td className="legal-td-label">Contact</td><td><a href="mailto:goldway.estone@outlook.com">goldway.estone@outlook.com</a> &nbsp;|&nbsp; <a href="tel:+231770405785">+231770405785</a></td></tr>
             <tr><td className="legal-td-label">Portal</td><td><a href="https://lmsa-id-portal.vercel.app" target="_blank" rel="noopener noreferrer">lmsa-id-portal.vercel.app</a></td></tr>
+            <tr><td className="legal-td-label">Data controller</td><td>GoldWay Creative Design &amp; Production Services</td></tr>
+            <tr><td className="legal-td-label">Contact</td><td><a href="mailto:goldway.estone@outlook.com">goldway.estone@outlook.com</a></td></tr>
             <tr><td className="legal-td-label">Jurisdiction</td><td>Republic of Liberia</td></tr>
           </tbody>
         </table>
 
         <div className="legal-section">
           <h2 className="legal-section-title">1. Who This Policy Applies To</h2>
-          <p>This policy applies to:</p>
-          <ul className="legal-list">
-            <li>Students who register on the LMSA ID Portal or whose information is submitted to the Portal by an institutional administrator</li>
-            <li>Representatives of institutions that engage GoldWay for ID card production services</li>
-            <li>Any person who contacts GoldWay directly for business enquiries</li>
-          </ul>
+          <p>This policy applies to students whose information appears on the Portal, and to institutional administrators who use the Portal to manage student records. It covers information collected through the Portal as well as information collected during GoldWay's ID card production process.</p>
         </div>
 
         <div className="legal-section">
           <h2 className="legal-section-title">2. What Information We Collect</h2>
 
-          <h3 className="legal-sub-title">2.1 Information collected through the Portal</h3>
-          <p>When a student registers on the Portal or an administrator uploads student data, the following information may be collected:</p>
+          <h3 className="legal-sub-title">2.1 Your ID card details</h3>
+          <p>When your information is added to the Portal — either by you or by your institution's administrator — the following details may be collected:</p>
           <ul className="legal-list">
             <li>Full name</li>
             <li>Student ID number</li>
-            <li>Year / level of study</li>
-            <li>Institutional position or role (e.g. Class Representative)</li>
+            <li>Year or level of study</li>
+            <li>Institutional position or role</li>
             <li>Student photograph</li>
             <li>Student signature (where provided)</li>
-            <li>Programme of study (e.g. MBBS, Pharm.D)</li>
+            <li>Programme of study</li>
             <li>Student email address</li>
-            <li>Blood type (where provided, for emergency purposes only)</li>
-            <li>Emergency contact name and phone number (where provided)</li>
+            <li>Blood type (optional — used for emergency identification purposes only)</li>
+            <li>Emergency contact name and phone number (optional)</li>
           </ul>
 
-          <h3 className="legal-sub-title">2.2 Information encoded in QR codes</h3>
-          <p>A subset of the above information — specifically student ID number, full name, year/level, programme, institutional position, email address, blood type, and emergency contact details — is encoded into the QR code printed on each physical ID card. This information is readable by any standard QR code scanner and is intended to facilitate student identity verification.</p>
+          <h3 className="legal-sub-title">2.2 What is on your QR code</h3>
+          <p>Every ID card includes a QR code. When scanned, it displays a subset of your details to help verify your identity. This includes your name, student ID, year/level, programme, and position. Sensitive details such as your blood type and emergency contact are also encoded in the QR code for emergency use, but are not displayed on the card face itself.</p>
+          <p>You should be aware that anyone with a standard QR scanner can read the information in your QR code when they scan your physical card.</p>
 
-          <h3 className="legal-sub-title">2.3 Information collected during production services</h3>
-          <p>When GoldWay provides photography and printing services, we temporarily hold student photographs and personal details for the purpose of producing the ID cards. This information is held by GoldWay in its capacity as data processor on behalf of the Institution.</p>
+          <h3 className="legal-sub-title">2.3 Correction requests</h3>
+          <p>If you submit a correction through the Portal, we retain a record of what was changed and when, to help administrators manage updates accurately.</p>
 
-          <h3 className="legal-sub-title">2.4 Contact information</h3>
-          <p>If you contact GoldWay by email or phone, we retain your name, contact details, and the content of your communication for the purpose of responding to your enquiry.</p>
+          <h3 className="legal-sub-title">2.4 Administrator activity</h3>
+          <p>Actions taken by institutional administrators — such as uploading student records or approving corrections — are logged for accountability purposes.</p>
         </div>
 
         <div className="legal-section">
-          <h2 className="legal-section-title">3. How We Use Your Information</h2>
-          <p>GoldWay uses the information collected for the following purposes only:</p>
+          <h2 className="legal-section-title">3. Why We Collect This Information</h2>
+          <p>We collect and use your information only for the following purposes:</p>
           <ul className="legal-list">
-            <li>To produce student ID cards on behalf of the contracting Institution</li>
-            <li>To populate and operate the LMSA ID Portal, including student record management, QR code generation, and card preview</li>
-            <li>To allow students to verify their own details and submit corrections through the Portal</li>
-            <li>To allow authorised institutional administrators to manage student records</li>
-            <li>To communicate with institutions and students regarding the production process</li>
+            <li>To produce your student ID card with accurate details</li>
+            <li>To display your card details on the Portal so you can review and confirm them</li>
+            <li>To generate the QR code on your ID card for identity verification</li>
+            <li>To process corrections you submit through the Portal</li>
+            <li>To allow your institution's administrator to manage student records</li>
           </ul>
-          <p>GoldWay does not use student data for marketing, advertising, profiling, or any purpose beyond those listed above.</p>
+          <p>We do not use your information for advertising, marketing, or any purpose unrelated to your ID card.</p>
         </div>
 
         <div className="legal-section">
-          <h2 className="legal-section-title">4. How We Store Your Information</h2>
-
-          <h3 className="legal-sub-title">4.1 Portal data</h3>
-          <p>Student records entered into or uploaded to the Portal are stored securely on Supabase, a third-party database and storage service. All data is stored with access controls and is protected by row-level security policies that restrict access to authorised users only.</p>
-
-          <h3 className="legal-sub-title">4.2 Student photographs and signatures</h3>
-          <p>Student photographs and signature images are stored in Supabase cloud storage. Public URLs are used to display images within the Portal; however, the files are accessible only via unique, non-guessable paths.</p>
-
-          <h3 className="legal-sub-title">4.3 QR codes</h3>
-          <p>Generated QR code images are stored in Supabase cloud storage, organised by year/level subfolder. Each QR code is named after the student's ID number.</p>
-
-          <h3 className="legal-sub-title">4.4 Production data</h3>
-          <p>Personal data held by GoldWay during the production process (photographs, design files, student lists) is stored on GoldWay's internal systems and is accessible only to GoldWay personnel directly involved in the project.</p>
+          <h2 className="legal-section-title">4. How We Keep Your Information Safe</h2>
+          <p>Your information is stored on secure, access-controlled cloud infrastructure. Access to student records is restricted — only authorised administrators of your institution can view or edit your record. Your data is protected by authentication controls that prevent unauthorised access.</p>
+          <p>Student photographs and other files are stored securely and are only accessible within the Portal by authorised users.</p>
         </div>
 
         <div className="legal-section">
-          <h2 className="legal-section-title">5. Data Retention</h2>
+          <h2 className="legal-section-title">5. How Long We Keep Your Information</h2>
 
-          <h3 className="legal-sub-title">5.1 Portal data</h3>
-          <p>Student records remain on the Portal for as long as the Institution's account is active. Institutions may request deletion of their data at any time by contacting GoldWay.</p>
+          <h3 className="legal-sub-title">5.1 Portal records</h3>
+          <p>Your student record remains on the Portal for as long as your institution's account is active. Your institution may request deletion of all student data at any time.</p>
 
-          <h3 className="legal-sub-title">5.2 Production data</h3>
-          <p>Personal data held by GoldWay for the purpose of producing ID cards is retained until the end of the academic year in which the order was completed, after which it is permanently deleted from GoldWay's systems. This includes photographs, design files, and student lists.</p>
-
-          <h3 className="legal-sub-title">5.3 Contact and business records</h3>
-          <p>Business correspondence and invoice records may be retained for up to three years for accounting and legal purposes.</p>
+          <h3 className="legal-sub-title">5.2 Production records</h3>
+          <p>Any personal information GoldWay holds during the ID card production process — including photographs and student lists — is deleted at the end of the academic year in which your cards were produced.</p>
         </div>
 
         <div className="legal-section">
           <h2 className="legal-section-title">6. Who We Share Your Information With</h2>
-          <p>GoldWay does not sell, rent, or trade student or institutional data to any third party.</p>
-          <p>We may share information in the following limited circumstances:</p>
+          <p>GoldWay does not sell or share your personal information with third parties for commercial purposes.</p>
+          <p>Your information may be shared only in these limited circumstances:</p>
           <ul className="legal-list">
-            <li><strong>Supabase</strong> (our hosting and database provider) — solely for the purpose of storing and serving Portal data. Supabase processes data in accordance with its own privacy policy.</li>
-            <li><strong>Our PVC card printing partner</strong> — receives only the minimum data necessary to produce the physical cards (card design files). No raw student personal data is passed to the printing partner.</li>
-            <li><strong>Legal obligations</strong> — where we are required by law or by a competent authority to disclose information.</li>
+            <li><strong>Secure infrastructure providers</strong> — we use trusted third-party services to host and store Portal data securely. These providers process data only on our instructions and do not have independent access to your information.</li>
+            <li><strong>Your institution</strong> — your record is accessible to authorised administrators at your institution for the purpose of managing your ID card.</li>
+            <li><strong>Legal requirements</strong> — if we are required by law or by a competent authority to disclose information, we will do so.</li>
           </ul>
         </div>
 
         <div className="legal-section">
           <h2 className="legal-section-title">7. Your Rights</h2>
-          <p>Students and institutions have the following rights in relation to their personal data held by GoldWay:</p>
+          <p>You have the following rights regarding your personal information:</p>
           <ul className="legal-list">
-            <li><strong>Right of access:</strong> You may request a copy of the personal data GoldWay holds about you.</li>
-            <li><strong>Right to correction:</strong> You may request that inaccurate or incomplete data be corrected. Students may also use the Portal's self-correction feature for certain fields.</li>
-            <li><strong>Right to deletion:</strong> You may request that your personal data be deleted, subject to any legal obligations GoldWay has to retain it.</li>
-            <li><strong>Right to object:</strong> You may object to the processing of your data for any purpose beyond those stated in Section 3.</li>
+            <li><strong>Access:</strong> You can ask to see the information we hold about you.</li>
+            <li><strong>Correction:</strong> You can ask us to correct inaccurate information. You can also use the Portal's self-correction feature directly.</li>
+            <li><strong>Deletion:</strong> You can ask us to delete your information. We will do so subject to any obligations your institution has regarding student records.</li>
+            <li><strong>Objection:</strong> You can ask us to stop processing your information for any purpose beyond operating your ID card.</li>
           </ul>
-          <p>To exercise any of these rights, contact GoldWay using the details in Section 9.</p>
+          <p>To make any of these requests, contact us using the details in Section 9.</p>
         </div>
 
         <div className="legal-section">
-          <h2 className="legal-section-title">8. Cookies &amp; Tracking</h2>
-          <p>The LMSA ID Portal does not use tracking cookies, advertising pixels, or third-party analytics tools. Session data is managed through Supabase authentication and is used solely to maintain secure admin login sessions.</p>
+          <h2 className="legal-section-title">8. Cookies and Tracking</h2>
+          <p>The LMSA ID Portal does not use advertising cookies or tracking tools. The Portal uses only the minimum session data necessary to keep you securely logged in during your visit. No data is shared with advertising networks or analytics platforms.</p>
         </div>
 
         <div className="legal-section">
           <h2 className="legal-section-title">9. Governing Law</h2>
-          <p>This Privacy Policy is governed by the laws of the Republic of Liberia. Any disputes arising in connection with this policy shall be subject to the exclusive jurisdiction of the courts of the Republic of Liberia.</p>
+          <p>This Privacy Policy is governed by the laws of the Republic of Liberia. Any disputes arising in connection with this policy shall be subject to the jurisdiction of the courts of the Republic of Liberia.</p>
         </div>
 
         <div className="legal-section">
           <h2 className="legal-section-title">10. Changes to This Policy</h2>
-          <p>GoldWay may update this Privacy Policy from time to time to reflect changes in our practices or legal obligations. The effective date at the top of this document will be updated when changes are made. We encourage students and institutions to review this policy periodically.</p>
+          <p>If we make changes to this Privacy Policy, the updated version will be published on the Portal with a revised effective date. We encourage you to review this page periodically. Continued use of the Portal after changes are published means you accept the updated policy.</p>
         </div>
 
         <div className="legal-section">
-          <h2 className="legal-section-title">11. Contact</h2>
-          <p>For any questions, requests, or concerns regarding this Privacy Policy or the handling of your personal data, please contact:</p>
+          <h2 className="legal-section-title">11. Contact Us</h2>
+          <p>If you have any questions about this Privacy Policy or how your information is handled, please contact:</p>
           <div className="legal-contact-card">
-            <p><strong>Name:</strong> Emmett Stone Gbatu — GoldWay</p>
             <p><strong>Email:</strong> <a href="mailto:goldway.estone@outlook.com">goldway.estone@outlook.com</a></p>
-            <p><strong>Phone:</strong> <a href="tel:+231770405785">+231770405785</a></p>
             <p><strong>Portal:</strong> <a href="https://lmsa-id-portal.vercel.app" target="_blank" rel="noopener noreferrer">lmsa-id-portal.vercel.app</a></p>
           </div>
         </div>
 
         <div className="legal-footer-line">
-          GoldWay — Creative Design &amp; Production Services<br />
-          <a href="tel:+231770405785">+231770405785</a> &nbsp;|&nbsp; <a href="mailto:goldway.estone@outlook.com">goldway.estone@outlook.com</a> &nbsp;|&nbsp; <a href="https://lmsa-id-portal.vercel.app" target="_blank" rel="noopener noreferrer">lmsa-id-portal.vercel.app</a>
+          LMSA ID Portal &mdash; Operated by GoldWay<br />
+          <a href="mailto:goldway.estone@outlook.com">goldway.estone@outlook.com</a> &nbsp;|&nbsp; <a href="https://lmsa-id-portal.vercel.app" target="_blank" rel="noopener noreferrer">lmsa-id-portal.vercel.app</a>
         </div>
       </div>
       <Footer />
