@@ -2,15 +2,6 @@ require('dotenv').config()
 const { validateEnv } = require('./env')
 validateEnv()
 
-const Sentry = require('@sentry/node')
-
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV || 'development',
-  tracesSampleRate: 0.1,
-  enabled: !!process.env.SENTRY_DSN,
-})
-
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -27,6 +18,16 @@ const adminsRouter = require('./routes/admins')
 const submissionsRouter = require('./routes/submissions')
 
 const app = express()
+
+if (process.env.SENTRY_DSN) {
+  const Sentry = require('@sentry/node')
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 0.1,
+  })
+  app.use(Sentry.Handlers.requestHandler())
+}
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -109,8 +110,10 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }))
 
 // ---- Global Express error handler ----
-app.use(Sentry.Handlers.requestHandler())
-app.use(Sentry.Handlers.errorHandler())
+if (process.env.SENTRY_DSN) {
+  const Sentry = require('@sentry/node')
+  app.use(Sentry.Handlers.errorHandler())
+}
 
 app.use((err, req, res, _next) => {
   const status = err.status || err.statusCode || (err instanceof SyntaxError ? 400 : 500)
