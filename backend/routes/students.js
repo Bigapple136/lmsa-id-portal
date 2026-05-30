@@ -5,17 +5,12 @@ const { parse } = require('csv-parse/sync')
 const JSZip = require('jszip')
 const path = require('path')
 const PDFDocument = require('pdfkit')
-const { createClient } = require('@supabase/supabase-js')
+const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
 const { email, maxLength, firstError } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
 
 function requireFullAdmin(req, res, next) {
   if (req.userRole !== 'admin') {

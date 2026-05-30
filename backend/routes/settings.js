@@ -3,14 +3,10 @@ const router = express.Router()
 const JSZip = require('jszip')
 const path = require('path')
 const fs = require('fs')
-const { createClient } = require('@supabase/supabase-js')
+const { supabase } = require('../db')
+const cache = require('../cache')
 const { requireAdmin } = require('../middleware/auth')
 const { isBoolean, isObject, checkFieldsConfig, checkLayoutConfig, firstError } = require('../middleware/validate')
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
 
 function requireFullAdmin(req, res, next) {
   if (req.userRole !== 'admin') {
@@ -52,20 +48,35 @@ const DEFAULT_LAYOUT = {
   signature:  { x:0.5254, y:0.8386, width:0.3898, height:0.0896, type:'image' },
 }
 
-// ── PUBLIC reads ──
+// ── PUBLIC reads (cached, 5-minute TTL) ──
 router.get('/fields', async (req, res) => {
+  const cached = cache.get('settings:card_fields')
+  if (cached) return res.json(cached)
+
   const { data } = await supabase.from('portal_settings').select('value').eq('key', 'card_fields').maybeSingle()
-  res.json(data?.value || DEFAULT_FIELDS)
+  const result = data?.value || DEFAULT_FIELDS
+  cache.set('settings:card_fields', result, 300000)
+  res.json(result)
 })
 
 router.get('/qr-fields', async (req, res) => {
+  const cached = cache.get('settings:qr_fields')
+  if (cached) return res.json(cached)
+
   const { data } = await supabase.from('portal_settings').select('value').eq('key', 'qr_fields').maybeSingle()
-  res.json(data?.value || DEFAULT_QR_FIELDS)
+  const result = data?.value || DEFAULT_QR_FIELDS
+  cache.set('settings:qr_fields', result, 300000)
+  res.json(result)
 })
 
 router.get('/layout', async (req, res) => {
+  const cached = cache.get('settings:card_layout')
+  if (cached) return res.json(cached)
+
   const { data } = await supabase.from('portal_settings').select('value').eq('key', 'card_layout').maybeSingle()
-  res.json(data?.value || DEFAULT_LAYOUT)
+  const result = data?.value || DEFAULT_LAYOUT
+  cache.set('settings:card_layout', result, 300000)
+  res.json(result)
 })
 
 // ── ADMIN writes ──
@@ -76,6 +87,7 @@ router.put('/fields', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data, error } = await supabase.from('portal_settings')
     .upsert({ key: 'card_fields', value: req.body, updated_at: new Date().toISOString() }).select().single()
   if (error) return res.status(500).json({ error: error.message })
+  cache.set('settings:card_fields', data.value, 300000)
   res.json(data.value)
 })
 
@@ -87,6 +99,7 @@ router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
     .upsert({ key: 'qr_fields', value: req.body, updated_at: new Date().toISOString() })
     .select().single()
   if (error) return res.status(400).json({ error: error.message })
+  cache.set('settings:qr_fields', data.value, 300000)
   res.json(data.value)
 })
 
@@ -98,6 +111,7 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     .upsert({ key: 'card_layout', value: req.body, updated_at: new Date().toISOString() })
     .select().single()
   if (error) return res.status(400).json({ error: error.message })
+  cache.set('settings:card_layout', data.value, 300000)
   res.json(data.value)
 })
 

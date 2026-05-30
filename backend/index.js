@@ -19,6 +19,9 @@ const submissionsRouter = require('./routes/submissions')
 
 const app = express()
 
+// Trust proxy for correct IP detection behind load balancers (Render, etc.)
+app.set('trust proxy', 1)
+
 if (process.env.SENTRY_DSN) {
   const Sentry = require('@sentry/node')
   Sentry.init({
@@ -76,23 +79,18 @@ if (process.env.NODE_ENV === 'production') {
   app.use(morgan('dev'))
 }
 
-const generalLimiter = rateLimit({ windowMs: 15*60*1000, max: 200, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests.' } })
-const lookupLimiter = rateLimit({ windowMs: 15*60*1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many lookup attempts.' } })
-const confirmLimiter = rateLimit({ windowMs: 15*60*1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many confirmation attempts.' } })
-const submissionLimiter = rateLimit({ windowMs: 15*60*1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many submissions. Please try again later.' } })
-const qrBulkLimiter = rateLimit({ windowMs: 15*60*1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many QR bulk operations. Please try again later.' } })
+// Rate limiters — per-IP tracking via express-rate-limit (requires trust proxy)
+const generalLimiter = rateLimit({ windowMs: 15*60*1000, max: 500, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests.' } })
+const lookupLimiter = rateLimit({ windowMs: 15*60*1000, max: 300, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many lookup attempts. Please try again later.' } })
+const confirmLimiter = rateLimit({ windowMs: 15*60*1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many confirmation attempts.' } })
+const submissionLimiter = rateLimit({ windowMs: 15*60*1000, max: 50, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many submissions. Please try again later.' } })
+const qrBulkLimiter = rateLimit({ windowMs: 15*60*1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many QR bulk operations. Please try again later.' } })
 
 app.use('/api', generalLimiter)
 app.use('/api/students/lookup', lookupLimiter)
 app.use('/api/confirmations', confirmLimiter)
 app.use('/api/submissions', (req, res, next) => { if (req.method === 'POST') return submissionLimiter(req, res, next); next() })
 app.use(['/api/qr/generate-all', '/api/qr/regenerate-all'], qrBulkLimiter)
-
-const { createClient } = require('@supabase/supabase-js')
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
 
 app.use('/api/students', studentsRouter)
 app.use('/api/confirmations', confirmationsRouter)
@@ -124,30 +122,36 @@ app.use((err, req, res, _next) => {
   res.status(status).json({ error: message })
 })
 
-// ---- Startup ----
-const PORT = process.env.PORT || 4000
-const server = app.listen(PORT, () => {
-  console.log(`LMSA ID Portal backend running on port ${PORT}`)
-  console.log(`CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'all (dev mode)'}`)
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
-})
-
-// ---- Graceful shutdown ----
-function shutdown(signal) {
-  console.log(`\n[${signal}] Shutting down gracefully...`)
-  server.close(() => {
-    console.log('HTTP server closed.')
-    process.exit(0)
-  })
-  // Force exit after 10s regardless
-  setTimeout(() => {
-    console.error('Forced exit after timeout.')
-    process.exit(1)
-  }, 10000).unref()
+function createServer() {
+  return app
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'))
-process.on('SIGINT', () => shutdown('SIGINT'))
+function startServer() {
+  const PORT = process.env.PORT || 4000
+  const server = app.listen(PORT, () => {
+    const pid = process.pid
+    console.log(`LMSA ID Portal backend running on port ${PORT} (pid ${pid})`)
+    console.log(`CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'all (dev mode)'}`)
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
+  })
+
+  function shutdown(signal) {
+    console.log(`\n[${signal}] Shutting down gracefully...`)
+    server.close(() => {
+      console.log('HTTP server closed.')
+      process.exit(0)
+    })
+    setTimeout(() => {
+      console.error('Forced exit after timeout.')
+      process.exit(1)
+    }, 10000).unref()
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  process.on('SIGINT', () => shutdown('SIGINT'))
+
+  return server
+}
 
 // ---- Unhandled rejections / exceptions ----
 process.on('unhandledRejection', (reason) => {
@@ -155,6 +159,12 @@ process.on('unhandledRejection', (reason) => {
 })
 process.on('uncaughtException', (err) => {
   console.error('[UNCAUGHT EXCEPTION]', err)
-  // Crashing is the safest behaviour for uncaught exceptions
   process.exit(1)
 })
+
+module.exports = { createServer, startServer, app }
+
+// Auto-start when run directly (not via cluster.js or test)
+if (require.main === module) {
+  startServer()
+}

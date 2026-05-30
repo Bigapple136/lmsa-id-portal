@@ -1,13 +1,8 @@
 const express = require('express')
 const router = express.Router()
-const { createClient } = require('@supabase/supabase-js')
+const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
 const { required, maxLength, email, uuid, enumValue, firstError } = require('../middleware/validate')
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
 
 const ALLOWED_YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 

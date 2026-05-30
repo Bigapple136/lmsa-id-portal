@@ -2,15 +2,10 @@ const express = require('express')
 const router = express.Router()
 const QRCode = require('qrcode')
 const crypto = require('crypto')
-const { createClient } = require('@supabase/supabase-js')
+const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
 const { maxLength } = require('../middleware/validate')
 const { getQRFields } = require('./settings')
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-)
 
 function requireFullAdmin(req, res, next) {
   if (req.userRole !== 'admin') {
