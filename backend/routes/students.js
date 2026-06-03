@@ -463,7 +463,6 @@ router.get('/export/photoshoot', requireAdmin, async (req, res) => {
 
     const signLeft = x + 4, signTop = y + 6, signW = colSign - 8
     doc.rect(signLeft, signTop, signW, signH).stroke('#999')
-    doc.fontSize(7).fillColor('#aaa').text('Sign here', signLeft, signTop + signH / 2 - 4, { width: signW, align: 'center' })
     doc.fillColor('#000')
 
     const ly = y + rowH - 1
