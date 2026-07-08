@@ -18,4 +18,4 @@ ALTER TABLE student_submissions ADD COLUMN IF NOT EXISTS current_address TEXT;
 -- Merge new fields into existing qr_fields config (if already present) or seed defaults
 INSERT INTO portal_settings (key, value) VALUES
   ('qr_fields', '{"programme":{"label":"Programme","enabled":true},"blood_type":{"label":"Blood Type","enabled":true},"student_email":{"label":"Student Email","enabled":false},"emergency_contact_name":{"label":"Emergency Contact Name","enabled":true},"emergency_contact_phone":{"label":"Emergency Contact Phone","enabled":true},"date_of_birth":{"label":"Date of Birth","enabled":true},"nationality":{"label":"Nationality","enabled":true},"county_of_origin":{"label":"County of Origin","enabled":true},"current_address":{"label":"Current Address","enabled":true}}'::jsonb)
-ON CONFLICT (key) DO UPDATE SET value = value || EXCLUDED.value;
+ON CONFLICT (key) DO UPDATE SET value = portal_settings.value || EXCLUDED.value;
