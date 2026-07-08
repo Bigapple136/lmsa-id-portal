@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS students (
   student_email     TEXT,
   emergency_contact_name  TEXT,
   emergency_contact_phone TEXT,
+  date_of_birth     DATE,
+  nationality       TEXT,
+  county_of_origin  TEXT,
+  current_address   TEXT,
   qr_url            TEXT,
   status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
                       'pending','confirmed','issue','photo_issue'
@@ -113,6 +117,10 @@ CREATE TABLE IF NOT EXISTS student_submissions (
   student_email           TEXT,
   emergency_contact_name  TEXT,
   emergency_contact_phone TEXT,
+  date_of_birth           DATE,
+  nationality             TEXT,
+  county_of_origin        TEXT,
+  current_address         TEXT,
   status                  TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
                             'pending','approved','rejected'
                           )),

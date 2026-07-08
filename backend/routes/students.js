@@ -181,13 +181,14 @@ router.post('/', requireAdmin, upload.fields([
   { name: 'photo', maxCount: 1 }, { name: 'signature', maxCount: 1 }
 ]), async (req, res) => {
   const { student_id, full_name, year_level, position, blood_type,
-          emergency_contact_name, emergency_contact_phone, student_email, programme } = req.body
+          emergency_contact_name, emergency_contact_phone, student_email, programme,
+          date_of_birth, nationality, county_of_origin, current_address } = req.body
 
   if (!student_id || !full_name || !year_level)
     return res.status(400).json({ error: 'student_id, full_name, and year_level are required.' })
   if (!validateYear(year_level))
     return res.status(400).json({ error: `year_level must be one of: ${ALLOWED_YEARS.join(', ')}` })
-  if (!validateTextLength(student_id, 50) || !validateTextLength(full_name) || !validateTextLength(position) || !validateTextLength(programme))
+  if (!validateTextLength(student_id, 50) || !validateTextLength(full_name) || !validateTextLength(position) || !validateTextLength(programme) || !validateTextLength(nationality, 100) || !validateTextLength(county_of_origin, 100) || !validateTextLength(current_address, 500))
     return res.status(400).json({ error: 'A field value is too long.' })
   const emailErr = student_email ? email(student_email) : null
   if (emailErr) return res.status(400).json({ error: emailErr })
@@ -209,6 +210,10 @@ router.post('/', requireAdmin, upload.fields([
     emergency_contact_phone: emergency_contact_phone?.trim() || null,
     student_email: student_email?.trim() || null,
     programme: programme?.trim() || null,
+    date_of_birth: date_of_birth?.trim() || null,
+    nationality: nationality?.trim() || null,
+    county_of_origin: county_of_origin?.trim() || null,
+    current_address: current_address?.trim() || null,
   }).select().single()
   if (error) return res.status(400).json({ error: error.message })
 
@@ -273,6 +278,10 @@ router.post('/bulk', requireAdmin, upload.fields([
       emergency_contact_phone: r.emergency_contact_phone?.trim().slice(0, 30) || null,
       student_email: r.student_email?.trim().slice(0, MAX_TEXT_LENGTH) || null,
       programme: r.programme?.trim().slice(0, MAX_TEXT_LENGTH) || null,
+      date_of_birth: r.date_of_birth?.trim() || null,
+      nationality: r.nationality?.trim().slice(0, 100) || null,
+      county_of_origin: r.county_of_origin?.trim().slice(0, 100) || null,
+      current_address: r.current_address?.trim().slice(0, 500) || null,
     })
   }
   if (!rows.length) return res.status(400).json({ error: 'No valid rows found.' })
@@ -306,10 +315,11 @@ router.patch('/:studentId', requireAdmin, upload.fields([
   if (sidErr) return res.status(400).json({ error: sidErr })
 
   const { full_name, year_level, position, blood_type,
-          emergency_contact_name, emergency_contact_phone, student_email, programme } = req.body
+          emergency_contact_name, emergency_contact_phone, student_email, programme,
+          date_of_birth, nationality, county_of_origin, current_address } = req.body
 
   if (year_level && !validateYear(year_level)) return res.status(400).json({ error: `Invalid year_level.` })
-  if (!validateTextLength(full_name) || !validateTextLength(position) || !validateTextLength(programme))
+  if (!validateTextLength(full_name) || !validateTextLength(position) || !validateTextLength(programme) || !validateTextLength(nationality, 100) || !validateTextLength(county_of_origin, 100) || !validateTextLength(current_address, 500))
     return res.status(400).json({ error: 'A field value is too long.' })
   if (req.files?.photo?.[0] && !validateImageMime(req.files.photo[0].mimetype))
     return res.status(400).json({ error: 'Photo must be JPG or PNG.' })
@@ -335,6 +345,10 @@ router.patch('/:studentId', requireAdmin, upload.fields([
   if (emergency_contact_phone !== undefined) updates.emergency_contact_phone = emergency_contact_phone?.trim() || null
   if (student_email !== undefined) updates.student_email = student_email?.trim() || null
   if (programme !== undefined) updates.programme = programme?.trim() || null
+  if (date_of_birth !== undefined) updates.date_of_birth = date_of_birth?.trim() || null
+  if (nationality !== undefined) updates.nationality = nationality?.trim() || null
+  if (county_of_origin !== undefined) updates.county_of_origin = county_of_origin?.trim() || null
+  if (current_address !== undefined) updates.current_address = current_address?.trim() || null
 
   if (req.files?.photo?.[0]) {
     try { updates.photo_url = await uploadPhoto(req.files.photo[0].buffer, req.files.photo[0].mimetype, req.params.studentId, newYearLevel) }
@@ -375,7 +389,7 @@ router.patch('/:studentId/self-correct', async (req, res) => {
   if (corrections?.full_name && !validateTextLength(corrections.full_name)) return res.status(400).json({ error: 'full_name too long.' })
   if (corrections?.position && !validateTextLength(corrections.position)) return res.status(400).json({ error: 'position too long.' })
 
-  const VALID_QR_FIELDS = ['blood_type', 'programme', 'student_email', 'emergency_contact_name', 'emergency_contact_phone']
+  const VALID_QR_FIELDS = ['blood_type', 'programme', 'student_email', 'emergency_contact_name', 'emergency_contact_phone', 'date_of_birth', 'nationality', 'county_of_origin', 'current_address']
   if (qr_corrections) {
     for (const key of Object.keys(qr_corrections)) {
       if (!VALID_QR_FIELDS.includes(key)) return res.status(400).json({ error: `Invalid QR field: ${key}` })

@@ -208,15 +208,19 @@ router.get('/html/:studentId', async (req, res) => {
   try {
     const qrFields = await getQRFields()
 
-    const name     = student.full_name || '—'
-    const sid      = student.student_id || '—'
-    const level    = student.year_level || '—'
-    const position = student.position || null
-    const programme = student.programme || null
-    const bloodType = student.blood_type || null
-    const email    = student.student_email || null
+    const name       = student.full_name || '—'
+    const sid        = student.student_id || '—'
+    const level      = student.year_level || '—'
+    const position   = student.position || null
+    const programme  = student.programme || null
+    const bloodType  = student.blood_type || null
+    const email      = student.student_email || null
     const emergName  = student.emergency_contact_name || null
     const emergPhone = student.emergency_contact_phone || null
+    const dob        = student.date_of_birth || null
+    const nationality = student.nationality || null
+    const county     = student.county_of_origin || null
+    const address    = student.current_address || null
 
     const showBloodType   = qrFields.blood_type?.enabled              && bloodType
     const showProgramme   = qrFields.programme?.enabled               && programme
@@ -224,6 +228,10 @@ router.get('/html/:studentId', async (req, res) => {
     const showEmerName   = qrFields.emergency_contact_name?.enabled   && emergName
     const showEmerPhone  = qrFields.emergency_contact_phone?.enabled  && emergPhone
     const showEmerCard   = showEmerName || showEmerPhone
+    const showDob        = qrFields.date_of_birth?.enabled            && dob
+    const showNationality = qrFields.nationality?.enabled             && nationality
+    const showCounty     = qrFields.county_of_origin?.enabled         && county
+    const showAddress    = qrFields.current_address?.enabled          && address
 
     const initials = name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 
@@ -400,6 +408,32 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
           </div>
         </div>` : ''}
       </div>
+    </div>` : ''}
+
+    ${(showDob || showNationality) ? `
+    <div class="bento-grid-2">
+      ${showDob ? `
+      <div class="bento-card">
+        <div class="bento-card-label">Date of Birth</div>
+        <div class="bento-card-value">${dob}</div>
+      </div>` : '<div></div>'}
+      ${showNationality ? `
+      <div class="bento-card">
+        <div class="bento-card-label">Nationality</div>
+        <div class="bento-card-value">${nationality}</div>
+      </div>` : '<div></div>'}
+    </div>` : ''}
+
+    ${showCounty ? `
+    <div class="bento-card">
+      <div class="bento-card-label">County of Origin</div>
+      <div class="bento-card-value">${county}</div>
+    </div>` : ''}
+
+    ${showAddress ? `
+    <div class="bento-card">
+      <div class="bento-card-label">Current Address</div>
+      <div class="bento-card-value" style="font-size:13px">${address}</div>
     </div>` : ''}
 
   </div>

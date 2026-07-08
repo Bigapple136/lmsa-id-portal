@@ -29,6 +29,10 @@ const DEFAULT_QR_FIELDS = {
   student_email:           { label: 'Student Email',           enabled: false },
   emergency_contact_name:   { label: 'Emergency Contact Name',  enabled: true  },
   emergency_contact_phone:  { label: 'Emergency Contact Phone', enabled: true  },
+  date_of_birth:            { label: 'Date of Birth',           enabled: true  },
+  nationality:              { label: 'Nationality',             enabled: true  },
+  county_of_origin:         { label: 'County of Origin',        enabled: true  },
+  current_address:          { label: 'Current Address',         enabled: true  },
 }
 
 const QR_COLUMN_META = {
@@ -37,6 +41,10 @@ const QR_COLUMN_META = {
   student_email:          { header: 'student_email',          width: 28, note: 'QR only. Student email address.', qr: true },
   emergency_contact_name:  { header: 'emergency_contact_name', width: 28, note: 'QR only. Full name of emergency contact.', qr: true },
   emergency_contact_phone: { header: 'emergency_contact_phone',width: 22, note: 'QR only. e.g. +231 770 405785', qr: true },
+  date_of_birth:           { header: 'date_of_birth',          width: 14, note: 'QR only. Date of birth (YYYY-MM-DD).', qr: true },
+  nationality:             { header: 'nationality',             width: 18, note: 'QR only. Nationality.', qr: true },
+  county_of_origin:        { header: 'county_of_origin',       width: 18, note: 'QR only. County of origin (Liberia).', qr: true },
+  current_address:         { header: 'current_address',        width: 30, note: 'QR only. Current residential address.', qr: true },
 }
 
 const DEFAULT_LAYOUT = {

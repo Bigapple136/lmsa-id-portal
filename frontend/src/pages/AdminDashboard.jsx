@@ -7,6 +7,7 @@ import LayoutMapper from '../components/LayoutMapper'
 import SessionTimeout from '../components/SessionTimeout'
 
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
+const LIBERIA_COUNTIES = ['Bomi', 'Bong', 'Gbarpolu', 'Grand Bassa', 'Grand Cape Mount', 'Grand Gedeh', 'Grand Kru', 'Lofa', 'Margibi', 'Maryland', 'Montserrado', 'Nimba', 'River Cess', 'River Gee', 'Sinoe']
 
 const FIELD_META = {
   student_id: { label: 'Student ID', locked: true },
@@ -45,7 +46,8 @@ export default function AdminDashboard() {
   const [manualForm, setManualForm] = useState({
     student_id:'', full_name:'', year_level:'1st Year', position:'',
     programme:'', blood_type:'', student_email:'',
-    emergency_contact_name:'', emergency_contact_phone:''
+    emergency_contact_name:'', emergency_contact_phone:'',
+    date_of_birth:'', nationality:'', county_of_origin:'', current_address:''
   })
   const [manualPhoto, setManualPhoto] = useState(null)
   const [manualSig, setManualSig] = useState(null)
@@ -372,6 +374,10 @@ export default function AdminDashboard() {
       student_email: s.student_email || '',
       emergency_contact_name: s.emergency_contact_name || '',
       emergency_contact_phone: s.emergency_contact_phone || '',
+      date_of_birth: s.date_of_birth || '',
+      nationality: s.nationality || '',
+      county_of_origin: s.county_of_origin || '',
+      current_address: s.current_address || '',
     })
     setEditPhoto(null); setEditSig(null); setEditMsg(null)
   }
@@ -387,6 +393,10 @@ export default function AdminDashboard() {
     form.append('student_email', editForm.student_email || '')
     form.append('emergency_contact_name', editForm.emergency_contact_name || '')
     form.append('emergency_contact_phone', editForm.emergency_contact_phone || '')
+    form.append('date_of_birth', editForm.date_of_birth || '')
+    form.append('nationality', editForm.nationality || '')
+    form.append('county_of_origin', editForm.county_of_origin || '')
+    form.append('current_address', editForm.current_address || '')
     if (editPhoto) form.append('photo', editPhoto)
     if (editSig) form.append('signature', editSig)
     const res = await adminForm(`/api/students/${encodeURIComponent(editStudent.student_id)}`, 'PATCH', form)
@@ -594,6 +604,25 @@ export default function AdminDashboard() {
                   <div className="field-group">
                     <label className="field-label">Emergency Contact Phone</label>
                     <input className="field-input" placeholder="+231 xxx xxxx" value={editForm.emergency_contact_phone} onChange={e=>setEditForm({...editForm, emergency_contact_phone:e.target.value})}/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Date of Birth</label>
+                    <input className="field-input" type="date" value={editForm.date_of_birth} onChange={e=>setEditForm({...editForm, date_of_birth:e.target.value})}/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Nationality</label>
+                    <input className="field-input" placeholder="Liberian" value={editForm.nationality} onChange={e=>setEditForm({...editForm, nationality:e.target.value})}/>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">County of Origin</label>
+                    <input className="field-input" list="liberia-counties-edit" placeholder="e.g. Montserrado" value={editForm.county_of_origin} onChange={e=>setEditForm({...editForm, county_of_origin:e.target.value})}/>
+                    <datalist id="liberia-counties-edit">
+                      {LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}
+                    </datalist>
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Current Address</label>
+                    <input className="field-input" placeholder="e.g. 123 Broad Street, Monrovia" value={editForm.current_address} onChange={e=>setEditForm({...editForm, current_address:e.target.value})}/>
                   </div>
                 </div>
               </div>
@@ -855,16 +884,36 @@ export default function AdminDashboard() {
                       </div>
                       <div className="field-group">
                         <label className="field-label">Emergency Contact Phone</label>
-                        <input className="field-input" placeholder="+231 xxx xxxx" value={manualForm.emergency_contact_phone} onChange={e=>setManualForm({...manualForm, emergency_contact_phone:e.target.value})}/>
-                      </div>
+                      <input className="field-input" placeholder="+231 xxx xxxx" value={manualForm.emergency_contact_phone} onChange={e=>setManualForm({...manualForm, emergency_contact_phone:e.target.value})}/>
+                    </div>
+                    <div className="field-group">
+                      <label className="field-label">Date of Birth</label>
+                      <input className="field-input" type="date" value={manualForm.date_of_birth} onChange={e=>setManualForm({...manualForm, date_of_birth:e.target.value})}/>
+                    </div>
+                    <div className="field-group">
+                      <label className="field-label">Nationality</label>
+                      <input className="field-input" placeholder="Liberian" value={manualForm.nationality} onChange={e=>setManualForm({...manualForm, nationality:e.target.value})}/>
+                    </div>
+                    <div className="field-group">
+                      <label className="field-label">County of Origin</label>
+                      <input className="field-input" list="liberia-counties-manual" placeholder="e.g. Montserrado" value={manualForm.county_of_origin} onChange={e=>setManualForm({...manualForm, county_of_origin:e.target.value})}/>
+                      <datalist id="liberia-counties-manual">
+                        {LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}
+                      </datalist>
+                    </div>
+                    <div className="field-group">
+                      <label className="field-label">Current Address</label>
+                      <input className="field-input" placeholder="e.g. 123 Broad Street, Monrovia" value={manualForm.current_address} onChange={e=>setManualForm({...manualForm, current_address:e.target.value})}/>
                     </div>
                   </div>
+                </div>
 
                   <div className="btn-row">
                     <button className="btn-gold" type="submit" disabled={manualSubmitting}>{manualSubmitting?'Adding...':'Add Student'}</button>
                     <button className="btn-outline" type="button" onClick={()=>{
                       setManualForm({student_id:'',full_name:'',year_level:'1st Year',position:'',
-                        programme:'',blood_type:'',student_email:'',emergency_contact_name:'',emergency_contact_phone:''})
+                        programme:'',blood_type:'',student_email:'',emergency_contact_name:'',emergency_contact_phone:'',
+                        date_of_birth:'',nationality:'',county_of_origin:'',current_address:''})
                       setManualPhoto(null);setManualSig(null);setManualMsg(null)
                     }}>Clear</button>
                   </div>

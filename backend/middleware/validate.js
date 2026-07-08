@@ -31,6 +31,13 @@ function uuid(value, name = 'ID') {
   return null
 }
 
+function dateString(value, name = 'Date') {
+  if (!value || typeof value !== 'string') return null
+  const d = new Date(value)
+  if (isNaN(d.getTime())) return `${name} is not a valid date.`
+  return null
+}
+
 function enumValue(value, allowed, name = 'Value') {
   if (value && !allowed.includes(value)) return `${name} must be one of: ${allowed.join(', ')}.`
   return null
@@ -81,7 +88,7 @@ function firstError(...checks) {
 }
 
 module.exports = {
-  required, maxLength, email, uuid, enumValue, isBoolean, isObject,
+  required, maxLength, email, uuid, dateString, enumValue, isBoolean, isObject,
   checkFieldsConfig, checkLayoutConfig, firstError,
   MAX_TEXT_LENGTH, MAX_NOTE_LENGTH, ALLOWED_YEARS,
 }

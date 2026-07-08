@@ -15,6 +15,10 @@ const QR_FIELD_META = {
   student_email: { label:'Email' },
   emergency_contact_name: { label:'Emergency Contact Name' },
   emergency_contact_phone: { label:'Emergency Contact Phone' },
+  date_of_birth: { label:'Date of Birth' },
+  nationality: { label:'Nationality' },
+  county_of_origin: { label:'County of Origin' },
+  current_address: { label:'Current Address' },
 }
 
 const ISSUE_TYPES = [

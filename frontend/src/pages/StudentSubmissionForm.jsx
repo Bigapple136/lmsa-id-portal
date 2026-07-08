@@ -4,6 +4,7 @@ import { apiFetch } from '../lib/api'
 
 const YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+const LIBERIA_COUNTIES = ['Bomi', 'Bong', 'Gbarpolu', 'Grand Bassa', 'Grand Cape Mount', 'Grand Gedeh', 'Grand Kru', 'Lofa', 'Margibi', 'Maryland', 'Montserrado', 'Nimba', 'River Cess', 'River Gee', 'Sinoe']
 
 export default function StudentSubmissionForm() {
   const [enabled, setEnabled] = useState(null)
@@ -19,6 +20,7 @@ export default function StudentSubmissionForm() {
     student_id: '', full_name: '', year_level: '1st Year', position: '',
     programme: '', blood_type: '', student_email: '',
     emergency_contact_name: '', emergency_contact_phone: '',
+    date_of_birth: '', nationality: 'Liberian', county_of_origin: '', current_address: '',
   })
 
   useEffect(() => {
@@ -115,7 +117,11 @@ export default function StudentSubmissionForm() {
   const showStudentEmail = qrFieldsConfig?.student_email?.enabled === true
   const showEmergencyContactName = qrFieldsConfig?.emergency_contact_name?.enabled === true
   const showEmergencyContactPhone = qrFieldsConfig?.emergency_contact_phone?.enabled === true
-  const hasAdditionalFields = showProgramme || showBloodType || showStudentEmail || showEmergencyContactName || showEmergencyContactPhone
+  const showDateOfBirth = qrFieldsConfig?.date_of_birth?.enabled === true
+  const showNationality = qrFieldsConfig?.nationality?.enabled === true
+  const showCountyOfOrigin = qrFieldsConfig?.county_of_origin?.enabled === true
+  const showCurrentAddress = qrFieldsConfig?.current_address?.enabled === true
+  const hasAdditionalFields = showProgramme || showBloodType || showStudentEmail || showEmergencyContactName || showEmergencyContactPhone || showDateOfBirth || showNationality || showCountyOfOrigin || showCurrentAddress
 
   return (
     <div className="page-outer">
@@ -200,6 +206,37 @@ export default function StudentSubmissionForm() {
                         value={form.emergency_contact_phone} onChange={e => setForm({...form, emergency_contact_phone: e.target.value})} />
                     </div>
                   )}
+                  {showDateOfBirth && (
+                    <div className="field-group">
+                      <label className="field-label">Date of Birth</label>
+                      <input className="field-input" type="date"
+                        value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} required />
+                    </div>
+                  )}
+                  {showNationality && (
+                    <div className="field-group">
+                      <label className="field-label">Nationality</label>
+                      <input className="field-input" placeholder="Liberian"
+                        value={form.nationality} onChange={e => setForm({...form, nationality: e.target.value})} required />
+                    </div>
+                  )}
+                  {showCountyOfOrigin && (
+                    <div className="field-group">
+                      <label className="field-label">County of Origin</label>
+                      <input className="field-input" list="liberia-counties" placeholder="e.g. Montserrado"
+                        value={form.county_of_origin} onChange={e => setForm({...form, county_of_origin: e.target.value})} required />
+                      <datalist id="liberia-counties">
+                        {LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}
+                      </datalist>
+                    </div>
+                  )}
+                  {showCurrentAddress && (
+                    <div className="field-group">
+                      <label className="field-label">Current Address</label>
+                      <input className="field-input" placeholder="e.g. 123 Broad Street, Monrovia"
+                        value={form.current_address} onChange={e => setForm({...form, current_address: e.target.value})} required />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -274,6 +311,30 @@ export default function StudentSubmissionForm() {
                   <div>
                     <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Emergency Phone</span>
                     <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.emergency_contact_phone}</div>
+                  </div>
+                )}
+                {showDateOfBirth && form.date_of_birth && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Date of Birth</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.date_of_birth}</div>
+                  </div>
+                )}
+                {showNationality && form.nationality && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Nationality</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.nationality}</div>
+                  </div>
+                )}
+                {showCountyOfOrigin && form.county_of_origin && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>County of Origin</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.county_of_origin}</div>
+                  </div>
+                )}
+                {showCurrentAddress && form.current_address && (
+                  <div>
+                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Current Address</span>
+                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.current_address}</div>
                   </div>
                 )}
               </div>

@@ -84,6 +84,10 @@ export default function QrViewPage() {
                 { label: 'Email',               value: student.student_email,        style: null },
                 { label: 'Emergency Contact',    value: student.emergency_contact_name, style: null },
                 { label: 'Emergency Phone',      value: student.emergency_contact_phone, style: null },
+                { label: 'Date of Birth',        value: student.date_of_birth,         style: null },
+                { label: 'Nationality',          value: student.nationality,           style: null },
+                { label: 'County of Origin',     value: student.county_of_origin,      style: null },
+                { label: 'Current Address',      value: student.current_address,       style: null },
               ].filter(r => r.value).map(r => (
                 <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #f5f5f5', fontSize: '13px' }}>
                   <span style={{ color: '#888', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{r.label}</span>

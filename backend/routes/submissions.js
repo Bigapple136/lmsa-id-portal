@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
-const { required, maxLength, email, uuid, enumValue, firstError } = require('../middleware/validate')
+const { required, maxLength, email, uuid, dateString, enumValue, firstError } = require('../middleware/validate')
 
 const ALLOWED_YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
 
@@ -27,7 +27,7 @@ router.post('/', async (req, res) => {
     return res.status(403).json({ error: 'Submission form is currently disabled.' })
   }
 
-  const { student_id, full_name, year_level, position, programme, blood_type, student_email, emergency_contact_name, emergency_contact_phone } = req.body
+  const { student_id, full_name, year_level, position, programme, blood_type, student_email, emergency_contact_name, emergency_contact_phone, date_of_birth, nationality, county_of_origin, current_address } = req.body
 
   const err = firstError(
     required(student_id, 'student_id'), required(full_name, 'full_name'), required(year_level, 'year_level'),
@@ -35,8 +35,10 @@ router.post('/', async (req, res) => {
     maxLength(position, 200, 'position'), maxLength(programme, 200, 'programme'),
     maxLength(blood_type, 20, 'blood_type'), maxLength(student_email, 200, 'student_email'),
     maxLength(emergency_contact_name, 200, 'emergency_contact_name'), maxLength(emergency_contact_phone, 30, 'emergency_contact_phone'),
+    maxLength(nationality, 100, 'nationality'), maxLength(county_of_origin, 100, 'county_of_origin'), maxLength(current_address, 500, 'current_address'),
     enumValue(year_level, ALLOWED_YEARS, 'year_level'),
     student_email ? email(student_email) : null,
+    date_of_birth ? dateString(date_of_birth, 'date_of_birth') : null,
   )
   if (err) return res.status(400).json({ error: err })
 
@@ -59,6 +61,10 @@ router.post('/', async (req, res) => {
     student_email: student_email?.trim() || null,
     emergency_contact_name: emergency_contact_name?.trim() || null,
     emergency_contact_phone: emergency_contact_phone?.trim() || null,
+    date_of_birth: date_of_birth?.trim() || null,
+    nationality: nationality?.trim() || null,
+    county_of_origin: county_of_origin?.trim() || null,
+    current_address: current_address?.trim() || null,
   }).select().single()
 
   if (error) return res.status(400).json({ error: error.message })
@@ -118,6 +124,10 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
     student_email: submission.student_email?.trim() || null,
     emergency_contact_name: submission.emergency_contact_name?.trim() || null,
     emergency_contact_phone: submission.emergency_contact_phone?.trim() || null,
+    date_of_birth: submission.date_of_birth?.trim() || null,
+    nationality: submission.nationality?.trim() || null,
+    county_of_origin: submission.county_of_origin?.trim() || null,
+    current_address: submission.current_address?.trim() || null,
     status: 'pending',
   }).select().single()
 
