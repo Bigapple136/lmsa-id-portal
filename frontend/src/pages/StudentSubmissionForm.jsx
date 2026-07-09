@@ -145,7 +145,7 @@ export default function StudentSubmissionForm() {
     showEmergencyContactPhone || showDateOfBirth || showNationality || showCountyOfOrigin || showCurrentAddress
 
   return (
-    <div className="submission-page" style={{ position: 'relative', background: 'linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 50%, #122a44 100%)' }}>
+    <div className="submission-page" style={{ position: 'relative', background: 'linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 50%, #122a44 100%)', flexDirection: 'column', alignItems: 'center' }}>
       <div className="form-particles">
         {PARTICLES.map((p, i) => (
           <div key={i} className="particle" style={{
@@ -159,8 +159,8 @@ export default function StudentSubmissionForm() {
           }}/>
         ))}
       </div>
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '480px', margin: '0 auto', padding: '32px 16px', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <div className="landing-card" style={{ marginTop: 'auto', marginBottom: 'auto' }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '480px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '32px 16px' }}>
+        <div className="landing-card">
           <div className="landing-header">
             <h1 className="landing-title">Student Details Form</h1>
             <p className="landing-desc">Submit your information for your ID card</p>
