@@ -1127,6 +1127,35 @@ a.about-contact-item:hover .about-contact-value { text-decoration: underline; }
   to { transform: rotate(360deg); }
 }
 
+/* ── Floating particles ── */
+@keyframes particle-float {
+  0% { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+  10% { opacity: var(--p-opacity, 0.06); }
+  85% { opacity: var(--p-opacity, 0.06); }
+  100% { transform: translateY(-110vh) translateX(var(--p-drift, 30px)) scale(0.4); opacity: 0; }
+}
+
+.form-particles {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  will-change: transform, opacity;
+  width: var(--p-size);
+  height: var(--p-size);
+  left: var(--p-left);
+  bottom: calc(-1 * var(--p-size));
+  background: var(--p-color);
+  animation: particle-float var(--p-duration) var(--p-delay) ease-in infinite;
+}
+
 /* ── Submission form ── */
 .submission-page {
   min-height: 100vh;
