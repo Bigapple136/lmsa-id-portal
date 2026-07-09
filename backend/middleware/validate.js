@@ -2,7 +2,7 @@
 
 const MAX_TEXT_LENGTH = 200
 const MAX_NOTE_LENGTH = 1000
-const ALLOWED_YEARS = ['1st Year','2nd Year','3rd Year','4th Year','5th Year','6th Year']
+const ALLOWED_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 
 function required(value, name) {
   if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) {
@@ -49,7 +49,8 @@ function isBoolean(value, name = 'Value') {
 }
 
 function isObject(value, name = 'Body') {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return `${name} must be a JSON object.`
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return `${name} must be a JSON object.`
   return null
 }
 
@@ -59,9 +60,12 @@ function checkFieldsConfig(value) {
   for (const [key, field] of Object.entries(value)) {
     const fieldErr = isObject(field)
     if (fieldErr) return `Field "${key}" must be an object.`
-    if (field.enabled !== undefined && typeof field.enabled !== 'boolean') return `Field "${key}".enabled must be a boolean.`
-    if (field.locked !== undefined && typeof field.locked !== 'boolean') return `Field "${key}".locked must be a boolean.`
-    if (field.label !== undefined && typeof field.label !== 'string') return `Field "${key}".label must be a string.`
+    if (field.enabled !== undefined && typeof field.enabled !== 'boolean')
+      return `Field "${key}".enabled must be a boolean.`
+    if (field.locked !== undefined && typeof field.locked !== 'boolean')
+      return `Field "${key}".locked must be a boolean.`
+    if (field.label !== undefined && typeof field.label !== 'string')
+      return `Field "${key}".label must be a string.`
   }
   return null
 }
@@ -73,9 +77,12 @@ function checkLayoutConfig(value) {
     if (!item || typeof item !== 'object') continue
     const itemErr = isObject(item)
     if (itemErr) return `Layout item "${key}" must be an object.`
-    if (item.type && !['text', 'image'].includes(item.type)) return `Layout item "${key}".type must be 'text' or 'image'.`
-    if (item.x !== undefined && typeof item.x !== 'number') return `Layout item "${key}".x must be a number.`
-    if (item.y !== undefined && typeof item.y !== 'number') return `Layout item "${key}".y must be a number.`
+    if (item.type && !['text', 'image'].includes(item.type))
+      return `Layout item "${key}".type must be 'text' or 'image'.`
+    if (item.x !== undefined && typeof item.x !== 'number')
+      return `Layout item "${key}".x must be a number.`
+    if (item.y !== undefined && typeof item.y !== 'number')
+      return `Layout item "${key}".y must be a number.`
   }
   return null
 }
@@ -88,7 +95,18 @@ function firstError(...checks) {
 }
 
 module.exports = {
-  required, maxLength, email, uuid, dateString, enumValue, isBoolean, isObject,
-  checkFieldsConfig, checkLayoutConfig, firstError,
-  MAX_TEXT_LENGTH, MAX_NOTE_LENGTH, ALLOWED_YEARS,
+  required,
+  maxLength,
+  email,
+  uuid,
+  dateString,
+  enumValue,
+  isBoolean,
+  isObject,
+  checkFieldsConfig,
+  checkLayoutConfig,
+  firstError,
+  MAX_TEXT_LENGTH,
+  MAX_NOTE_LENGTH,
+  ALLOWED_YEARS,
 }

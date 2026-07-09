@@ -8,9 +8,13 @@ export default function Footer() {
       <div className="footer-inner">
         <span className="footer-copy">© 2026 GoldWay. All rights reserved.</span>
         <span className="footer-sep">·</span>
-        <button className="footer-link" onClick={() => navigate('/terms')}>Terms of Service</button>
+        <button className="footer-link" onClick={() => navigate('/terms')}>
+          Terms of Service
+        </button>
         <span className="footer-sep">·</span>
-        <button className="footer-link" onClick={() => navigate('/privacy')}>Privacy Policy</button>
+        <button className="footer-link" onClick={() => navigate('/privacy')}>
+          Privacy Policy
+        </button>
       </div>
     </footer>
   )

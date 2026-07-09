@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
-const { uuid, firstError } = require('../middleware/validate')
+const { uuid } = require('../middleware/validate')
 
 function requireFullAdmin(req, res, next) {
   if (req.userRole !== 'admin') {
@@ -13,7 +13,8 @@ function requireFullAdmin(req, res, next) {
 
 router.get('/', requireAdmin, async (req, res) => {
   const { data, error } = await supabase
-    .from('admins').select('id, email, name, role, created_at')
+    .from('admins')
+    .select('id, email, name, role, created_at')
     .order('created_at', { ascending: true })
   if (error) return res.status(500).json({ error: error.message })
   res.json(data)
@@ -43,8 +44,10 @@ router.post('/', requireAdmin, requireFullAdmin, async (req, res) => {
     if (!userId) return res.status(500).json({ error: 'Failed to create user.' })
 
     const { data, error: insertError } = await supabase
-      .from('admins').insert({ id: userId, email: email.trim(), name: name?.trim() || null, role: newRole })
-      .select('id, email, name, role, created_at').single()
+      .from('admins')
+      .insert({ id: userId, email: email.trim(), name: name?.trim() || null, role: newRole })
+      .select('id, email, name, role, created_at')
+      .single()
 
     if (insertError) return res.status(400).json({ error: insertError.message })
 
@@ -53,7 +56,7 @@ router.post('/', requireAdmin, requireFullAdmin, async (req, res) => {
       p_action: 'invited',
       p_old_role: null,
       p_new_role: newRole,
-      p_performed_by: req.user.id
+      p_performed_by: req.user.id,
     })
 
     res.status(201).json(data)
@@ -70,8 +73,11 @@ router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Role is required. Must be admin or support_admin.' })
   }
 
-  const { data: targetAdmin, error: fetchError } = await supabase
-    .from('admins').select('id, role').eq('id', targetId).maybeSingle()
+  const { data: targetAdmin } = await supabase
+    .from('admins')
+    .select('id, role')
+    .eq('id', targetId)
+    .maybeSingle()
   if (!targetAdmin) return res.status(404).json({ error: 'Admin not found.' })
 
   if (targetAdmin.role === newRole) {
@@ -79,18 +85,23 @@ router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
   }
 
   const { data: adminCount } = await supabase
-    .from('admins').select('id', { count: 'exact' })
+    .from('admins')
+    .select('id', { count: 'exact' })
     .eq('role', 'admin')
     .neq('id', targetId)
   const adminCountAfter = (adminCount?.length || 0) + (newRole === 'admin' ? 1 : 0)
   if (adminCountAfter === 0) {
-    return res.status(400).json({ error: 'Cannot change role. There must be at least one full admin.' })
+    return res
+      .status(400)
+      .json({ error: 'Cannot change role. There must be at least one full admin.' })
   }
 
   const oldRole = targetAdmin.role
 
   const { error: updateError } = await supabase
-    .from('admins').update({ role: newRole }).eq('id', targetId)
+    .from('admins')
+    .update({ role: newRole })
+    .eq('id', targetId)
   if (updateError) return res.status(500).json({ error: updateError.message })
 
   await supabase.rpc('log_admin_action', {
@@ -98,11 +109,14 @@ router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     p_action: 'role_changed',
     p_old_role: oldRole,
     p_new_role: newRole,
-    p_performed_by: req.user.id
+    p_performed_by: req.user.id,
   })
 
   const { data: updated } = await supabase
-    .from('admins').select('id, email, name, role, created_at').eq('id', targetId).single()
+    .from('admins')
+    .select('id, email, name, role, created_at')
+    .eq('id', targetId)
+    .single()
   res.json(updated)
 })
 
@@ -112,15 +126,18 @@ router.delete('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
 
   const targetId = req.params.id
 
-  if (req.user.id === targetId)
-    return res.status(400).json({ error: 'Cannot remove yourself.' })
+  if (req.user.id === targetId) return res.status(400).json({ error: 'Cannot remove yourself.' })
 
   const { data: targetAdmin } = await supabase
-    .from('admins').select('id, role').eq('id', targetId).maybeSingle()
+    .from('admins')
+    .select('id, role')
+    .eq('id', targetId)
+    .maybeSingle()
   if (!targetAdmin) return res.status(404).json({ error: 'Admin not found.' })
 
   const { data: adminCount } = await supabase
-    .from('admins').select('id', { count: 'exact' })
+    .from('admins')
+    .select('id', { count: 'exact' })
     .eq('role', 'admin')
     .neq('id', targetId)
   if ((adminCount?.length || 0) === 0) {
@@ -135,7 +152,7 @@ router.delete('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     p_action: 'removed',
     p_old_role: targetAdmin.role,
     p_new_role: null,
-    p_performed_by: req.user.id
+    p_performed_by: req.user.id,
   })
 
   res.status(204).send()

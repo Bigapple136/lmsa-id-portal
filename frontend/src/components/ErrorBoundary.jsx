@@ -17,29 +17,35 @@ export default class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          gap: '16px',
-          padding: '32px',
-          fontFamily: 'Inter, Arial, sans-serif',
-          background: '#f6fbf4',
-          color: '#181d19',
-          textAlign: 'center',
-        }}>
-          <div style={{
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            background: '#fef0f0',
+        <div
+          style={{
+            minHeight: '100vh',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 28,
-          }}>!</div>
+            flexDirection: 'column',
+            gap: '16px',
+            padding: '32px',
+            fontFamily: 'Inter, Arial, sans-serif',
+            background: '#f6fbf4',
+            color: '#181d19',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: '50%',
+              background: '#fef0f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 28,
+            }}
+          >
+            !
+          </div>
           <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Something went wrong</h1>
           <p style={{ fontSize: 14, color: '#666', margin: 0, maxWidth: 400 }}>
             An unexpected error occurred. Please try refreshing the page.

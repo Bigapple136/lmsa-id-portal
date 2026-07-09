@@ -7,7 +7,9 @@ import { supabase } from './supabase'
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 async function getAuthHeaders() {
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
   if (!session) return {}
   return { Authorization: `Bearer ${session.access_token}` }
 }
@@ -24,7 +26,7 @@ export async function apiJson(path, method, body) {
   return apiFetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   })
 }
 
@@ -37,7 +39,7 @@ export async function adminFetch(path, options = {}) {
     headers: {
       ...(options.headers || {}),
       ...authHeaders,
-    }
+    },
   })
   return res
 }
@@ -47,7 +49,7 @@ export async function adminJson(path, method, body) {
   return adminFetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   })
 }
 

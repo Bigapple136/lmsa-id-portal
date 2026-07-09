@@ -17,10 +17,11 @@ router.post('/', async (req, res) => {
 
   // Verify student exists before accepting confirmation
   const { data: student, error: lookupErr } = await supabase
-    .from('students').select('student_id')
-    .eq('student_id', student_id).maybeSingle()
-  if (lookupErr || !student)
-    return res.status(404).json({ error: 'Student not found.' })
+    .from('students')
+    .select('student_id')
+    .eq('student_id', student_id)
+    .maybeSingle()
+  if (lookupErr || !student) return res.status(404).json({ error: 'Student not found.' })
 
   const { error: confError } = await supabase
     .from('confirmations')
@@ -29,7 +30,9 @@ router.post('/', async (req, res) => {
 
   const newStatus = action === 'confirmed' ? 'confirmed' : 'issue'
   const { error: updateError } = await supabase
-    .from('students').update({ status: newStatus }).eq('student_id', student_id)
+    .from('students')
+    .update({ status: newStatus })
+    .eq('student_id', student_id)
   if (updateError) return res.status(400).json({ error: updateError.message })
 
   res.json({ success: true, status: newStatus })

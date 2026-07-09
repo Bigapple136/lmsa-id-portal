@@ -35,10 +35,10 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
   useEffect(() => {
     startTimers()
     const eventList = events.current
-    eventList.forEach(ev => document.addEventListener(ev, resetTimer))
+    eventList.forEach((ev) => document.addEventListener(ev, resetTimer))
     return () => {
       clearTimers()
-      eventList.forEach(ev => document.removeEventListener(ev, resetTimer))
+      eventList.forEach((ev) => document.removeEventListener(ev, resetTimer))
     }
   }, [startTimers, clearTimers, resetTimer])
 
@@ -63,10 +63,10 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
           Your session will expire in less than 1 minute due to inactivity.
         </div>
         <div className="session-timeout-actions">
-          <button className="btn-gold" onClick={handleStayLoggedIn} style={{ flex:1 }}>
+          <button className="btn-gold" onClick={handleStayLoggedIn} style={{ flex: 1 }}>
             Stay Logged In
           </button>
-          <button className="btn-outline" onClick={handleLogoutNow} style={{ flex:1 }}>
+          <button className="btn-outline" onClick={handleLogoutNow} style={{ flex: 1 }}>
             Log Out Now
           </button>
         </div>

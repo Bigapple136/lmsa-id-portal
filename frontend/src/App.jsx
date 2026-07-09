@@ -21,12 +21,33 @@ export default function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/preview/:token" element={<PreviewPage />} />
           <Route path="/qr/:studentId" element={<QrViewPage />} />
-          <Route path="/admin" element={<SentryErrorBoundary><AdminDashboard /></SentryErrorBoundary>} />
-          <Route path="/admin/admins" element={<SentryErrorBoundary><AdminManagementPage /></SentryErrorBoundary>} />
+          <Route
+            path="/admin"
+            element={
+              <SentryErrorBoundary>
+                <AdminDashboard />
+              </SentryErrorBoundary>
+            }
+          />
+          <Route
+            path="/admin/admins"
+            element={
+              <SentryErrorBoundary>
+                <AdminManagementPage />
+              </SentryErrorBoundary>
+            }
+          />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/submit" element={<SentryErrorBoundary><StudentSubmissionForm /></SentryErrorBoundary>} />
+          <Route
+            path="/submit"
+            element={
+              <SentryErrorBoundary>
+                <StudentSubmissionForm />
+              </SentryErrorBoundary>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>

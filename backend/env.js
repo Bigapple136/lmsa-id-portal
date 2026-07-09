@@ -7,7 +7,9 @@ const REQUIRED_VARS = [
 ]
 
 function validateEnv() {
-  const missing = REQUIRED_VARS.filter((key) => !process.env[key] || process.env[key].startsWith('your-'))
+  const missing = REQUIRED_VARS.filter(
+    (key) => !process.env[key] || process.env[key].startsWith('your-'),
+  )
   if (missing.length > 0) {
     console.error(
       `[FATAL] Missing or placeholder environment variables:\n  ${missing.join('\n  ')}\n` +

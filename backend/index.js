@@ -32,28 +32,30 @@ if (process.env.SENTRY_DSN) {
   app.use(Sentry.Handlers.requestHandler())
 }
 
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' },
-  frameguard: { action: 'deny' },
-  noSniff: true,
-  xssFilter: true,
-  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
-      fontSrc: ["'self'"],
-      connectSrc: ["'self'", 'https://*.supabase.co'],
-      frameAncestors: ["'none'"],
-      formAction: ["'self'"],
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    frameguard: { action: 'deny' },
+    noSniff: true,
+    xssFilter: true,
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        fontSrc: ["'self'"],
+        connectSrc: ["'self'", 'https://*.supabase.co'],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'"],
+      },
     },
-  },
-}))
+  }),
+)
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
   : []
 
 const corsOptions = {
@@ -80,16 +82,49 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Rate limiters — per-IP tracking via express-rate-limit (requires trust proxy)
-const generalLimiter = rateLimit({ windowMs: 15*60*1000, max: 500, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests.' } })
-const lookupLimiter = rateLimit({ windowMs: 15*60*1000, max: 300, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many lookup attempts. Please try again later.' } })
-const confirmLimiter = rateLimit({ windowMs: 15*60*1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many confirmation attempts.' } })
-const submissionLimiter = rateLimit({ windowMs: 15*60*1000, max: 50, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many submissions. Please try again later.' } })
-const qrBulkLimiter = rateLimit({ windowMs: 15*60*1000, max: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many QR bulk operations. Please try again later.' } })
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+})
+const lookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many lookup attempts. Please try again later.' },
+})
+const confirmLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many confirmation attempts.' },
+})
+const submissionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions. Please try again later.' },
+})
+const qrBulkLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many QR bulk operations. Please try again later.' },
+})
 
 app.use('/api', generalLimiter)
 app.use('/api/students/lookup', lookupLimiter)
 app.use('/api/confirmations', confirmLimiter)
-app.use('/api/submissions', (req, res, next) => { if (req.method === 'POST') return submissionLimiter(req, res, next); next() })
+app.use('/api/submissions', (req, res, next) => {
+  if (req.method === 'POST') return submissionLimiter(req, res, next)
+  next()
+})
 app.use(['/api/qr/generate-all', '/api/qr/regenerate-all'], qrBulkLimiter)
 
 app.use('/api/students', studentsRouter)
@@ -131,7 +166,9 @@ function startServer() {
   const server = app.listen(PORT, () => {
     const pid = process.pid
     console.log(`LMSA ID Portal backend running on port ${PORT} (pid ${pid})`)
-    console.log(`CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'all (dev mode)'}`)
+    console.log(
+      `CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'all (dev mode)'}`,
+    )
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
   })
 

@@ -13,7 +13,6 @@ export default function Navbar({ showLogin = true }) {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
-
         {/* Left — LMSA identity */}
         <div className="navbar-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
           <div className="navbar-brand-name">LMSA</div>
@@ -42,10 +41,7 @@ export default function Navbar({ showLogin = true }) {
           </button>
 
           {showLogin && (
-            <button
-              className="navbar-login"
-              onClick={() => navigate('/admin')}
-            >
+            <button className="navbar-login" onClick={() => navigate('/admin')}>
               Admin Login
             </button>
           )}
@@ -54,7 +50,7 @@ export default function Navbar({ showLogin = true }) {
         {/* Mobile hamburger */}
         <button
           className="navbar-hamburger"
-          onClick={() => setMenuOpen(o => !o)}
+          onClick={() => setMenuOpen((o) => !o)}
           aria-label="Toggle menu"
         >
           <span className={`ham-line ${menuOpen ? 'open' : ''}`} />
@@ -68,26 +64,38 @@ export default function Navbar({ showLogin = true }) {
         <div className="navbar-mobile-menu">
           <button
             className="navbar-mobile-link"
-            onClick={() => { navigate('/about'); setMenuOpen(false) }}
+            onClick={() => {
+              navigate('/about')
+              setMenuOpen(false)
+            }}
           >
             About
           </button>
           <button
             className="navbar-mobile-link"
-            onClick={() => { navigate('/terms'); setMenuOpen(false) }}
+            onClick={() => {
+              navigate('/terms')
+              setMenuOpen(false)
+            }}
           >
             Terms
           </button>
           <button
             className="navbar-mobile-link"
-            onClick={() => { navigate('/privacy'); setMenuOpen(false) }}
+            onClick={() => {
+              navigate('/privacy')
+              setMenuOpen(false)
+            }}
           >
             Privacy
           </button>
           {showLogin && (
             <button
               className="navbar-mobile-login"
-              onClick={() => { navigate('/admin'); setMenuOpen(false) }}
+              onClick={() => {
+                navigate('/admin')
+                setMenuOpen(false)
+              }}
             >
               Admin Login
             </button>

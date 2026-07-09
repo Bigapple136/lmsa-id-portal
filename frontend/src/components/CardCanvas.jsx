@@ -12,10 +12,10 @@ function loadImg(src) {
 
 function getFieldText(field, student) {
   const map = {
-    full_name:  student.full_name  || '',
+    full_name: student.full_name || '',
     student_id: student.student_id || '',
     year_level: student.year_level || '',
-    position:   student.position   || '',
+    position: student.position || '',
   }
   return map[field] || ''
 }
@@ -23,16 +23,60 @@ function getFieldText(field, student) {
 // Pixel-calibrated layout for LMSA portrait template (590×1004 px)
 // All values are fractional (0–1) relative to card width/height
 export const CALIBRATED_LAYOUT = {
-  photo:      { x:0.1271, y:0.1673, width:0.7458, height:0.3287, type:'image' },
-  full_name:  { x:0.5,    y:0.5896, fontSize:0.0678, color:'#1A1A1A', bold:true,  textAlign:'center', type:'text', maxWidth:0.88 },
-  student_id: { x:0.2441, y:0.6614, fontSize:0.0576, color:'#CC0000', bold:false, textAlign:'left',   type:'text', maxWidth:0.50 },
-  position:   { x:0.5,    y:0.7231, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'center', type:'text', maxWidth:0.70 },
-  year_level: { x:0.0593, y:0.7749, fontSize:0.0508, color:'#1A1A1A', bold:true,  textAlign:'left',   type:'text', maxWidth:0.50 },
-  signature:  { x:0.5254, y:0.8386, width:0.3898, height:0.0896, type:'image' },
-  qr:         { x:0.0593, y:0.8187, width:0.2542, height:0.1394, type:'image' },
+  photo: { x: 0.1271, y: 0.1673, width: 0.7458, height: 0.3287, type: 'image' },
+  full_name: {
+    x: 0.5,
+    y: 0.5896,
+    fontSize: 0.0678,
+    color: '#1A1A1A',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.88,
+  },
+  student_id: {
+    x: 0.2441,
+    y: 0.6614,
+    fontSize: 0.0576,
+    color: '#CC0000',
+    bold: false,
+    textAlign: 'left',
+    type: 'text',
+    maxWidth: 0.5,
+  },
+  position: {
+    x: 0.5,
+    y: 0.7231,
+    fontSize: 0.0508,
+    color: '#1A1A1A',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.7,
+  },
+  year_level: {
+    x: 0.0593,
+    y: 0.7749,
+    fontSize: 0.0508,
+    color: '#1A1A1A',
+    bold: true,
+    textAlign: 'left',
+    type: 'text',
+    maxWidth: 0.5,
+  },
+  signature: { x: 0.5254, y: 0.8386, width: 0.3898, height: 0.0896, type: 'image' },
+  qr: { x: 0.0593, y: 0.8187, width: 0.2542, height: 0.1394, type: 'image' },
 }
 
-const FIELD_ORDER = ['photo', 'full_name', 'student_id', 'position', 'year_level', 'signature', 'qr']
+const FIELD_ORDER = [
+  'photo',
+  'full_name',
+  'student_id',
+  'position',
+  'year_level',
+  'signature',
+  'qr',
+]
 
 export default function CardCanvas({ student, templateUrl, layout, maxWidth = 300 }) {
   const canvasRef = useRef(null)
@@ -59,7 +103,7 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
 
         const W = template.naturalWidth
         const H = template.naturalHeight
-        canvas.width  = W
+        canvas.width = W
         canvas.height = H
 
         // Draw background template
@@ -99,24 +143,27 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
               }
               ctx.drawImage(img, sx, sy, sw, sh, px, py, pw, ph)
               ctx.restore()
-            } catch { /* photo not available — placeholder already on template */ }
-
+            } catch {
+              /* photo not available — placeholder already on template */
+            }
           } else if (field === 'signature') {
             if (!student.signature_url) continue
             try {
               const img = await loadImg(student.signature_url)
               if (cancelled) return
               ctx.drawImage(img, pos.x * W, pos.y * H, pos.width * W, pos.height * H)
-            } catch { /* signature not available */ }
-
+            } catch {
+              /* signature not available */
+            }
           } else if (field === 'qr') {
             if (!student.qr_url) continue
             try {
               const img = await loadImg(student.qr_url)
               if (cancelled) return
               ctx.drawImage(img, pos.x * W, pos.y * H, pos.width * W, pos.height * H)
-            } catch { /* QR not available yet */ }
-
+            } catch {
+              /* QR not available yet */
+            }
           } else {
             const text = getFieldText(field, student)
             if (!text) continue
@@ -145,7 +192,6 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
         }
 
         if (!cancelled) setRendered(true)
-
       } catch (err) {
         if (!cancelled) setFailed(true)
         console.warn('CardCanvas draw error:', err.message)
@@ -153,7 +199,9 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
     }
 
     draw()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [student, templateUrl, JSON.stringify(resolvedLayout)])
 
   if (failed) return null // Parent will show IDCardDisplay fallback

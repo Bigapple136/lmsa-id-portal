@@ -13,11 +13,18 @@ export default function PrintPreviewModal({ student, onClose }) {
       try {
         const [tRes, lRes] = await Promise.all([
           apiFetch('/api/templates/active'),
-          apiFetch('/api/settings/layout')
+          apiFetch('/api/settings/layout'),
         ])
-        if (tRes.ok) { const t = await tRes.json(); setTemplateUrl(t.file_url) }
-        if (lRes.ok) { setCardLayout(await lRes.json()) }
-      } catch { /* use fallback */ }
+        if (tRes.ok) {
+          const t = await tRes.json()
+          setTemplateUrl(t.file_url)
+        }
+        if (lRes.ok) {
+          setCardLayout(await lRes.json())
+        }
+      } catch {
+        /* use fallback */
+      }
       setReady(true)
     }
     load()
@@ -27,16 +34,25 @@ export default function PrintPreviewModal({ student, onClose }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <span>Print preview — CR-80</span>
-          <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
         </div>
 
         {/* Card — full template render or fallback */}
         <div className="print-card-wrapper">
           {!ready && (
-            <div style={{ padding:'24px', textAlign:'center', fontSize:'13px', color:'var(--muted)' }}>
+            <div
+              style={{
+                padding: '24px',
+                textAlign: 'center',
+                fontSize: '13px',
+                color: 'var(--muted)',
+              }}
+            >
               Loading card...
             </div>
           )}
@@ -48,9 +64,7 @@ export default function PrintPreviewModal({ student, onClose }) {
               maxWidth={340}
             />
           )}
-          {ready && !useCanvas && (
-            <IDCardDisplay student={student}/>
-          )}
+          {ready && !useCanvas && <IDCardDisplay student={student} />}
           <p className="print-size-note">
             {useCanvas
               ? 'This is exactly how your card will look when printed.'
@@ -63,8 +77,12 @@ export default function PrintPreviewModal({ student, onClose }) {
         </div>
 
         <div className="btn-row">
-          <button className="btn-gold" onClick={onClose}>Looks good</button>
-          <button className="btn-outline" onClick={onClose}>Report issue</button>
+          <button className="btn-gold" onClick={onClose}>
+            Looks good
+          </button>
+          <button className="btn-outline" onClick={onClose}>
+            Report issue
+          </button>
         </div>
       </div>
     </div>

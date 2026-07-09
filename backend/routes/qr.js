@@ -16,7 +16,6 @@ function requireFullAdmin(req, res, next) {
 
 const JSZip = require('jszip')
 
-const FRONTEND_URL = process.env.FRONTEND_URL
 const BACKEND_URL = process.env.BACKEND_URL
 const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET
 
@@ -29,7 +28,10 @@ function signStudentToken(studentId) {
 function verifyStudentToken(token) {
   const [payload, sig] = (token || '').split('.')
   if (!payload || !sig || !QR_SIGNING_SECRET) return null
-  const expected = crypto.createHmac('sha256', QR_SIGNING_SECRET).update(payload).digest('base64url')
+  const expected = crypto
+    .createHmac('sha256', QR_SIGNING_SECRET)
+    .update(payload)
+    .digest('base64url')
   return sig === expected ? Buffer.from(payload, 'base64url').toString() : null
 }
 
@@ -45,14 +47,13 @@ async function generateQRBuffer(student) {
     width: 400,
     margin: 2,
     errorCorrectionLevel: 'M',
-    color: { dark: '#0D1B2A', light: '#FFFFFF' }
+    color: { dark: '#0D1B2A', light: '#FFFFFF' },
   })
   return buffer
 }
 
 async function uploadQR(buffer, student) {
-  const yearFolder = (student.year_level || 'unknown')
-    .toLowerCase().replace(/\s+/g, '-')
+  const yearFolder = (student.year_level || 'unknown').toLowerCase().replace(/\s+/g, '-')
   const path = `${yearFolder}/${student.student_id}.png`
 
   const { error } = await supabase.storage
@@ -60,15 +61,14 @@ async function uploadQR(buffer, student) {
     .upload(path, buffer, { contentType: 'image/png', upsert: true })
   if (error) throw new Error(error.message)
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('qr-codes').getPublicUrl(path)
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from('qr-codes').getPublicUrl(path)
   return publicUrl
 }
 
 async function saveQRUrl(studentId, url) {
-  await supabase.from('students')
-    .update({ qr_url: url })
-    .eq('student_id', studentId)
+  await supabase.from('students').update({ qr_url: url }).eq('student_id', studentId)
 }
 
 function normaliseYearFolder(yearLevel) {
@@ -96,11 +96,12 @@ router.post('/generate/:studentId', requireAdmin, requireFullAdmin, async (req, 
   if (sidErr) return res.status(400).json({ error: sidErr })
 
   const { data: student, error } = await supabase
-    .from('students').select('*')
-    .eq('student_id', req.params.studentId).maybeSingle()
+    .from('students')
+    .select('*')
+    .eq('student_id', req.params.studentId)
+    .maybeSingle()
 
-  if (error || !student)
-    return res.status(404).json({ error: 'Student not found.' })
+  if (error || !student) return res.status(404).json({ error: 'Student not found.' })
 
   try {
     const url = await generateForStudent(student)
@@ -111,14 +112,14 @@ router.post('/generate/:studentId', requireAdmin, requireFullAdmin, async (req, 
 })
 
 router.post('/generate-all', requireAdmin, requireFullAdmin, async (req, res) => {
-  const { data: students, error } = await supabase
-    .from('students').select('*')
-    .is('qr_url', null)
+  const { data: students, error } = await supabase.from('students').select('*').is('qr_url', null)
 
   if (error) return res.status(500).json({ error: error.message })
-  if (!students?.length) return res.json({ generated: 0, message: 'All students already have QR codes.' })
+  if (!students?.length)
+    return res.json({ generated: 0, message: 'All students already have QR codes.' })
 
-  let generated = 0, failed = 0
+  let generated = 0,
+    failed = 0
   for (const student of students) {
     try {
       await generateForStudent(student)
@@ -137,16 +138,15 @@ router.post('/regenerate/:studentId', requireAdmin, requireFullAdmin, async (req
   if (sidErr) return res.status(400).json({ error: sidErr })
 
   const { data: student, error } = await supabase
-    .from('students').select('*')
-    .eq('student_id', req.params.studentId).maybeSingle()
+    .from('students')
+    .select('*')
+    .eq('student_id', req.params.studentId)
+    .maybeSingle()
 
-  if (error || !student)
-    return res.status(404).json({ error: 'Student not found.' })
+  if (error || !student) return res.status(404).json({ error: 'Student not found.' })
 
   try {
-    await supabase.from('students')
-      .update({ qr_url: null })
-      .eq('student_id', student.student_id)
+    await supabase.from('students').update({ qr_url: null }).eq('student_id', student.student_id)
     const url = await generateForStudent(student)
     res.json({ qr_url: url, student_id: student.student_id })
   } catch (err) {
@@ -155,15 +155,15 @@ router.post('/regenerate/:studentId', requireAdmin, requireFullAdmin, async (req
 })
 
 router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) => {
-  const { data: students, error } = await supabase
-    .from('students').select('*')
+  const { data: students, error } = await supabase.from('students').select('*')
 
   if (error) return res.status(500).json({ error: error.message })
   if (!students?.length) return res.json({ generated: 0, message: 'No students found.' })
 
   await supabase.from('students').update({ qr_url: null }).not('qr_url', 'is', null)
 
-  let generated = 0, failed = 0
+  let generated = 0,
+    failed = 0
   for (const student of students) {
     try {
       await generateForStudent(student)
@@ -183,7 +183,10 @@ router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
 
   try {
     const { data: student, error } = await supabase
-      .from('students').select('student_id').eq('student_id', req.params.studentId).maybeSingle()
+      .from('students')
+      .select('student_id')
+      .eq('student_id', req.params.studentId)
+      .maybeSingle()
     if (error || !student) return res.status(404).json({ error: 'Student not found.' })
     const url = `${BACKEND_URL}/api/qr/html/${signStudentToken(student.student_id)}`
     res.json({ url })
@@ -199,41 +202,48 @@ router.get('/html/:studentId', async (req, res) => {
     return res.status(403).send('Invalid or tampered QR code. Please request a new ID card.')
 
   const { data: student, error } = await supabase
-    .from('students').select('*')
-    .eq('student_id', studentId).maybeSingle()
+    .from('students')
+    .select('*')
+    .eq('student_id', studentId)
+    .maybeSingle()
 
-  if (error || !student)
-    return res.status(404).json({ error: 'Student not found.' })
+  if (error || !student) return res.status(404).json({ error: 'Student not found.' })
 
   try {
     const qrFields = await getQRFields()
 
-    const name       = student.full_name || '—'
-    const sid        = student.student_id || '—'
-    const level      = student.year_level || '—'
-    const position   = student.position || null
-    const programme  = student.programme || null
-    const bloodType  = student.blood_type || null
-    const email      = student.student_email || null
-    const emergName  = student.emergency_contact_name || null
+    const name = student.full_name || '—'
+    const sid = student.student_id || '—'
+    const level = student.year_level || '—'
+    const position = student.position || null
+    const programme = student.programme || null
+    const bloodType = student.blood_type || null
+    const email = student.student_email || null
+    const emergName = student.emergency_contact_name || null
     const emergPhone = student.emergency_contact_phone || null
-    const dob        = student.date_of_birth || null
+    const dob = student.date_of_birth || null
     const nationality = student.nationality || null
-    const county     = student.county_of_origin || null
-    const address    = student.current_address || null
+    const county = student.county_of_origin || null
+    const address = student.current_address || null
 
-    const showBloodType   = qrFields.blood_type?.enabled              && bloodType
-    const showProgramme   = qrFields.programme?.enabled               && programme
-    const showEmail      = qrFields.student_email?.enabled            && email
-    const showEmerName   = qrFields.emergency_contact_name?.enabled   && emergName
-    const showEmerPhone  = qrFields.emergency_contact_phone?.enabled  && emergPhone
-    const showEmerCard   = showEmerName || showEmerPhone
-    const showDob        = qrFields.date_of_birth?.enabled            && dob
-    const showNationality = qrFields.nationality?.enabled             && nationality
-    const showCounty     = qrFields.county_of_origin?.enabled         && county
-    const showAddress    = qrFields.current_address?.enabled          && address
+    const showBloodType = qrFields.blood_type?.enabled && bloodType
+    const showProgramme = qrFields.programme?.enabled && programme
+    const showEmail = qrFields.student_email?.enabled && email
+    const showEmerName = qrFields.emergency_contact_name?.enabled && emergName
+    const showEmerPhone = qrFields.emergency_contact_phone?.enabled && emergPhone
+    const showEmerCard = showEmerName || showEmerPhone
+    const showDob = qrFields.date_of_birth?.enabled && dob
+    const showNationality = qrFields.nationality?.enabled && nationality
+    const showCounty = qrFields.county_of_origin?.enabled && county
+    const showAddress = qrFields.current_address?.enabled && address
 
-    const initials = name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+    const initials = name
+      .split(' ')
+      .map((w) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase()
 
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -350,9 +360,10 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
   <!-- Profile row -->
   <div class="profile-row">
     <div class="profile-photo-wrap">
-      ${student.photo_url
-        ? `<img class="profile-photo" src="${student.photo_url}" alt="${name}" crossorigin="anonymous"/>`
-        : `<div class="profile-photo" style="display:flex;align-items:center;justify-content:center;font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:22px;color:rgba(255,255,255,0.7);background:linear-gradient(135deg,#00653c,#1e7f51)">${initials}</div>`
+      ${
+        student.photo_url
+          ? `<img class="profile-photo" src="${student.photo_url}" alt="${name}" crossorigin="anonymous"/>`
+          : `<div class="profile-photo" style="display:flex;align-items:center;justify-content:center;font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:22px;color:rgba(255,255,255,0.7);background:linear-gradient(135deg,#00653c,#1e7f51)">${initials}</div>`
       }
       <div class="photo-badge">
         <span class="material-symbols-outlined" style="font-size:12px;color:#fff">verified</span>
@@ -367,79 +378,129 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
   <!-- Bento grid -->
   <div class="bento">
 
-    ${(showBloodType || showProgramme) ? `
+    ${
+      showBloodType || showProgramme
+        ? `
     <div class="bento-grid-2">
-      ${showBloodType ? `
+      ${
+        showBloodType
+          ? `
       <div class="bento-card">
         <div class="bento-card-label">Blood Type</div>
         <div class="bento-card-value">${bloodType}</div>
-      </div>` : '<div></div>'}
-      ${showProgramme ? `
+      </div>`
+          : '<div></div>'
+      }
+      ${
+        showProgramme
+          ? `
       <div class="bento-card">
         <div class="bento-card-label">Programme</div>
         <div class="bento-card-value" style="font-size:13px">${programme}</div>
-      </div>` : '<div></div>'}
-    </div>` : ''}
+      </div>`
+          : '<div></div>'
+      }
+    </div>`
+        : ''
+    }
 
-    ${showEmail ? `
+    ${
+      showEmail
+        ? `
     <div class="bento-card">
       <div class="bento-card-label">Email Address</div>
       <div class="bento-card-value" style="font-size:14px;word-break:break-all">${email}</div>
-    </div>` : ''}
+    </div>`
+        : ''
+    }
 
-    ${showEmerCard ? `
+    ${
+      showEmerCard
+        ? `
     <div class="bento-card">
       <div class="bento-card-label">Emergency Contact</div>
       <div>
-        ${showEmerName ? `
+        ${
+          showEmerName
+            ? `
         <div class="contact-row" style="padding:12px 0;border-bottom:1px solid #f0f5ee">
           <div class="contact-icon"><span class="material-symbols-outlined">person</span></div>
           <div>
             <div class="contact-label">Name</div>
             <div class="contact-value">${emergName}</div>
           </div>
-        </div>` : ''}
-        ${showEmerPhone ? `
-        <div class="contact-row" style="padding-top:${showEmerName?'12px':'0'}">
+        </div>`
+            : ''
+        }
+        ${
+          showEmerPhone
+            ? `
+        <div class="contact-row" style="padding-top:${showEmerName ? '12px' : '0'}">
           <div class="contact-icon"><span class="material-symbols-outlined">call</span></div>
           <div>
             <div class="contact-label">Phone</div>
             <div class="contact-value">${emergPhone}</div>
           </div>
-        </div>` : ''}
+        </div>`
+            : ''
+        }
       </div>
-    </div>` : ''}
+    </div>`
+        : ''
+    }
 
-    ${(showDob || showNationality) ? `
+    ${
+      showDob || showNationality
+        ? `
     <div class="bento-grid-2">
-      ${showDob ? `
+      ${
+        showDob
+          ? `
       <div class="bento-card">
         <div class="bento-card-label">Date of Birth</div>
         <div class="bento-card-value">${dob}</div>
-      </div>` : '<div></div>'}
-      ${showNationality ? `
+      </div>`
+          : '<div></div>'
+      }
+      ${
+        showNationality
+          ? `
       <div class="bento-card">
         <div class="bento-card-label">Nationality</div>
         <div class="bento-card-value">${nationality}</div>
-      </div>` : '<div></div>'}
-    </div>` : ''}
+      </div>`
+          : '<div></div>'
+      }
+    </div>`
+        : ''
+    }
 
-    ${showCounty ? `
+    ${
+      showCounty
+        ? `
     <div class="bento-card">
       <div class="bento-card-label">County of Origin</div>
       <div class="bento-card-value">${county}</div>
-    </div>` : ''}
+    </div>`
+        : ''
+    }
 
-    ${showAddress ? `
+    ${
+      showAddress
+        ? `
     <div class="bento-card">
       <div class="bento-card-label">Current Address</div>
       <div class="bento-card-value" style="font-size:13px">${address}</div>
-    </div>` : ''}
+    </div>`
+        : ''
+    }
 
   </div>
 
   <!-- QR Reference section -->
-  ${student.qr_url ? `
+  ${
+    student.qr_url
+      ? `
   <div class="qr-ref no-print">
     <div class="qr-ref-inner">
       <div class="qr-ref-text">
@@ -448,7 +509,9 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
       </div>
       <img src="${student.qr_url}" alt="QR Code" crossorigin="anonymous" style="width:72px;height:72px"/>
     </div>
-  </div>` : ''}
+  </div>`
+      : ''
+  }
 
   <!-- Footer -->
   <footer class="footer no-print">
@@ -463,7 +526,10 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 
     res.setHeader('Content-Type', 'text/html')
     res.setHeader('Content-Disposition', `inline; filename="QR_${student.student_id}.html"`)
-    res.setHeader('Content-Security-Policy', "img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co https://lmsa-id-portal.vercel.app; frame-ancestors 'none'")
+    res.setHeader(
+      'Content-Security-Policy',
+      "img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co https://lmsa-id-portal.vercel.app; frame-ancestors 'none'",
+    )
     res.send(html)
   } catch (err) {
     res.status(500).json({ error: 'Failed to generate QR page: ' + err.message })
@@ -472,7 +538,8 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 
 router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
   const { data: students, error } = await supabase
-    .from('students').select('student_id, full_name, year_level, qr_url')
+    .from('students')
+    .select('student_id, full_name, year_level, qr_url')
     .not('qr_url', 'is', null)
     .order('year_level')
 
@@ -488,10 +555,11 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
       const resp = await fetch(s.qr_url)
       if (!resp.ok) continue
       const buffer = Buffer.from(await resp.arrayBuffer())
-      const yearFolder = (s.year_level || 'unknown')
-        .toLowerCase().replace(/\s+/g, '-')
+      const yearFolder = (s.year_level || 'unknown').toLowerCase().replace(/\s+/g, '-')
       root.folder(yearFolder).file(`${s.student_id}.png`, buffer)
-    } catch (err) { console.warn('[QR Export] Failed to fetch', s.student_id, err.message) }
+    } catch (err) {
+      console.warn('[QR Export] Failed to fetch', s.student_id, err.message)
+    }
   }
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })

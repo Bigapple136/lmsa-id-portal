@@ -16,22 +16,21 @@ export default function AboutPage() {
           <h1 className="about-hero-title">GoldWay</h1>
           <p className="about-hero-tagline">Creative Design &amp; Production Services</p>
           <p className="about-hero-desc">
-            Liberia-based design studio specialising in brand identity, print production,
-            and digital solutions for institutions and organisations.
+            Liberia-based design studio specialising in brand identity, print production, and
+            digital solutions for institutions and organisations.
           </p>
         </div>
       </div>
 
       <div className="about-body">
-
         {/* About this portal: Brand */}
         <div className="about-section">
           <h2 className="about-section-title">About this portal</h2>
           <p className="about-section-text">
-            This ID Card Verification Portal was designed and developed by GoldWay for the
-            Liberia Medical Students Association (LMSA) and A.M. Dogliotti College of Medicine.
-            It provides a seamless, fully digital workflow for student ID card photography,
-            design, verification, and print production — from a single platform.
+            This ID Card Verification Portal was designed and developed by GoldWay for the Liberia
+            Medical Students Association (LMSA) and A.M. Dogliotti College of Medicine. It provides
+            a seamless, fully digital workflow for student ID card photography, design,
+            verification, and print production — from a single platform.
           </p>
           <p className="about-section-text" style={{ marginTop: '12px' }}>
             Students can preview their ID card before printing, confirm their details are correct,
@@ -46,22 +45,30 @@ export default function AboutPage() {
             <div className="about-service-card">
               <div className="about-service-icon">🎨</div>
               <div className="about-service-name">Graphic Design</div>
-              <div className="about-service-desc">Brand identity, ID cards, certificates, print layouts, and institutional materials.</div>
+              <div className="about-service-desc">
+                Brand identity, ID cards, certificates, print layouts, and institutional materials.
+              </div>
             </div>
             <div className="about-service-card">
               <div className="about-service-icon">📸</div>
               <div className="about-service-name">Photography</div>
-              <div className="about-service-desc">On-site portrait and ID photography sessions for institutions and organisations.</div>
+              <div className="about-service-desc">
+                On-site portrait and ID photography sessions for institutions and organisations.
+              </div>
             </div>
             <div className="about-service-card">
               <div className="about-service-icon">🖨</div>
               <div className="about-service-name">Print Production</div>
-              <div className="about-service-desc">PVC ID cards, business cards, banners, and institutional print materials.</div>
+              <div className="about-service-desc">
+                PVC ID cards, business cards, banners, and institutional print materials.
+              </div>
             </div>
             <div className="about-service-card">
               <div className="about-service-icon">💻</div>
               <div className="about-service-name">Digital Solutions</div>
-              <div className="about-service-desc">Custom web portals, management systems, and digital tools for institutions.</div>
+              <div className="about-service-desc">
+                Custom web portals, management systems, and digital tools for institutions.
+              </div>
             </div>
           </div>
         </div>
@@ -70,8 +77,8 @@ export default function AboutPage() {
         <div className="about-section">
           <h2 className="about-section-title">Get in touch</h2>
           <p className="about-section-text">
-            Interested in working with GoldWay for your institution's design, photography,
-            or print production needs? We would love to hear from you.
+            Interested in working with GoldWay for your institution's design, photography, or print
+            production needs? We would love to hear from you.
           </p>
 
           <div className="about-contact-card">
@@ -104,11 +111,14 @@ export default function AboutPage() {
 
         {/* Back CTA */}
         <div style={{ textAlign: 'center', paddingBottom: '32px' }}>
-          <button className="btn-primary" style={{ maxWidth: '280px', margin: '0 auto' }} onClick={() => navigate('/')}>
+          <button
+            className="btn-primary"
+            style={{ maxWidth: '280px', margin: '0 auto' }}
+            onClick={() => navigate('/')}
+          >
             Back to Student Portal
           </button>
         </div>
-
       </div>
       <Footer />
     </div>

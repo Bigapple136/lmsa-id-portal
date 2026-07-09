@@ -7,10 +7,11 @@ export default function IDCardDisplay({ student }) {
 
       <div className="id-card-body">
         <div className="id-card-photo">
-          {student.photo_url
-            ? <img src={student.photo_url} alt={student.full_name} />
-            : <span>Photo</span>
-          }
+          {student.photo_url ? (
+            <img src={student.photo_url} alt={student.full_name} />
+          ) : (
+            <span>Photo</span>
+          )}
         </div>
 
         <div className="id-card-info">

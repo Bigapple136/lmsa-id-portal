@@ -13,16 +13,18 @@ function requireFullAdmin(req, res, next) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }
+  limits: { fileSize: 10 * 1024 * 1024 },
 })
 
 // PUBLIC: get active template (needed by preview page + CardCanvas)
 router.get('/active', async (req, res) => {
   const { data, error } = await supabase
-    .from('templates').select('*')
+    .from('templates')
+    .select('*')
     .eq('is_active', true)
     .order('uploaded_at', { ascending: false })
-    .limit(1).maybeSingle()
+    .limit(1)
+    .maybeSingle()
   if (error) return res.status(500).json({ error: error.message })
   if (!data) return res.status(404).json({ error: 'No active template found.' })
   res.json(data)
@@ -31,7 +33,9 @@ router.get('/active', async (req, res) => {
 // ADMIN: list all templates
 router.get('/', requireAdmin, async (req, res) => {
   const { data, error } = await supabase
-    .from('templates').select('*').order('uploaded_at', { ascending: false })
+    .from('templates')
+    .select('*')
+    .order('uploaded_at', { ascending: false })
   if (error) return res.status(500).json({ error: error.message })
   res.json(data)
 })
@@ -51,18 +55,22 @@ router.post('/', requireAdmin, requireFullAdmin, upload.single('file'), async (r
   const { error: uploadError } = await supabase.storage
     .from('templates')
     .upload(storagePath, req.file.buffer, {
-      contentType: req.file.mimetype, upsert: false
+      contentType: req.file.mimetype,
+      upsert: false,
     })
   if (uploadError) return res.status(400).json({ error: uploadError.message })
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('templates').getPublicUrl(storagePath)
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from('templates').getPublicUrl(storagePath)
 
   await supabase.from('templates').update({ is_active: false }).eq('is_active', true)
 
-  const { data, error } = await supabase.from('templates')
+  const { data, error } = await supabase
+    .from('templates')
     .insert({ file_name: req.file.originalname, file_url: publicUrl, is_active: true })
-    .select().single()
+    .select()
+    .single()
 
   if (error) return res.status(400).json({ error: error.message })
   res.status(201).json(data)
