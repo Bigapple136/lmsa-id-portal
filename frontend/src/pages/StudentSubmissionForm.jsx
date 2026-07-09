@@ -215,7 +215,7 @@ export default function StudentSubmissionForm() {
                   <label className="field-label">Position (optional)</label>
                   <input
                     className="field-input"
-                    placeholder="e.g. Class Representative"
+                    placeholder="e.g. Member"
                     value={form.position}
                     onChange={(e) => setForm({ ...form, position: e.target.value })}
                   />
@@ -230,9 +230,9 @@ export default function StudentSubmissionForm() {
                     marginTop: '4px',
                   }}
                 >
-                  <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>
-                    Additional details
-                  </p>
+<p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
+  Additional Details
+</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {showProgramme && (
                       <div className="field-group">

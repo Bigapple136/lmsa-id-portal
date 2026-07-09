@@ -734,7 +734,7 @@ export default function AdminDashboard() {
                   <label className="field-label">Position</label>
                   <input
                     className="field-input"
-                    placeholder="e.g. Class Representative"
+                    placeholder="e.g. Member"
                     value={editForm.position}
                     onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
                   />
@@ -1315,7 +1315,7 @@ export default function AdminDashboard() {
                       <label className="field-label">Position</label>
                       <input
                         className="field-input"
-                        placeholder="e.g. Class Representative"
+                        placeholder="e.g. Member"
                         value={manualForm.position}
                         onChange={(e) => setManualForm({ ...manualForm, position: e.target.value })}
                       />
