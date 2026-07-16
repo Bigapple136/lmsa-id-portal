@@ -985,46 +985,43 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-body">
-        {dataLoading && (
-          <div>
-            <div className="stats-grid">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="stat-box">
-                  <div className="skeleton skeleton-title" style={{ marginBottom: 8 }} />
-                  <div className="skeleton skeleton-text" style={{ width: '60%' }} />
-                </div>
-              ))}
-            </div>
-            <div className="skeleton skeleton-row" style={{ marginBottom: 14 }} />
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="skeleton skeleton-row" />
-            ))}
-          </div>
-        )}
-
         {/* ── OVERVIEW ── */}
-        {activeTab === 'overview' && !dataLoading && (
+        {activeTab === 'overview' && (
           <div>
             <div className="stats-grid">
-              <div className="stat-box">
-                <div className="stat-num">{stats.total}</div>
-                <div className="stat-lbl">Total</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-num confirmed">{stats.confirmed}</div>
-                <div className="stat-lbl">Confirmed</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-num pending">{stats.pending}</div>
-                <div className="stat-lbl">Pending</div>
-              </div>
-              <div className="stat-box">
-                <div className="stat-num issue">{stats.issues}</div>
-                <div className="stat-lbl">Issues</div>
-              </div>
+              {dataLoading
+                ? [1, 2, 3, 4].map((i) => (
+                    <div key={i} className="stat-box">
+                      <div className="skeleton skeleton-title" style={{ marginBottom: 8 }} />
+                      <div className="skeleton skeleton-text" style={{ width: '60%' }} />
+                    </div>
+                  ))
+                : (
+                  <>
+                    <div className="stat-box">
+                      <div className="stat-num">{stats.total}</div>
+                      <div className="stat-lbl">Total</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-num confirmed">{stats.confirmed}</div>
+                      <div className="stat-lbl">Confirmed</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-num pending">{stats.pending}</div>
+                      <div className="stat-lbl">Pending</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-num issue">{stats.issues}</div>
+                      <div className="stat-lbl">Issues</div>
+                    </div>
+                  </>
+                )
+              }
             </div>
             <div className="section-title">Active template</div>
-            {activeTemplate ? (
+            {dataLoading ? (
+              <div className="skeleton skeleton-row" style={{ marginBottom: 14 }} />
+            ) : activeTemplate ? (
               <div className="template-row">
                 <div className="template-icon">🎨</div>
                 <div className="template-info">
@@ -1055,12 +1052,15 @@ export default function AdminDashboard() {
             <div className="section-title" style={{ marginTop: '16px' }}>
               Recent activity
             </div>
-            {recentActivity.length === 0 && (
+            {dataLoading ? (
+              [1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="skeleton skeleton-row" />
+              ))
+            ) : recentActivity.length === 0 ? (
               <p style={{ fontSize: '13px', color: 'var(--muted)', padding: '8px 0' }}>
                 No students yet.
               </p>
-            )}
-            {recentActivity.map((s) => (
+            ) : recentActivity.map((s) => (
               <div className="student-row" key={s.id}>
                 <div className="avatar">{getInitials(s.full_name)}</div>
                 <div className="student-info">
@@ -1077,7 +1077,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ── UPLOAD ── */}
-        {activeTab === 'upload' && !dataLoading && (
+        {activeTab === 'upload' && (
           <div>
             {/* Downloads */}
             <div className="section-title">Download templates</div>
@@ -1543,7 +1543,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ── LAYOUT ── */}
-        {activeTab === 'layout' && !dataLoading && (
+        {activeTab === 'layout' && (
           <div>
             <div className="section-title">
               Card layout mapper <span className="new-badge">Template 2</span>
@@ -1574,7 +1574,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ── SUBMISSION FORM ── */}
-        {activeTab === 'submissions' && !dataLoading && (
+        {activeTab === 'submissions' && (
           <div>
             <div className="section-title">Submissions</div>
             <div className="mode-toggle">
@@ -1692,7 +1692,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ── SETTINGS ── */}
-        {activeTab === 'settings' && !dataLoading && (
+        {activeTab === 'settings' && (
           <div>
             {/* Card field toggles */}
             <div className="section-title">
@@ -1702,7 +1702,7 @@ export default function AdminDashboard() {
               Toggle which fields appear on the ID card. This also controls the columns in the
               downloadable Excel template and the structure of the image folder.
             </p>
-            {fields && (
+            {fields ? (
               <div className="field-toggle-panel">
                 {Object.entries(FIELD_META).map(([key, meta]) => (
                   <div
@@ -1738,6 +1738,8 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
+            ) : (
+              <div className="skeleton skeleton-card" />
             )}
 
             {/* QR field toggles */}
@@ -1748,7 +1750,7 @@ export default function AdminDashboard() {
               Toggle which extra fields are encoded into the QR code. Enabled fields are included in
               the QR payload and appear on the QR verification page.
             </p>
-            {qrFields && (
+            {qrFields ? (
               <div className="field-toggle-panel">
                 {Object.entries(qrFields).map(([key, meta]) => (
                   <div
@@ -1783,6 +1785,8 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
+            ) : (
+              <div className="skeleton skeleton-card" />
             )}
 
             <div className="divider" />
@@ -1866,7 +1870,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ── STUDENTS ── */}
-        {activeTab === 'students' && !dataLoading && (
+        {activeTab === 'students' && (
           <div>
             {/* QR bulk controls - admin only */}
             {userRole === 'admin' && (
@@ -2011,12 +2015,15 @@ export default function AdminDashboard() {
                 + Add
               </button>
             </div>
-            {filtered.length === 0 && (
+            {dataLoading ? (
+              [1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="skeleton skeleton-row" />
+              ))
+            ) : filtered.length === 0 ? (
               <p style={{ fontSize: '13px', color: 'var(--muted)', padding: '12px 0' }}>
                 {search ? 'No students match your search.' : 'No students added yet.'}
               </p>
-            )}
-            {(() => {
+            ) : (() => {
               const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
               const safePage = Math.min(currentPage, totalPages)
               const pageStart = (safePage - 1) * PAGE_SIZE
