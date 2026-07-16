@@ -1,11 +1,12 @@
 const express = require('express')
 const router = express.Router()
 const { supabase } = require('../db')
+const { requireAdmin } = require('../middleware/auth')
 
 const ALLOWED_ACTIONS = ['confirmed', 'issue']
 const MAX_NOTE_LENGTH = 1000
 
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const { student_id, action, note } = req.body
 
   if (!student_id || !action)

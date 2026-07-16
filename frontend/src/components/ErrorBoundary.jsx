@@ -12,6 +12,15 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[ErrorBoundary]', error, info.componentStack)
+    try {
+      if (window.Sentry) {
+        window.Sentry.captureException(error, {
+          contexts: { react: { componentStack: info.componentStack } },
+        })
+      }
+    } catch {
+      // Sentry unavailable
+    }
   }
 
   render() {

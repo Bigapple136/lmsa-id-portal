@@ -3,12 +3,13 @@ import { supabase } from '../lib/supabase'
 
 const DEFAULT_TIMEOUT = 30 * 60 * 1000
 const WARNING_BEFORE = 60 * 1000
+const DEBOUNCE_MS = 1000
 
 export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
   const [showWarning, setShowWarning] = useState(false)
   const timerRef = useRef(null)
   const warningTimerRef = useRef(null)
-  const events = useRef(['mousemove', 'keydown', 'click', 'touchstart', 'scroll'])
+  const lastResetRef = useRef(0)
 
   const clearTimers = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -29,16 +30,27 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
   }, [timeout, clearTimers])
 
   const resetTimer = useCallback(() => {
+    const now = Date.now()
+    if (now - lastResetRef.current < DEBOUNCE_MS) return
+    lastResetRef.current = now
     startTimers()
   }, [startTimers])
 
   useEffect(() => {
     startTimers()
-    const eventList = events.current
-    eventList.forEach((ev) => document.addEventListener(ev, resetTimer))
+    const handler = () => resetTimer()
+    document.addEventListener('mousemove', handler)
+    document.addEventListener('keydown', handler)
+    document.addEventListener('click', handler)
+    document.addEventListener('touchstart', handler)
+    document.addEventListener('scroll', handler)
     return () => {
       clearTimers()
-      eventList.forEach((ev) => document.removeEventListener(ev, resetTimer))
+      document.removeEventListener('mousemove', handler)
+      document.removeEventListener('keydown', handler)
+      document.removeEventListener('click', handler)
+      document.removeEventListener('touchstart', handler)
+      document.removeEventListener('scroll', handler)
     }
   }, [startTimers, clearTimers, resetTimer])
 

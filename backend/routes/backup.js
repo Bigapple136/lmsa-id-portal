@@ -51,42 +51,37 @@ router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
   // Export storage files
   for (const { bucket, folder } of STORAGE_BUCKETS) {
     try {
-      const { data: files, error: listErr } = await supabase.storage.from(bucket).list('', {
-        limit: 1000,
-        sortBy: { column: 'name', order: 'asc' },
-      })
-      if (listErr || !files?.length) {
-        if (listErr) console.warn(`[Backup] Failed to list bucket ${bucket}:`, listErr.message)
-        continue
-      }
-
       const bucketFolder = zip.folder(folder)
 
-      // Recursively download all files
       async function downloadFolder(path, dest) {
-        const { data: items, error } = await supabase.storage.from(bucket).list(path, {
-          limit: 1000,
-          sortBy: { column: 'name', order: 'asc' },
-        })
-        if (error || !items) return
+        let offset = 0
+        let hasMore = true
+        while (hasMore) {
+          const { data: items, error } = await supabase.storage.from(bucket).list(path, {
+            limit: 1000,
+            offset,
+            sortBy: { column: 'name', order: 'asc' },
+          })
+          if (error || !items) break
+          hasMore = items.length === 1000
+          offset += items.length
 
-        for (const item of items) {
-          const itemPath = path ? `${path}/${item.name}` : item.name
-          if (item.id === null) {
-            // It's a folder
-            const subFolder = dest.folder(item.name)
-            await downloadFolder(itemPath, subFolder)
-          } else {
-            // It's a file
-            try {
-              const { data: fileData, error: dlErr } = await supabase.storage
-                .from(bucket)
-                .download(itemPath)
-              if (dlErr || !fileData) continue
-              const buffer = Buffer.from(await fileData.arrayBuffer())
-              dest.file(item.name, buffer)
-            } catch (err) {
-              console.warn(`[Backup] Failed to download ${bucket}/${itemPath}:`, err.message)
+          for (const item of items) {
+            const itemPath = path ? `${path}/${item.name}` : item.name
+            if (item.id === null) {
+              const subFolder = dest.folder(item.name)
+              await downloadFolder(itemPath, subFolder)
+            } else {
+              try {
+                const { data: fileData, error: dlErr } = await supabase.storage
+                  .from(bucket)
+                  .download(itemPath)
+                if (dlErr || !fileData) continue
+                const buffer = Buffer.from(await fileData.arrayBuffer())
+                dest.file(item.name, buffer)
+              } catch (err) {
+                console.warn(`[Backup] Failed to download ${bucket}/${itemPath}:`, err.message)
+              }
             }
           }
         }

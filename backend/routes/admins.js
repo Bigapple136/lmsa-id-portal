@@ -66,6 +66,9 @@ router.post('/', requireAdmin, requireFullAdmin, async (req, res) => {
 })
 
 router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
+  const idErr = uuid(req.params.id, 'Admin ID')
+  if (idErr) return res.status(400).json({ error: idErr })
+
   const targetId = req.params.id
   const { role: newRole } = req.body
 

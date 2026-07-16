@@ -13,6 +13,46 @@ import StudentSubmissionForm from './pages/StudentSubmissionForm'
 
 const SentryErrorBoundary = Sentry.ErrorBoundary || ErrorBoundary
 
+function NotFoundPage() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: '16px',
+        padding: '32px',
+        fontFamily: 'Inter, Arial, sans-serif',
+        background: '#f6fbf4',
+        color: '#181d19',
+        textAlign: 'center',
+      }}
+    >
+      <h1 style={{ fontSize: 64, fontWeight: 800, margin: 0, color: '#00653c' }}>404</h1>
+      <p style={{ fontSize: 16, color: '#666', margin: 0 }}>Page not found</p>
+      <a
+        href="/"
+        style={{
+          marginTop: 8,
+          padding: '10px 24px',
+          borderRadius: 8,
+          border: 'none',
+          background: '#00653c',
+          color: '#fff',
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: 'pointer',
+          textDecoration: 'none',
+        }}
+      >
+        Go Home
+      </a>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
@@ -48,6 +88,7 @@ export default function App() {
               </SentryErrorBoundary>
             }
           />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
     </ErrorBoundary>

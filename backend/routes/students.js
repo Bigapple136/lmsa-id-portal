@@ -24,7 +24,7 @@ function getQRGenerator() {
   return require('./qr').generateForStudent
 }
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } })
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
 const ALLOWED_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
@@ -83,32 +83,37 @@ async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
   const oldFolder = normaliseYearFolder(oldYearLevel)
   const newFolder = normaliseYearFolder(newYearLevel)
 
-  const oldPhotoPath = `photos/${oldFolder}/${safeSid}.jpg`
+  const oldPhotoPathJpg = `photos/${oldFolder}/${safeSid}.jpg`
   const oldPhotoPathPng = `photos/${oldFolder}/${safeSid}.png`
   const oldSigPath = `signatures/${oldFolder}/${safeSid}.png`
 
-  const { data: photoData } =
-    (await supabase.storage
-      .from('id-cards')
-      .download(oldPhotoPath)
-      .catch(() => null)) ||
-    (await supabase.storage
-      .from('id-cards')
-      .download(oldPhotoPathPng)
-      .catch(() => null))
+  let photoResult = null
+  try {
+    photoResult = await supabase.storage.from('id-cards').download(oldPhotoPathJpg)
+  } catch {
+    // ignore
+  }
+  let photoExt = 'jpg'
+  if (!photoResult?.data) {
+    try {
+      photoResult = await supabase.storage.from('id-cards').download(oldPhotoPathPng)
+      photoExt = 'png'
+    } catch {
+      // ignore
+    }
+  }
 
-  if (photoData) {
-    const buffer = Buffer.from(await photoData.arrayBuffer())
-    const ext = oldPhotoPath ? 'jpg' : 'png'
-    const newPath = `photos/${newFolder}/${safeSid}.${ext}`
+  if (photoResult?.data) {
+    const buffer = Buffer.from(await photoResult.data.arrayBuffer())
+    const newPath = `photos/${newFolder}/${safeSid}.${photoExt}`
     await supabase.storage.from('id-cards').upload(newPath, buffer, {
-      contentType: ext === 'jpg' ? 'image/jpeg' : 'image/png',
+      contentType: photoExt === 'jpg' ? 'image/jpeg' : 'image/png',
       upsert: true,
     })
     const {
       data: { publicUrl },
     } = supabase.storage.from('id-cards').getPublicUrl(newPath)
-    await supabase.storage.from('id-cards').remove([oldPhotoPath, oldPhotoPathPng].filter(Boolean))
+    await supabase.storage.from('id-cards').remove([oldPhotoPathJpg, oldPhotoPathPng].filter(Boolean))
     await supabase.from('students').update({ photo_url: publicUrl }).eq('student_id', studentId)
   }
 
@@ -601,6 +606,9 @@ router.patch(
 
 // ── PUBLIC: self-correct ──
 router.patch('/:studentId/self-correct', async (req, res) => {
+  const sidErr = maxLength(req.params.studentId, 50, 'studentId')
+  if (sidErr) return res.status(400).json({ error: sidErr })
+
   const { corrections, qr_corrections, photo_issue } = req.body
   const studentId = req.params.studentId
 

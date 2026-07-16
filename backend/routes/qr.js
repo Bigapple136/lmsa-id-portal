@@ -19,6 +19,16 @@ const JSZip = require('jszip')
 const BACKEND_URL = process.env.BACKEND_URL
 const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET
 
+function escapeHtml(str) {
+  if (!str) return ''
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 function signStudentToken(studentId) {
   const payload = Buffer.from(studentId).toString('base64url')
   const sig = crypto.createHmac('sha256', QR_SIGNING_SECRET).update(payload).digest('base64url')
@@ -32,7 +42,15 @@ function verifyStudentToken(token) {
     .createHmac('sha256', QR_SIGNING_SECRET)
     .update(payload)
     .digest('base64url')
-  return sig === expected ? Buffer.from(payload, 'base64url').toString() : null
+  try {
+    const sigBuf = Buffer.from(sig, 'base64url')
+    const expectedBuf = Buffer.from(expected, 'base64url')
+    if (sigBuf.length !== expectedBuf.length) return null
+    if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) return null
+    return Buffer.from(payload, 'base64url').toString()
+  } catch {
+    return null
+  }
 }
 
 async function buildPayload(student) {
@@ -212,19 +230,20 @@ router.get('/html/:studentId', async (req, res) => {
   try {
     const qrFields = await getQRFields()
 
-    const name = student.full_name || '—'
-    const sid = student.student_id || '—'
-    const level = student.year_level || '—'
-    const position = student.position || null
-    const programme = student.programme || null
-    const bloodType = student.blood_type || null
-    const email = student.student_email || null
-    const emergName = student.emergency_contact_name || null
-    const emergPhone = student.emergency_contact_phone || null
-    const dob = student.date_of_birth || null
-    const nationality = student.nationality || null
-    const county = student.county_of_origin || null
-    const address = student.current_address || null
+    const rawName = student.full_name || '—'
+    const name = escapeHtml(rawName)
+    const sid = escapeHtml(student.student_id || '—')
+    const level = escapeHtml(student.year_level || '—')
+    const position = escapeHtml(student.position) || null
+    const programme = escapeHtml(student.programme) || null
+    const bloodType = escapeHtml(student.blood_type) || null
+    const email = escapeHtml(student.student_email) || null
+    const emergName = escapeHtml(student.emergency_contact_name) || null
+    const emergPhone = escapeHtml(student.emergency_contact_phone) || null
+    const dob = escapeHtml(student.date_of_birth) || null
+    const nationality = escapeHtml(student.nationality) || null
+    const county = escapeHtml(student.county_of_origin) || null
+    const address = escapeHtml(student.current_address) || null
 
     const showBloodType = qrFields.blood_type?.enabled && bloodType
     const showProgramme = qrFields.programme?.enabled && programme
@@ -237,7 +256,7 @@ router.get('/html/:studentId', async (req, res) => {
     const showCounty = qrFields.county_of_origin?.enabled && county
     const showAddress = qrFields.current_address?.enabled && address
 
-    const initials = name
+    const initials = rawName
       .split(' ')
       .map((w) => w[0])
       .filter(Boolean)
@@ -251,7 +270,7 @@ router.get('/html/:studentId', async (req, res) => {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta http-equiv="Content-Security-Policy" content="img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co https://lmsa-id-portal.vercel.app"/>
-<title>${name} — LMSA ID Verification</title>
+<title>${escapeHtml(student.full_name || 'Student')} — LMSA ID Verification</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -362,7 +381,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
     <div class="profile-photo-wrap">
       ${
         student.photo_url
-          ? `<img class="profile-photo" src="${student.photo_url}" alt="${name}" crossorigin="anonymous"/>`
+          ? `<img class="profile-photo" src="${escapeHtml(student.photo_url)}" alt="${name}" crossorigin="anonymous"/>`
           : `<div class="profile-photo" style="display:flex;align-items:center;justify-content:center;font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:22px;color:rgba(255,255,255,0.7);background:linear-gradient(135deg,#00653c,#1e7f51)">${initials}</div>`
       }
       <div class="photo-badge">
@@ -507,7 +526,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
         <div class="qr-ref-title">Scan this card's QR code to verify identity</div>
         <div class="qr-ref-hint">Use any QR scanner app</div>
       </div>
-      <img src="${student.qr_url}" alt="QR Code" crossorigin="anonymous" style="width:72px;height:72px"/>
+      <img src="${escapeHtml(student.qr_url)}" alt="QR Code" crossorigin="anonymous" style="width:72px;height:72px"/>
     </div>
   </div>`
       : ''

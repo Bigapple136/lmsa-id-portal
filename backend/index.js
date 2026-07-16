@@ -61,7 +61,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.length === 0) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true)
     } else {
       callback(new Error('Not allowed by CORS'))
@@ -169,7 +169,7 @@ function startServer() {
     const pid = process.pid
     console.log(`LMSA ID Portal backend running on port ${PORT} (pid ${pid})`)
     console.log(
-      `CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'all (dev mode)'}`,
+      `CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'none (set ALLOWED_ORIGINS)'}`,
     )
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
   })
