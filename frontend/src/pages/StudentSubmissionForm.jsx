@@ -176,7 +176,7 @@ export default function StudentSubmissionForm() {
 
               <div className="field-group">
                 <label className="field-label">Student ID Number</label>
-                <input className="field-input" placeholder="e.g. AMD-2024-0042"
+                <input className="field-input" placeholder="e.g. 123456"
                   value={form.student_id} onChange={e => setForm({...form, student_id: e.target.value})} required />
               </div>
 

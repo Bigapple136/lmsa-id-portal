@@ -54,7 +54,7 @@ export default function LandingPage() {
               <label className="field-label">Student ID Number</label>
               <input
                 className="field-input"
-                placeholder="e.g. AMD-2024-0042"
+                placeholder="e.g. 123456"
                 value={studentId}
                 onChange={(e) => setStudentId(e.target.value)}
                 autoComplete="off"
