@@ -2180,6 +2180,7 @@ export default function AdminDashboard() {
                           )}
                           {s.student_id && userRole === 'admin' && (
                             <button
+                              type="button"
                               style={{
                                 fontSize: '10px',
                                 color: '#CC0000',
@@ -2205,7 +2206,7 @@ export default function AdminDashboard() {
                                     alert('Failed to delete student.')
                                     return
                                   }
-                                  setStudents((prev) => prev.filter((st) => st.id !== s.id))
+                                  loadStudents()
                                 } catch {
                                   alert('Failed to delete student.')
                                 }
