@@ -1866,6 +1866,53 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
+
+            <div className="divider" />
+
+            {/* Backup */}
+            {userRole === 'admin' && (
+              <>
+                <div className="section-title">System backup</div>
+                <p className="section-desc">
+                  Download a full backup of all database records and uploaded files (photos,
+                  signatures, QR codes, templates). The backup is delivered as a ZIP file.
+                </p>
+                <button
+                  className="btn-gold"
+                  onClick={async () => {
+                    try {
+                      setDownloading((prev) => ({ ...prev, backup: true }))
+                      const res = await adminFetch('/api/backup')
+                      if (!res.ok) {
+                        const body = await res.json().catch(() => ({}))
+                        alert(body.error || 'Backup failed.')
+                        return
+                      }
+                      const blob = await res.blob()
+                      const disposition = res.headers.get('Content-Disposition') || ''
+                      const match = disposition.match(/filename="?(.+?)"?$/)
+                      const filename = match ? match[1] : 'lmsa-backup.zip'
+                      const url = URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = filename
+                      document.body.appendChild(a)
+                      a.click()
+                      a.remove()
+                      URL.revokeObjectURL(url)
+                    } catch {
+                      alert('Backup failed. Please try again.')
+                    } finally {
+                      setDownloading((prev) => ({ ...prev, backup: false }))
+                    }
+                  }}
+                  disabled={downloading.backup}
+                  style={{ fontSize: '13px', padding: '9px 18px' }}
+                >
+                  {downloading.backup ? 'Generating backup...' : '📦 Download Full Backup'}
+                </button>
+              </>
+            )}
           </div>
         )}
 
