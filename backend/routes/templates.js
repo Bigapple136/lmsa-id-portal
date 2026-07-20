@@ -2,14 +2,7 @@ const express = require('express')
 const router = express.Router()
 const multer = require('multer')
 const { supabase } = require('../db')
-const { requireAdmin } = require('../middleware/auth')
-
-function requireFullAdmin(req, res, next) {
-  if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
-  }
-  next()
-}
+const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 
 const upload = multer({
   storage: multer.memoryStorage(),

@@ -613,11 +613,13 @@ export default function AdminDashboard() {
 
   async function handleDeleteSubmission(id) {
     if (!window.confirm('Delete this submission? This cannot be undone.')) return
+    const prevSubmissions = submissions
+    setSubmissions((prev) => prev.filter((s) => s.id !== id))
     const res = await adminFetch(`/api/submissions/${id}`, { method: 'DELETE' })
     if (res.ok) {
-      setSubmissions((prev) => prev.filter((s) => s.id !== id))
       setSubmissionMsg({ ok: true, text: 'Submission deleted.' })
     } else {
+      setSubmissions(prevSubmissions)
       setSubmissionMsg({ ok: false, text: 'Failed to delete submission.' })
     }
     setTimeout(() => setSubmissionMsg(null), 3000)

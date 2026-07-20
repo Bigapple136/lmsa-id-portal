@@ -6,18 +6,11 @@ const JSZip = require('jszip')
 const path = require('path')
 const PDFDocument = require('pdfkit')
 const { supabase } = require('../db')
-const { requireAdmin } = require('../middleware/auth')
+const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { email, maxLength } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
-
-function requireFullAdmin(req, res, next) {
-  if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
-  }
-  next()
-}
 
 // Lazy-load QR generator to avoid circular dep issues
 function getQRGenerator() {
@@ -151,7 +144,7 @@ router.get('/lookup', async (req, res) => {
     .ilike('full_name', safeName)
     .maybeSingle()
   if (error) return res.status(500).json({ found: false, error: 'Lookup failed.' })
-  if (!data) return res.status(404).json({ found: false, error: 'No student found.' })
+  if (!data) return res.status(200).json({ found: false })
   const token = signStudentToken(data.student_id)
   res.json({ found: true, preview_url: `${FRONTEND_URL}/preview/${token}` })
 })
@@ -172,6 +165,12 @@ router.get('/preview/:token', async (req, res) => {
 router.get('/preview-url/:studentId', requireAdmin, async (req, res) => {
   const sidErr = maxLength(req.params.studentId, 50, 'studentId')
   if (sidErr) return res.status(400).json({ error: sidErr })
+  const { data: exists } = await supabase
+    .from('students')
+    .select('student_id')
+    .eq('student_id', req.params.studentId)
+    .maybeSingle()
+  if (!exists) return res.status(404).json({ error: 'Student not found.' })
   const token = signStudentToken(req.params.studentId)
   res.json({ url: `${FRONTEND_URL}/preview/${token}` })
 })
@@ -446,13 +445,13 @@ router.post(
     }
     if (!rows.length) return res.status(400).json({ error: 'No valid rows found.' })
 
-    const seen = new Set()
+    const seen = new Map()
     const deduped = []
     const totalProvided = rows.length
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (!seen.has(rows[i].student_id)) {
-        seen.add(rows[i].student_id)
-        deduped.unshift(rows[i])
+    for (const row of rows) {
+      if (!seen.has(row.student_id)) {
+        seen.set(row.student_id, true)
+        deduped.push(row)
       }
     }
     const duplicatesSkipped = totalProvided - deduped.length

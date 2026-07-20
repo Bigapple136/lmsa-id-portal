@@ -1,15 +1,8 @@
 const express = require('express')
 const router = express.Router()
 const { supabase } = require('../db')
-const { requireAdmin } = require('../middleware/auth')
+const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { uuid } = require('../middleware/validate')
-
-function requireFullAdmin(req, res, next) {
-  if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
-  }
-  next()
-}
 
 router.get('/', requireAdmin, async (req, res) => {
   const { data, error } = await supabase
@@ -51,13 +44,14 @@ router.post('/', requireAdmin, requireFullAdmin, async (req, res) => {
 
     if (insertError) return res.status(400).json({ error: insertError.message })
 
-    await supabase.rpc('log_admin_action', {
+    const { error: logErr } = await supabase.rpc('log_admin_action', {
       p_admin_id: userId,
       p_action: 'invited',
       p_old_role: null,
       p_new_role: newRole,
       p_performed_by: req.user.id,
     })
+    if (logErr) console.warn('[Admins] Failed to log invite:', logErr.message)
 
     res.status(201).json(data)
   } catch (err) {
@@ -107,13 +101,14 @@ router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     .eq('id', targetId)
   if (updateError) return res.status(500).json({ error: updateError.message })
 
-  await supabase.rpc('log_admin_action', {
+  const { error: logErr1 } = await supabase.rpc('log_admin_action', {
     p_admin_id: targetId,
     p_action: 'role_changed',
     p_old_role: oldRole,
     p_new_role: newRole,
     p_performed_by: req.user.id,
   })
+  if (logErr1) console.warn('[Admins] Failed to log role change:', logErr1.message)
 
   const { data: updated } = await supabase
     .from('admins')
@@ -150,13 +145,14 @@ router.delete('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
   const { error } = await supabase.from('admins').delete().eq('id', targetId)
   if (error) return res.status(500).json({ error: error.message })
 
-  await supabase.rpc('log_admin_action', {
+  const { error: logErr2 } = await supabase.rpc('log_admin_action', {
     p_admin_id: targetId,
     p_action: 'removed',
     p_old_role: targetAdmin.role,
     p_new_role: null,
     p_performed_by: req.user.id,
   })
+  if (logErr2) console.warn('[Admins] Failed to log removal:', logErr2.message)
 
   res.status(204).send()
 })

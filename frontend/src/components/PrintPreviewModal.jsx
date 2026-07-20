@@ -22,8 +22,8 @@ export default function PrintPreviewModal({ student, onClose }) {
         if (lRes.ok) {
           setCardLayout(await lRes.json())
         }
-      } catch {
-        /* use fallback */
+      } catch (err) {
+        console.warn('[PrintPreview] Failed to load card data:', err)
       }
       setReady(true)
     }

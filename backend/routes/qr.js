@@ -3,16 +3,9 @@ const router = express.Router()
 const QRCode = require('qrcode')
 const crypto = require('crypto')
 const { supabase } = require('../db')
-const { requireAdmin } = require('../middleware/auth')
+const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { maxLength } = require('../middleware/validate')
 const { getQRFields } = require('./settings')
-
-function requireFullAdmin(req, res, next) {
-  if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
-  }
-  next()
-}
 
 const JSZip = require('jszip')
 

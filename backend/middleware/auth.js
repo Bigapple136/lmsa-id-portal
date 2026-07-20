@@ -29,4 +29,11 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-module.exports = { requireAdmin }
+function requireFullAdmin(req, res, next) {
+  if (req.userRole !== 'admin') {
+    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
+  }
+  next()
+}
+
+module.exports = { requireAdmin, requireFullAdmin }

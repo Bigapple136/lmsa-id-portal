@@ -26,15 +26,19 @@ function email(value, name = 'Email') {
 }
 
 function uuid(value, name = 'ID') {
-  const re = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  const re = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   if (!re.test(value)) return `${name} is not a valid UUID.`
   return null
 }
 
 function dateString(value, name = 'Date') {
   if (!value || typeof value !== 'string') return null
-  const d = new Date(value)
-  if (isNaN(d.getTime())) return `${name} is not a valid date.`
+  const iso = /^\d{4}-\d{2}-\d{2}$/
+  if (!iso.test(value)) return `${name} must be in YYYY-MM-DD format.`
+  const [y, m, d] = value.split('-').map(Number)
+  if (m < 1 || m > 12) return `${name} has an invalid month.`
+  const daysInMonth = new Date(y, m, 0).getDate()
+  if (d < 1 || d > daysInMonth) return `${name} has an invalid day.`
   return null
 }
 

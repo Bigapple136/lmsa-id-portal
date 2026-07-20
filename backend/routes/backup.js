@@ -2,14 +2,7 @@ const express = require('express')
 const router = express.Router()
 const JSZip = require('jszip')
 const { supabase } = require('../db')
-const { requireAdmin } = require('../middleware/auth')
-
-function requireFullAdmin(req, res, next) {
-  if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
-  }
-  next()
-}
+const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 
 const TABLES = [
   'students',
@@ -32,15 +25,26 @@ router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
   const zip = new JSZip()
   const dbFolder = zip.folder('database')
 
-  // Export all tables
+  // Export all tables with pagination
   for (const table of TABLES) {
     try {
-      const { data, error } = await supabase.from(table).select('*')
-      if (error) {
-        console.warn(`[Backup] Failed to fetch table ${table}:`, error.message)
-        dbFolder.file(`${table}.json`, JSON.stringify({ error: error.message }, null, 2))
-      } else {
-        dbFolder.file(`${table}.json`, JSON.stringify(data || [], null, 2))
+      const PAGE = 1000
+      let offset = 0
+      let allRows = []
+      let hasMore = true
+      while (hasMore) {
+        const { data, error } = await supabase.from(table).select('*').range(offset, offset + PAGE - 1)
+        if (error) {
+          console.warn(`[Backup] Failed to fetch table ${table}:`, error.message)
+          dbFolder.file(`${table}.json`, JSON.stringify({ error: error.message }, null, 2))
+          break
+        }
+        allRows = allRows.concat(data || [])
+        hasMore = (data || []).length === PAGE
+        offset += PAGE
+      }
+      if (allRows.length > 0 || offset > 0) {
+        dbFolder.file(`${table}.json`, JSON.stringify(allRows, null, 2))
       }
     } catch (err) {
       console.warn(`[Backup] Exception fetching table ${table}:`, err.message)

@@ -22,6 +22,15 @@ function validateEnv() {
     console.error('[FATAL] QR_SIGNING_SECRET must be at least 32 characters long.')
     process.exit(1)
   }
+
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOWED_ORIGINS) {
+    const origins = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+    const bad = origins.filter((o) => !o.startsWith('http://') && !o.startsWith('https://'))
+    if (bad.length > 0) {
+      console.error(`[FATAL] ALLOWED_ORIGINS contains invalid URLs: ${bad.join(', ')}`)
+      process.exit(1)
+    }
+  }
 }
 
 module.exports = { validateEnv }

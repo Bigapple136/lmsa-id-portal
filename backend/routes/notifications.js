@@ -21,7 +21,7 @@ router.get('/', requireAdmin, async (req, res) => {
       if (error.message?.includes('does not exist') || error.code === '42P01') {
         return res.json({ notifications: [], total: 0, unread: 0 })
       }
-      return res.status(500).json({ error: error.message })
+      return res.status(500).json({ error: 'Failed to load notifications.' })
     }
 
     const { count } = await supabase
@@ -36,7 +36,7 @@ router.get('/', requireAdmin, async (req, res) => {
     res.json({ notifications: data || [], total: count || 0, unread: unread || 0 })
   } catch (err) {
     console.error('[Notifications] GET error:', err)
-    res.json({ notifications: [], total: 0, unread: 0 })
+    res.status(500).json({ error: 'Failed to load notifications.' })
   }
 })
 
@@ -52,17 +52,17 @@ router.patch('/read-all', requireAdmin, async (req, res) => {
       if (error.message?.includes('does not exist') || error.code === '42P01') {
         return res.json({ message: 'No notifications to mark.' })
       }
-      return res.status(500).json({ error: error.message })
+      return res.status(500).json({ error: 'Failed to mark notifications.' })
     }
     res.json({ message: 'All notifications marked as read.' })
   } catch (err) {
     console.error('[Notifications] PATCH error:', err)
-    res.json({ message: 'No notifications to mark.' })
+    res.status(500).json({ error: 'Failed to mark notifications.' })
   }
 })
 
 // Internal: create a notification (called by other routes via service key)
-router.post('/', async (req, res) => {
+router.post('/', requireAdmin, async (req, res) => {
   const { type, title, message, student_id } = req.body
 
   if (!type || !title || !message) {
@@ -79,7 +79,7 @@ router.post('/', async (req, res) => {
 
     if (error) {
       console.warn('[Notifications] INSERT error:', error.message)
-      return res.status(500).json({ error: error.message })
+      return res.status(500).json({ error: 'Failed to create notification.' })
     }
     res.status(201).json({ message: 'Notification created.' })
   } catch (err) {

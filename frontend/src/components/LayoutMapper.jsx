@@ -70,7 +70,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
     if (initialLayout) {
       setLayout((prev) => ({ ...DEFAULT_LAYOUT, ...initialLayout, ...prev }))
     }
-  }, [])
+  }, [initialLayout])
 
   // Calculate display height from template aspect ratio
   useEffect(() => {

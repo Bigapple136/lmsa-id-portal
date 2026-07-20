@@ -5,19 +5,12 @@ const path = require('path')
 const fs = require('fs')
 const { supabase } = require('../db')
 const cache = require('../cache')
-const { requireAdmin } = require('../middleware/auth')
+const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const {
   isBoolean,
   checkFieldsConfig,
   checkLayoutConfig,
 } = require('../middleware/validate')
-
-function requireFullAdmin(req, res, next) {
-  if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
-  }
-  next()
-}
 
 const DEFAULT_FIELDS = {
   full_name: { label: 'Full Name', enabled: true, locked: false },
@@ -174,7 +167,9 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
 router.get('/download-excel', requireAdmin, async (req, res) => {
   const templatePath = path.join(__dirname, '..', 'templates', 'student_form_template.xlsx')
 
-  if (!fs.existsSync(templatePath)) {
+  try {
+    await fs.promises.access(templatePath)
+  } catch {
     return res
       .status(500)
       .json({ error: 'Template file not found. Run: node scripts/generate_template.js' })
@@ -261,12 +256,17 @@ router.put('/submission-form', requireAdmin, requireFullAdmin, async (req, res) 
 })
 
 async function getQRFields() {
+  const cached = cache.get('settings:qr_fields')
+  if (cached) return cached
+
   const { data } = await supabase
     .from('portal_settings')
     .select('value')
     .eq('key', 'qr_fields')
     .maybeSingle()
-  return data?.value || DEFAULT_QR_FIELDS
+  const result = data?.value || DEFAULT_QR_FIELDS
+  cache.set('settings:qr_fields', result, 300000)
+  return result
 }
 
 module.exports = router
