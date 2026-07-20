@@ -5,20 +5,44 @@
 import { supabase } from './supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
+const REQUEST_TIMEOUT = 30000
+
+function withTimeout(signal, ms) {
+  const controller = new AbortController()
+  const id = setTimeout(() => controller.abort(), ms)
+  if (signal) signal.addEventListener('abort', () => controller.abort())
+  return { signal: controller.signal, cleanup: () => clearTimeout(id) }
+}
 
 async function getAuthHeaders() {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  if (!session) return {}
-  return { Authorization: `Bearer ${session.access_token}` }
+  try {
+    const { data } = await supabase.auth.getSession()
+    const session = data?.session
+    if (!session) return {}
+    return { Authorization: `Bearer ${session.access_token}` }
+  } catch {
+    return {}
+  }
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const { signal: parentSignal, ...rest } = options
+  const { signal, cleanup } = withTimeout(parentSignal, REQUEST_TIMEOUT)
+  try {
+    const res = await fetch(url, { ...rest, signal })
+    cleanup()
+    return res
+  } catch (err) {
+    cleanup()
+    if (err.name === 'AbortError') throw new Error('Request timed out')
+    throw err
+  }
 }
 
 // Public fetch — no auth header (student-facing routes)
 export async function apiFetch(path, options = {}) {
   const url = `${API_BASE}${path}`
-  const res = await fetch(url, options)
-  return res
+  return fetchWithTimeout(url, options)
 }
 
 // Public fetch with JSON body
@@ -34,14 +58,13 @@ export async function apiJson(path, method, body) {
 export async function adminFetch(path, options = {}) {
   const authHeaders = await getAuthHeaders()
   const url = `${API_BASE}${path}`
-  const res = await fetch(url, {
+  return fetchWithTimeout(url, {
     ...options,
     headers: {
       ...(options.headers || {}),
       ...authHeaders,
     },
   })
-  return res
 }
 
 // Admin fetch with JSON body

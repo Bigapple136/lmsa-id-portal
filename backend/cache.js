@@ -1,8 +1,10 @@
 class MemoryCache {
-  constructor(defaultTTL = 300000) {
+  constructor(defaultTTL = 300000, maxEntries = 1000) {
     this.store = new Map()
     this.defaultTTL = defaultTTL
-    this._cleanupInterval = setInterval(() => this.cleanup(), 5 * 60 * 1000)
+    this.maxEntries = maxEntries
+    const interval = setInterval(() => this.cleanup(), 5 * 60 * 1000)
+    interval.unref()
   }
 
   get(key) {
@@ -16,7 +18,12 @@ class MemoryCache {
   }
 
   set(key, value, ttlMs) {
+    this.store.delete(key)
     this.store.set(key, { value, expiry: Date.now() + (ttlMs || this.defaultTTL) })
+    if (this.store.size > this.maxEntries) {
+      const oldest = this.store.keys().next().value
+      this.store.delete(oldest)
+    }
   }
 
   cleanup() {
@@ -27,11 +34,6 @@ class MemoryCache {
   }
 
   clear() {
-    this.store.clear()
-  }
-
-  destroy() {
-    clearInterval(this._cleanupInterval)
     this.store.clear()
   }
 }

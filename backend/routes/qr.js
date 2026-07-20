@@ -569,17 +569,24 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
   const zip = new JSZip()
   const root = zip.folder('qr-codes')
 
-  for (const s of students) {
-    try {
-      const resp = await fetch(s.qr_url)
-      if (!resp.ok) continue
-      const buffer = Buffer.from(await resp.arrayBuffer())
-      const yearFolder = (s.year_level || 'unknown').toLowerCase().replace(/\s+/g, '-')
-      root.folder(yearFolder).file(`${s.student_id}.png`, buffer)
-    } catch (err) {
-      console.warn('[QR Export] Failed to fetch', s.student_id, err.message)
+  const CONCURRENCY = 10
+  let idx = 0
+  async function downloadWorker() {
+    while (idx < students.length) {
+      const i = idx++
+      const s = students[i]
+      try {
+        const resp = await fetch(s.qr_url)
+        if (!resp.ok) continue
+        const buffer = Buffer.from(await resp.arrayBuffer())
+        const yearFolder = (s.year_level || 'unknown').toLowerCase().replace(/\s+/g, '-')
+        root.folder(yearFolder).file(`${s.student_id}.png`, buffer)
+      } catch (err) {
+        console.warn('[QR Export] Failed to fetch', s.student_id, err.message)
+      }
     }
   }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, students.length) }, downloadWorker))
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
   res.setHeader('Content-Type', 'application/zip')

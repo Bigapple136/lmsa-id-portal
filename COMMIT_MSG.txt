@@ -1,0 +1,15 @@
+fix: fix critical and high severity bugs from comprehensive sweep
+
+- Fix LIKE wildcard injection in /lookup endpoint (escape % and _)
+- Add signed token auth to self-correct endpoint (prevent IDOR)
+- Fix cluster restart tracking: use worker.id not PID (was broken)
+- Fix shutdown race condition: clearTimeout on clean exit
+- Add 30s request timeout via AbortController to all API fetches
+- Fix AdminDashboard race: await authMe role before loadAll
+- Fix StudentSubmissionForm: replace button with span inside label
+- Fix CardCanvas: use useMemo instead of JSON.stringify in deps
+- Fix SessionTimeout: await signOut() before redirect
+- Add Supabase env var validation in supabase.js
+- Add cache max entry limit (1000) with LRU eviction
+- Parallelize QR export with concurrency=10 instead of sequential
+- Fix admin edit: only reset status to pending when identity fields change

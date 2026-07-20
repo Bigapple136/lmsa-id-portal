@@ -17,16 +17,17 @@ if (cluster.isPrimary) {
 
   cluster.on('exit', (worker, code, signal) => {
     const now = Date.now()
-    const pid = worker.process.pid
-    console.log(`[CLUSTER] Worker ${pid} died (code: ${code}, signal: ${signal})`)
+    const wid = worker.id
+    console.log(`[CLUSTER] Worker ${wid} (pid ${worker.process.pid}) died (code: ${code}, signal: ${signal})`)
 
-    if (!restarts.has(pid)) restarts.set(pid, [])
-    const times = restarts.get(pid).filter((t) => now - t < RESTART_WINDOW)
+    if (!restarts.has(wid)) restarts.set(wid, [])
+    const times = restarts.get(wid).filter((t) => now - t < RESTART_WINDOW)
     times.push(now)
-    restarts.set(pid, times)
+    restarts.set(wid, times)
 
     if (times.length >= MAX_RESTARTS) {
-      console.error(`[CLUSTER] Worker ${pid} restarted ${MAX_RESTARTS} times in ${RESTART_WINDOW / 1000}s — giving up`)
+      console.error(`[CLUSTER] Worker ${wid} restarted ${MAX_RESTARTS} times in ${RESTART_WINDOW / 1000}s — giving up`)
+      restarts.delete(wid)
       return
     }
 

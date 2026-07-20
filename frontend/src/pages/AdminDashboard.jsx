@@ -191,7 +191,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!session) return
     const init = async () => {
-      await authMe().then((res) => res.ok && res.json().then((d) => setUserRole(d.role || 'admin')))
+      const res = await authMe()
+      if (res.ok) {
+        const d = await res.json()
+        setUserRole(d.role || 'admin')
+      }
       await loadAll()
     }
     init()

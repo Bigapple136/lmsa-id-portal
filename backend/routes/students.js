@@ -142,11 +142,13 @@ router.get('/lookup', async (req, res) => {
     return res.status(400).json({ found: false, error: 'Missing fields.' })
   if (!validateTextLength(student_id, 50) || !validateTextLength(full_name))
     return res.status(400).json({ found: false, error: 'Input too long.' })
+  const safeId = student_id.trim().replace(/[%_]/g, (c) => `\\${c}`)
+  const safeName = full_name.trim().replace(/[%_]/g, (c) => `\\${c}`)
   const { data, error } = await supabase
     .from('students')
     .select('student_id')
-    .ilike('student_id', student_id.trim())
-    .ilike('full_name', full_name.trim())
+    .ilike('student_id', safeId)
+    .ilike('full_name', safeName)
     .maybeSingle()
   if (error) return res.status(500).json({ found: false, error: 'Lookup failed.' })
   if (!data) return res.status(404).json({ found: false, error: 'No student found.' })
@@ -530,7 +532,7 @@ router.patch(
     const newYearLevel = year_level || oldYearLevel
     const yearLevelChanged = year_level && year_level !== oldYearLevel
 
-    const updates = { status: 'pending' }
+    const updates = {}
     if (full_name) updates.full_name = full_name.trim()
     if (year_level) updates.year_level = year_level
     if (position !== undefined) updates.position = position?.trim() || null
@@ -545,6 +547,13 @@ router.patch(
     if (nationality !== undefined) updates.nationality = nationality?.trim() || null
     if (county_of_origin !== undefined) updates.county_of_origin = county_of_origin?.trim() || null
     if (current_address !== undefined) updates.current_address = current_address?.trim() || null
+
+    const identityFields = ['full_name', 'year_level', 'photo_url', 'signature_url']
+    const identityChanged = Object.keys(updates).some((k) => identityFields.includes(k))
+    if (req.files?.photo?.[0]) {
+      identityChanged = true
+    }
+    if (identityChanged) updates.status = 'pending'
 
     if (req.files?.photo?.[0]) {
       try {
@@ -608,6 +617,13 @@ router.patch(
 router.patch('/:studentId/self-correct', async (req, res) => {
   const sidErr = maxLength(req.params.studentId, 50, 'studentId')
   if (sidErr) return res.status(400).json({ error: sidErr })
+
+  const token = req.query.token || req.body?.token
+  if (!token) return res.status(401).json({ error: 'Token required.' })
+  const tokenStudentId = verifyStudentToken(token)
+  if (!tokenStudentId || tokenStudentId !== req.params.studentId) {
+    return res.status(403).json({ error: 'Invalid or expired token.' })
+  }
 
   const { corrections, qr_corrections, photo_issue } = req.body
   const studentId = req.params.studentId

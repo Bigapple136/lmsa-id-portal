@@ -23,8 +23,12 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
     setShowWarning(false)
 
     warningTimerRef.current = setTimeout(() => setShowWarning(true), timeout - WARNING_BEFORE)
-    timerRef.current = setTimeout(() => {
-      supabase.auth.signOut()
+    timerRef.current = setTimeout(async () => {
+      try {
+        await supabase.auth.signOut()
+      } catch {
+        // sign-out failed — still redirect
+      }
       window.location.href = '/admin'
     }, timeout)
   }, [timeout, clearTimers])
@@ -54,13 +58,17 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
     }
   }, [startTimers, clearTimers, resetTimer])
 
-  function handleStayLoggedIn() {
+  async function handleStayLoggedIn() {
     resetTimer()
   }
 
-  function handleLogoutNow() {
+  async function handleLogoutNow() {
     clearTimers()
-    supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      // sign-out failed — still redirect
+    }
     window.location.href = '/admin'
   }
 

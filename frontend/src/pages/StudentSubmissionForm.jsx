@@ -377,7 +377,7 @@ export default function StudentSubmissionForm() {
                     onChange={e => setAgreed(e.target.checked)}
                     style={{ marginTop:'3px', accentColor:'var(--gold)', cursor:'pointer', flexShrink:0 }}/>
                   <label htmlFor="agree-tos" style={{ fontSize:'12px', color:'var(--muted)', lineHeight:1.5, cursor:'pointer' }}>
-                    I agree to the <button onClick={() => window.open('/terms', '_blank')} style={{ background:'none', border:'none', color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px', padding:0 }}>Terms of Service</button> and <button onClick={() => window.open('/privacy', '_blank')} style={{ background:'none', border:'none', color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px', padding:0 }}>Privacy Policy</button>
+                    I agree to the <span onClick={(e) => { e.preventDefault(); window.open('/terms', '_blank') }} style={{ color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px' }}>Terms of Service</span> and <span onClick={(e) => { e.preventDefault(); window.open('/privacy', '_blank') }} style={{ color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px' }}>Privacy Policy</span>
                   </label>
                 </div>
                 <div style={{ display:'flex', gap:'10px' }}>

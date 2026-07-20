@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 
 function loadImg(src) {
   return new Promise((resolve, reject) => {
@@ -84,7 +84,7 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
   const [failed, setFailed] = useState(false)
 
   // Use calibrated layout as fallback for any missing field
-  const resolvedLayout = { ...CALIBRATED_LAYOUT, ...(layout || {}) }
+  const resolvedLayout = useMemo(() => ({ ...CALIBRATED_LAYOUT, ...(layout || {}) }), [layout])
 
   useEffect(() => {
     if (!templateUrl || !student) return
@@ -202,7 +202,7 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
     return () => {
       cancelled = true
     }
-  }, [student, templateUrl, JSON.stringify(resolvedLayout)])
+  }, [student, templateUrl, resolvedLayout])
 
   if (failed) return null // Parent will show IDCardDisplay fallback
 

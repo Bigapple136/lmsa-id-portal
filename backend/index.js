@@ -178,14 +178,16 @@ function startServer() {
 
   function shutdown(signal) {
     console.log(`\n[${signal}] Shutting down gracefully...`)
-    server.close(() => {
-      console.log('HTTP server closed.')
-      process.exit(0)
-    })
-    setTimeout(() => {
+    const forceExit = setTimeout(() => {
       console.error('Forced exit after timeout.')
       process.exit(1)
-    }, 10000).unref()
+    }, 10000)
+    forceExit.unref()
+    server.close(() => {
+      console.log('HTTP server closed.')
+      clearTimeout(forceExit)
+      process.exit(0)
+    })
   }
 
   process.on('SIGTERM', () => shutdown('SIGTERM'))

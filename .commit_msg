@@ -1,1 +1,0 @@
-fix: remove frame-ancestors from meta CSP (only works in HTTP headers)

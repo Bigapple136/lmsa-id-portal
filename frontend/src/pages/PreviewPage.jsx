@@ -164,7 +164,7 @@ export default function PreviewPage() {
 
     try {
       const res = await apiFetch(
-        `/api/students/${encodeURIComponent(student.student_id)}/self-correct`,
+        `/api/students/${encodeURIComponent(student.student_id)}/self-correct?token=${encodeURIComponent(token)}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -187,7 +187,7 @@ export default function PreviewPage() {
     setSubmitting(true)
     try {
       const res = await apiFetch(
-        `/api/students/${encodeURIComponent(student.student_id)}/self-correct`,
+        `/api/students/${encodeURIComponent(student.student_id)}/self-correct?token=${encodeURIComponent(token)}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
