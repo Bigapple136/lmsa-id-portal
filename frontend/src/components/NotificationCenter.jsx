@@ -26,22 +26,26 @@ export default function NotificationCenter() {
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [apiError, setApiError] = useState(false)
   const panelRef = useRef(null)
   const bellRef = useRef(null)
 
   const fetchNotifications = useCallback(async (off = 0, append = false) => {
     setLoading(true)
+    setApiError(false)
     try {
       const res = await adminFetch(`/api/notifications?limit=50&offset=${off}`)
       if (res.ok) {
         const data = await res.json()
         setNotifications((prev) => (append ? [...prev, ...data.notifications] : data.notifications))
-        setTotal(data.total)
-        setUnread(data.unread)
+        setTotal(data.total || 0)
+        setUnread(data.unread || 0)
         setOffset(off + 50)
+      } else {
+        setApiError(true)
       }
     } catch {
-      // silent
+      setApiError(true)
     }
     setLoading(false)
   }, [])
@@ -50,23 +54,42 @@ export default function NotificationCenter() {
     fetchNotifications()
   }, [fetchNotifications])
 
-  // Realtime subscription for new notifications
+  // Polling fallback — refresh every 30s to catch events even without Realtime
   useEffect(() => {
-    const channel = supabase
-      .channel('notifications-realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications' },
-        (payload) => {
-          setNotifications((prev) => [payload.new, ...prev])
-          setUnread((prev) => prev + 1)
-          setTotal((prev) => prev + 1)
-        },
-      )
-      .subscribe()
+    const interval = setInterval(() => {
+      fetchNotifications()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
+
+  // Realtime subscription — wrapped in try/catch so CSP blocks don't crash the app
+  useEffect(() => {
+    let channel
+    try {
+      channel = supabase
+        .channel('notifications-realtime')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications' },
+          (payload) => {
+            setNotifications((prev) => [payload.new, ...prev])
+            setUnread((prev) => prev + 1)
+            setTotal((prev) => prev + 1)
+          },
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('[NotificationCenter] Realtime unavailable, using polling')
+          }
+        })
+    } catch {
+      console.warn('[NotificationCenter] Realtime subscription failed, using polling')
+    }
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channel) {
+        try { supabase.removeChannel(channel) } catch {}
+      }
     }
   }, [])
 
@@ -127,7 +150,12 @@ export default function NotificationCenter() {
           </div>
 
           <div className="nc-list">
-            {notifications.length === 0 && !loading && (
+            {apiError && (
+              <div className="nc-empty" style={{ color: 'var(--error-text)' }}>
+                Notifications unavailable. Please try again later.
+              </div>
+            )}
+            {!apiError && notifications.length === 0 && !loading && (
               <div className="nc-empty">No notifications yet</div>
             )}
             {notifications.map((n) => (

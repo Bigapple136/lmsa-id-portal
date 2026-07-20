@@ -1,0 +1,1 @@
+fix: make NotificationCenter resilient to CSP WebSocket blocks and harden notifications API
