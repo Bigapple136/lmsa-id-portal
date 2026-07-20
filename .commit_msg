@@ -1,1 +1,1 @@
-fix: make NotificationCenter resilient to CSP WebSocket blocks and harden notifications API
+fix: remove frame-ancestors from meta CSP (only works in HTTP headers)
