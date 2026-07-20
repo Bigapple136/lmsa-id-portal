@@ -48,7 +48,7 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
         fontSrc: ["'self'"],
-        connectSrc: ["'self'", 'https://*.supabase.co'],
+        connectSrc: ["'self'", 'https://*.supabase.co', 'wss://*.supabase.co'],
         frameAncestors: ["'none'"],
         formAction: ["'self'"],
       },

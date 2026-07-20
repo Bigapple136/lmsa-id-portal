@@ -27,7 +27,7 @@ router.get('/', requireAdmin, async (req, res) => {
     .select('*', { count: 'exact', head: true })
     .eq('is_read', false)
 
-  res.json({ notifications: data, total: count, unread })
+  res.json({ notifications: data || [], total: count || 0, unread: unread || 0 })
 })
 
 // Admin: mark all as read
