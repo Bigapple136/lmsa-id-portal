@@ -5,6 +5,7 @@ import CardCanvas from '../components/CardCanvas'
 import PrintPreviewModal from '../components/PrintPreviewModal'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
+import { useToast } from '../components/Toast'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
@@ -31,6 +32,7 @@ const ISSUE_TYPES = [
 export default function PreviewPage() {
   const { token } = useParams()
   const navigate = useNavigate()
+  const toast = useToast()
   const [student, setStudent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -110,7 +112,7 @@ export default function PreviewPage() {
       })
       setConfirmed(true)
     } catch {
-      alert('Something went wrong. Please try again.')
+      toast.error('Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -175,7 +177,7 @@ export default function PreviewPage() {
       if (hasPhoto) setPhotoNoticed(true)
       setStep('done')
     } catch {
-      alert('Something went wrong. Please try again.')
+      toast.error('Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -198,7 +200,7 @@ export default function PreviewPage() {
       setPhotoNoticed(true)
       setStep('done')
     } catch {
-      alert('Something went wrong. Please try again.')
+      toast.error('Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }

@@ -17,6 +17,7 @@ const qrRouter = require('./routes/qr')
 const adminsRouter = require('./routes/admins')
 const submissionsRouter = require('./routes/submissions')
 const backupRouter = require('./routes/backup')
+const notificationsRouter = require('./routes/notifications')
 
 const app = express()
 
@@ -136,6 +137,7 @@ app.use('/api/qr', qrRouter)
 app.use('/api/admins', adminsRouter)
 app.use('/api/submissions', submissionsRouter)
 app.use('/api/backup', backupRouter)
+app.use('/api/notifications', notificationsRouter)
 
 app.get('/api/auth/me', requireAdmin, async (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, role: req.userRole })

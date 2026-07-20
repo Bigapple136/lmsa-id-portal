@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { adminFetch } from '../lib/api'
 import SessionTimeout from '../components/SessionTimeout'
+import { useToast } from '../components/Toast'
+import NotificationCenter from '../components/NotificationCenter'
 
 export default function AdminManagementPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -82,12 +85,12 @@ export default function AdminManagementPage() {
       const res = await adminFetch(`/api/admins/${id}`, { method: 'DELETE' })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error || 'Failed to remove admin.')
+        toast.error(data.error || 'Failed to remove admin.')
         return
       }
       setAdmins((prev) => prev.filter((a) => a.id !== id))
     } catch {
-      alert('Failed to remove admin.')
+      toast.error('Failed to remove admin.')
     }
   }
 
@@ -100,12 +103,12 @@ export default function AdminManagementPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error || 'Failed to update role.')
+        toast.error(data.error || 'Failed to update role.')
         return
       }
       setAdmins((prev) => prev.map((a) => (a.id === id ? { ...a, role: newRole } : a)))
     } catch {
-      alert('Failed to update role.')
+      toast.error('Failed to update role.')
     }
   }
 
@@ -129,9 +132,12 @@ export default function AdminManagementPage() {
           </button>
           <div className="topbar-title">Manage Admins</div>
         </div>
-        <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
-          Sign out
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <NotificationCenter />
+          <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="admin-body">

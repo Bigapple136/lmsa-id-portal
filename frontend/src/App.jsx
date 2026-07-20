@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import ErrorBoundary from './components/ErrorBoundary'
+import { ToastProvider } from './components/Toast'
 import LandingPage from './pages/LandingPage'
 import PreviewPage from './pages/PreviewPage'
 import AdminDashboard from './pages/AdminDashboard'
@@ -56,7 +57,8 @@ function NotFoundPage() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/preview/:token" element={<PreviewPage />} />
@@ -91,6 +93,7 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
     </ErrorBoundary>
   )
 }

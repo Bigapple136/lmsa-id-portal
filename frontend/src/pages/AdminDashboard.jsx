@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
+import { useToast } from '../components/Toast'
+import NotificationCenter from '../components/NotificationCenter'
 
 import SessionTimeout from '../components/SessionTimeout'
 
@@ -34,6 +36,7 @@ const FIELD_META = {
 }
 
 export default function AdminDashboard() {
+  const toast = useToast()
   const [session, setSession] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [email, setEmail] = useState('')
@@ -357,7 +360,7 @@ export default function AdminDashboard() {
       )
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        alert(data.error || 'Download failed. Please try again.')
+        toast.error(data.error || 'Download failed. Please try again.')
         return
       }
       const blob = await res.blob()
@@ -370,7 +373,7 @@ export default function AdminDashboard() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch {
-      alert('Download failed. Please check your connection.')
+      toast.error('Download failed. Please check your connection.')
     } finally {
       setDownloading((prev) => ({ ...prev, [endpoint]: false }))
     }
@@ -952,9 +955,12 @@ export default function AdminDashboard() {
             GoldWay Admin Dashboard{userRole === 'support_admin' && ' · Support Admin'}
           </div>
         </div>
-        <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
-          Sign out
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <NotificationCenter />
+          <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </button>
+        </div>
       </div>
 
       <div className="admin-tabs">
@@ -1885,7 +1891,7 @@ export default function AdminDashboard() {
                       const res = await adminFetch('/api/backup')
                       if (!res.ok) {
                         const body = await res.json().catch(() => ({}))
-                        alert(body.error || 'Backup failed.')
+                        toast.error(body.error || 'Backup failed.')
                         return
                       }
                       const blob = await res.blob()
@@ -1901,7 +1907,7 @@ export default function AdminDashboard() {
                       a.remove()
                       URL.revokeObjectURL(url)
                     } catch {
-                      alert('Backup failed. Please try again.')
+                      toast.error('Backup failed. Please try again.')
                     } finally {
                       setDownloading((prev) => ({ ...prev, backup: false }))
                     }
@@ -2257,12 +2263,12 @@ export default function AdminDashboard() {
                                     { method: 'DELETE' },
                                   )
                                   if (!res.ok) {
-                                    alert('Failed to delete student.')
+                                    toast.error('Failed to delete student.')
                                     return
                                   }
                                   loadStudents()
                                 } catch {
-                                  alert('Failed to delete student.')
+                                  toast.error('Failed to delete student.')
                                 }
                               }}
                             >

@@ -108,6 +108,15 @@ router.post('/', async (req, res) => {
     .single()
 
   if (error) return res.status(400).json({ error: error.message })
+
+  // Emit notification for admins
+  supabase.from('notifications').insert({
+    type: 'submission',
+    title: 'New submission',
+    message: `${full_name.trim()} (${student_id.trim()}) submitted their details`,
+    student_id: student_id.trim(),
+  }).then(() => {}).catch(() => {})
+
   res.status(201).json({ id: data.id, message: 'Submission received. Awaiting admin review.' })
 })
 

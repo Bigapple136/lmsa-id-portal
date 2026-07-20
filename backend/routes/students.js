@@ -707,6 +707,23 @@ router.patch('/:studentId/self-correct', async (req, res) => {
     }
   }
 
+  // Emit notification for admins
+  if (photo_issue) {
+    supabase.from('notifications').insert({
+      type: 'photo_issue',
+      title: 'Photo issue',
+      message: `${studentId} reported an incorrect photo`,
+      student_id: studentId,
+    }).then(() => {}).catch(() => {})
+  } else if (notes.length) {
+    supabase.from('notifications').insert({
+      type: 'self_correction',
+      title: 'Detail correction',
+      message: `${studentId} requested corrections to their details`,
+      student_id: studentId,
+    }).then(() => {}).catch(() => {})
+  }
+
   const { data, error } = await supabase
     .from('students')
     .select('*')
