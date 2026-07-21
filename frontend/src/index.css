@@ -871,7 +871,18 @@ body {
 .navbar-login:hover { background: var(--navy-mid); color: var(--gold-light); }
 
 .navbar-hamburger { display: none; flex-direction: column; gap: 4px; background: none; border: none; cursor: pointer; padding: 4px; }
-.ham-line { display: block; width: 20px; height: 1.5px; background: #8899AA; border-radius: 2px; }
+.ham-line {
+  display: block;
+  width: 20px;
+  height: 1.5px;
+  background: #8899AA;
+  border-radius: 2px;
+  transition: transform 0.22s ease, opacity 0.18s ease;
+  transform-origin: center;
+}
+.navbar-hamburger.is-open .ham-line:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+.navbar-hamburger.is-open .ham-line:nth-child(2) { opacity: 0; transform: scaleX(0); }
+.navbar-hamburger.is-open .ham-line:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
 
 .navbar-mobile-menu { display: none; flex-direction: column; gap: 4px; padding: 10px 20px 14px; background: var(--navy); border-top: 0.5px solid var(--navy-mid); }
 .navbar-mobile-link { padding: 10px 12px; background: transparent; border: none; color: #8899AA; font-size: 14px; cursor: pointer; text-align: left; border-radius: var(--radius); }
@@ -1491,6 +1502,37 @@ a.about-contact-item:hover .about-contact-value { text-decoration: underline; }
 .legal-footer-line a {
   color: var(--gold);
   text-decoration: underline;
+}
+
+/* ── Focus-visible accessibility ── */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── Landing page emblem ── */
+.landing-emblem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: rgba(201, 168, 76, 0.1);
+  border: 1.5px solid rgba(201, 168, 76, 0.4);
+  border-radius: 14px;
+  margin: 0 auto 14px;
+}
+
+.landing-accent-line {
+  width: 36px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #C9A84C, transparent);
+  border-radius: 1px;
+  margin: 12px auto 0;
 }
 
 /* ── Footer ── */

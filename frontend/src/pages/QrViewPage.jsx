@@ -58,7 +58,8 @@ export default function QrViewPage() {
       </div>
     )
 
-  const VERIFY_URL = `${import.meta.env.VITE_API_URL}/api/qr/html/${encodeURIComponent(studentId)}`
+  const apiBase = import.meta.env.VITE_API_URL || ''
+  const VERIFY_URL = `${apiBase}/api/qr/html/${encodeURIComponent(studentId)}`
 
   const detailRows = [
     { icon: '\u{1F464}', label: 'Full Name', value: student.full_name, highlight: true },

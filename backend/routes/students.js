@@ -729,14 +729,14 @@ router.patch('/:studentId/self-correct', async (req, res) => {
       title: 'Photo issue',
       message: `${studentId} reported an incorrect photo`,
       student_id: studentId,
-    }).then(() => {}).catch(() => {})
+    }).then(() => {}).catch((err) => console.warn('[Notification] photo_issue insert failed:', err?.message))
   } else if (notes.length) {
     supabase.from('notifications').insert({
       type: 'self_correction',
       title: 'Detail correction',
       message: `${studentId} requested corrections to their details`,
       student_id: studentId,
-    }).then(() => {}).catch(() => {})
+    }).then(() => {}).catch((err) => console.warn('[Notification] self_correction insert failed:', err?.message))
   }
 
   const { data, error } = await supabase

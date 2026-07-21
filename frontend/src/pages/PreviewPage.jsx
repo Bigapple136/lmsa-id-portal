@@ -105,11 +105,12 @@ export default function PreviewPage() {
   async function handleConfirm() {
     setSubmitting(true)
     try {
-      await apiFetch('/api/confirmations', {
+      const res = await apiFetch('/api/confirmations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ student_id: student.student_id, action: 'confirmed' }),
       })
+      if (!res.ok) throw new Error('Confirmation failed')
       setConfirmed(true)
     } catch {
       toast.error('Something went wrong. Please try again.')
@@ -377,7 +378,7 @@ export default function PreviewPage() {
                 ) : (
                   <div className="btn-row">
                     <button className="btn-gold" onClick={handleConfirm} disabled={submitting}>
-                      {submitting ? '...' : 'Confirm — all correct'}
+                      {submitting ? 'Confirming...' : 'Confirm — all correct'}
                     </button>
                     <button className="btn-outline" onClick={() => setStep('select')}>
                       Report an issue
@@ -726,7 +727,7 @@ export default function PreviewPage() {
                       disabled={submitting}
                       style={{ width: '100%' }}
                     >
-                      {submitting ? '...' : 'Confirm — now looks correct'}
+                      {submitting ? 'Confirming...' : 'Confirm — now looks correct'}
                     </button>
                   </div>
                 )}

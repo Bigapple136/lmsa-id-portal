@@ -49,13 +49,14 @@ export default function Navbar({ showLogin = true }) {
 
         {/* Mobile hamburger */}
         <button
-          className="navbar-hamburger"
+          className={`navbar-hamburger${menuOpen ? ' is-open' : ''}`}
           onClick={() => setMenuOpen((o) => !o)}
           aria-label="Toggle menu"
+          aria-expanded={menuOpen}
         >
-          <span className={`ham-line ${menuOpen ? 'open' : ''}`} />
-          <span className={`ham-line ${menuOpen ? 'open' : ''}`} />
-          <span className={`ham-line ${menuOpen ? 'open' : ''}`} />
+          <span className="ham-line" />
+          <span className="ham-line" />
+          <span className="ham-line" />
         </button>
       </div>
 

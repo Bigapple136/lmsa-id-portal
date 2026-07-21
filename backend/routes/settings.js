@@ -1,8 +1,6 @@
 const express = require('express')
 const router = express.Router()
 const JSZip = require('jszip')
-const path = require('path')
-const fs = require('fs')
 const { supabase } = require('../db')
 const cache = require('../cache')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')

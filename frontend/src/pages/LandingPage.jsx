@@ -44,9 +44,16 @@ export default function LandingPage() {
       <div className="page-center">
         <div className="landing-card">
           <div className="landing-header">
+            <div className="landing-emblem">
+              <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
+                <path d="M20 4l16 10v12L20 36 4 26V14L20 4z" stroke="#C9A84C" strokeWidth="1.8" fill="none" />
+                <text x="20" y="24" textAnchor="middle" fill="#C9A84C" fontSize="10" fontWeight="900" fontFamily="serif">LM</text>
+              </svg>
+            </div>
             <p className="landing-subtitle">Liberia Medical Students Association</p>
             <h1 className="landing-title">ID Card Verification Portal</h1>
             <p className="landing-desc">A.M. Dogliotti College of Medicine</p>
+            <div className="landing-accent-line" />
           </div>
 
           <form className="landing-form" onSubmit={handleSearch}>

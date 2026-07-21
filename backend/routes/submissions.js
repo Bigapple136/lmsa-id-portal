@@ -115,7 +115,7 @@ router.post('/', async (req, res) => {
     title: 'New submission',
     message: `${full_name.trim()} (${student_id.trim()}) submitted their details`,
     student_id: student_id.trim(),
-  }).then(() => {}).catch(() => {})
+  }).then(() => {}).catch((err) => console.warn('[Notification] submission insert failed:', err?.message))
 
   res.status(201).json({ id: data.id, message: 'Submission received. Awaiting admin review.' })
 })

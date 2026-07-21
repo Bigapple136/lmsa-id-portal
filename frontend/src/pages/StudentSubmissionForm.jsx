@@ -69,19 +69,22 @@ export default function StudentSubmissionForm() {
   async function doSubmit() {
     setConfirming(false)
     setSubmitting(true)
-
-    const res = await apiFetch('/api/submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-    const data = await res.json()
-    setSubmitting(false)
-
-    if (res.ok) {
-      setSubmitted(true)
-    } else {
-      setError(data.error || 'Submission failed. Please try again.')
+    try {
+      const res = await apiFetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSubmitted(true)
+      } else {
+        setError(data.error || 'Submission failed. Please try again.')
+      }
+    } catch {
+      setError('Something went wrong. Please check your connection and try again.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
