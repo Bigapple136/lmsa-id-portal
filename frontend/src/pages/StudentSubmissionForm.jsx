@@ -164,12 +164,12 @@ export default function StudentSubmissionForm() {
     showProgramme && form.programme && { label: 'Programme', value: form.programme },
     showBloodType && form.blood_type && { label: 'Blood Type', value: form.blood_type },
     showStudentEmail && form.student_email && { label: 'Email', value: form.student_email },
-    showEmergencyContactName && form.emergency_contact_name && { label: 'Emergency Contact', value: form.emergency_contact_name },
-    showEmergencyContactPhone && form.emergency_contact_phone && { label: 'Emergency Phone', value: form.emergency_contact_phone },
     showDateOfBirth && form.date_of_birth && { label: 'Date of Birth', value: form.date_of_birth },
     showNationality && form.nationality && { label: 'Nationality', value: form.nationality },
     showCountyOfOrigin && form.county_of_origin && { label: 'County of Origin', value: form.county_of_origin },
     showCurrentAddress && form.current_address && { label: 'Address', value: form.current_address },
+    showEmergencyContactName && form.emergency_contact_name && { label: 'Emergency Contact', value: form.emergency_contact_name },
+    showEmergencyContactPhone && form.emergency_contact_phone && { label: 'Emergency Phone', value: form.emergency_contact_phone },
   ].filter(Boolean)
 
   return (
@@ -276,24 +276,10 @@ export default function StudentSubmissionForm() {
                 <div className="form-section-header">
                   <div>
                     <h2 className="form-section-title">Additional Information</h2>
-                    <p className="form-section-sub">Emergency contact and personal details.</p>
+                    <p className="form-section-sub">Contact and personal details.</p>
                   </div>
                 </div>
                 <div className="form-grid">
-                  {showEmergencyContactName && (
-                    <div className="field-group">
-                      <label className="field-label">Emergency Contact Name <span className="required">*</span></label>
-                      <input className="field-input" placeholder="Enter name and phone number"
-                        value={form.emergency_contact_name} onChange={update('emergency_contact_name')} />
-                    </div>
-                  )}
-                  {showEmergencyContactPhone && (
-                    <div className="field-group">
-                      <label className="field-label">Emergency Contact Phone <span className="required">*</span></label>
-                      <input className="field-input" placeholder="+231 xxx xxxx"
-                        value={form.emergency_contact_phone} onChange={update('emergency_contact_phone')} />
-                    </div>
-                  )}
                   {showStudentEmail && (
                     <div className="field-group">
                       <label className="field-label">Email <span className="required">*</span></label>
@@ -331,6 +317,20 @@ export default function StudentSubmissionForm() {
                       <textarea className="field-input" placeholder="Enter your full address" rows={3}
                         value={form.current_address} onChange={update('current_address')}
                         style={{ resize: 'vertical', minHeight: '60px' }} />
+                    </div>
+                  )}
+                  {showEmergencyContactName && (
+                    <div className="field-group">
+                      <label className="field-label">Emergency Contact Name <span className="required">*</span></label>
+                      <input className="field-input" placeholder="Enter full name"
+                        value={form.emergency_contact_name} onChange={update('emergency_contact_name')} />
+                    </div>
+                  )}
+                  {showEmergencyContactPhone && (
+                    <div className="field-group">
+                      <label className="field-label">Emergency Contact Phone <span className="required">*</span></label>
+                      <input className="field-input" placeholder="+231 xxx xxxx"
+                        value={form.emergency_contact_phone} onChange={update('emergency_contact_phone')} />
                     </div>
                   )}
                 </div>
