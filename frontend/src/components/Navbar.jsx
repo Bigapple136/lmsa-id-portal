@@ -13,20 +13,41 @@ export default function Navbar({ showLogin = true }) {
   return (
     <nav className="navbar">
       <div className="navbar-inner">
-        <div className="navbar-brand" onClick={() => navigate('/')}>
+        {/* Left — LMSA identity */}
+        <div className="navbar-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
           <div className="navbar-brand-name">LMSA</div>
           <div className="navbar-brand-sub">ID Card Portal</div>
         </div>
 
+        {/* Right — desktop links */}
         <div className="navbar-links">
-          <button className={`navbar-link ${isAbout ? 'active' : ''}`} onClick={() => navigate('/about')}>About</button>
-          <button className={`navbar-link ${isTerms ? 'active' : ''}`} onClick={() => navigate('/terms')}>Terms</button>
-          <button className={`navbar-link ${isPrivacy ? 'active' : ''}`} onClick={() => navigate('/privacy')}>Privacy</button>
+          <button
+            className={`navbar-link ${isAbout ? 'active' : ''}`}
+            onClick={() => navigate('/about')}
+          >
+            About
+          </button>
+          <button
+            className={`navbar-link ${isTerms ? 'active' : ''}`}
+            onClick={() => navigate('/terms')}
+          >
+            Terms
+          </button>
+          <button
+            className={`navbar-link ${isPrivacy ? 'active' : ''}`}
+            onClick={() => navigate('/privacy')}
+          >
+            Privacy
+          </button>
+
           {showLogin && (
-            <button className="navbar-login" onClick={() => navigate('/admin')}>Admin Login</button>
+            <button className="navbar-login" onClick={() => navigate('/admin')}>
+              Admin Login
+            </button>
           )}
         </div>
 
+        {/* Mobile hamburger */}
         <button
           className={`navbar-hamburger${menuOpen ? ' is-open' : ''}`}
           onClick={() => setMenuOpen((o) => !o)}
@@ -39,13 +60,46 @@ export default function Navbar({ showLogin = true }) {
         </button>
       </div>
 
+      {/* Mobile dropdown */}
       {menuOpen && (
         <div className="navbar-mobile-menu">
-          <button className="navbar-mobile-link" onClick={() => { navigate('/about'); setMenuOpen(false) }}>About</button>
-          <button className="navbar-mobile-link" onClick={() => { navigate('/terms'); setMenuOpen(false) }}>Terms</button>
-          <button className="navbar-mobile-link" onClick={() => { navigate('/privacy'); setMenuOpen(false) }}>Privacy</button>
+          <button
+            className="navbar-mobile-link"
+            onClick={() => {
+              navigate('/about')
+              setMenuOpen(false)
+            }}
+          >
+            About
+          </button>
+          <button
+            className="navbar-mobile-link"
+            onClick={() => {
+              navigate('/terms')
+              setMenuOpen(false)
+            }}
+          >
+            Terms
+          </button>
+          <button
+            className="navbar-mobile-link"
+            onClick={() => {
+              navigate('/privacy')
+              setMenuOpen(false)
+            }}
+          >
+            Privacy
+          </button>
           {showLogin && (
-            <button className="navbar-mobile-login" onClick={() => { navigate('/admin'); setMenuOpen(false) }}>Admin Login</button>
+            <button
+              className="navbar-mobile-login"
+              onClick={() => {
+                navigate('/admin')
+                setMenuOpen(false)
+              }}
+            >
+              Admin Login
+            </button>
           )}
         </div>
       )}

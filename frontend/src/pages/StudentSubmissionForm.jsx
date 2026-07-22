@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import Footer from '../components/Footer'
 import { apiFetch } from '../lib/api'
-import { Button } from '../components/ui'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
@@ -39,13 +38,19 @@ export default function StudentSubmissionForm() {
     async function init() {
       try {
         const [statusRes, fieldsRes, qrFieldsRes] = await Promise.all([
-          apiFetch('/api/submissions/status'), apiFetch('/api/settings/fields'), apiFetch('/api/settings/qr-fields'),
+          apiFetch('/api/submissions/status'),
+          apiFetch('/api/settings/fields'),
+          apiFetch('/api/settings/qr-fields'),
         ])
         const [statusData, fieldsData, qrFieldsData] = await Promise.all([
           statusRes.json(), fieldsRes.json(), qrFieldsRes.json(),
         ])
-        setEnabled(statusData.enabled); setFieldsConfig(fieldsData); setQrFieldsConfig(qrFieldsData)
-      } catch { setEnabled(false) }
+        setEnabled(statusData.enabled)
+        setFieldsConfig(fieldsData)
+        setQrFieldsConfig(qrFieldsData)
+      } catch {
+        setEnabled(false)
+      }
       setLoading(false)
     }
     init()
@@ -66,65 +71,90 @@ export default function StudentSubmissionForm() {
 
   function canNext() {
     if (step === 0) return form.student_id.trim() && form.full_name.trim()
-    return true
+    if (step === 1) return true
+    if (step === 2) return true
+    return false
   }
 
   async function doSubmit() {
-    setSubmitting(true); setError('')
+    setSubmitting(true)
+    setError('')
     try {
       const res = await apiFetch('/api/submissions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
       })
       const data = await res.json()
-      if (res.ok) setSubmitted(true)
-      else setError(data.error || 'Submission failed. Please try again.')
-    } catch { setError('Something went wrong. Please check your connection and try again.') }
-    finally { setSubmitting(false) }
+      if (res.ok) {
+        setSubmitted(true)
+      } else {
+        setError(data.error || 'Submission failed. Please try again.')
+      }
+    } catch {
+      setError('Something went wrong. Please check your connection and try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  if (loading) return (
-    <div className="page-center">
-      <div className="landing-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-6)' }}>
-        <p className="loading">Loading submission form...</p>
-      </div>
-    </div>
-  )
-
-  if (!enabled) return (
-    <div className="page-center">
-      <div className="landing-card" style={{ textAlign: 'center', padding: 'var(--space-10) var(--space-6)' }}>
-        <div style={{ fontSize: '36px', marginBottom: 'var(--space-3)' }}>🔒</div>
-        <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 600, marginBottom: 'var(--space-2)' }}>Form is currently closed</h2>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)' }}>The student submission form is not accepting responses at this time.</p>
-      </div>
-    </div>
-  )
-
-  if (submitted) return (
-    <div className="submission-page">
-      <div className="submission-topbar">
-        <div className="submission-topbar-inner">
-          <div className="submission-topbar-brand">
-            <img src="/lmsa-logo.png" alt="LMSA" className="submission-topbar-logo" />
-            <span className="submission-topbar-name">LMSA</span>
-          </div>
+  if (loading) {
+    return (
+      <div className="page-center">
+        <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Loading...</p>
         </div>
       </div>
-      <div className="submission-wizard-body">
-        <div className="submission-wizard-card">
-          <div style={{ textAlign: 'center', padding: 'var(--space-12) var(--space-8)' }}>
-            <div style={{ fontSize: '48px', marginBottom: 'var(--space-4)' }}>✅</div>
-            <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: 'var(--space-2)', color: 'var(--text)' }}>Submission Received!</h2>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', marginBottom: 'var(--space-2)', lineHeight: 1.6 }}>
-              Your details have been submitted successfully. An admin will review your information shortly.
-            </p>
-            <p style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>You may now close this tab.</p>
-          </div>
+    )
+  }
+
+  if (!enabled) {
+    return (
+      <div className="page-center">
+        <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#128274;</div>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+            Form is currently closed
+          </h2>
+          <p style={{ fontSize: '13px', color: 'var(--muted)' }}>
+            The student submission form is not accepting responses at this time.
+          </p>
         </div>
       </div>
-      <Footer />
-    </div>
-  )
+    )
+  }
+
+  if (submitted) {
+    return (
+      <div className="submission-page">
+        <div className="submission-topbar">
+          <div className="submission-topbar-inner">
+            <div className="submission-topbar-brand">
+              <img src="/lmsa-logo.png" alt="LMSA" className="submission-topbar-logo" />
+              <span className="submission-topbar-name">LMSA</span>
+            </div>
+          </div>
+        </div>
+        <div className="submission-wizard-body">
+          <div className="submission-wizard-card">
+            <div style={{ textAlign: 'center', padding: '48px 32px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#9989;</div>
+              <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: 'var(--text)' }}>
+                Submission Received!
+              </h2>
+              <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px', lineHeight: 1.6 }}>
+                Your details have been submitted successfully. An admin will review your information shortly.
+              </p>
+              <p style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 500 }}>
+                You may now close this tab.
+              </p>
+            </div>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    )
+  }
 
   const reviewRows = [
     { label: 'Student ID', value: form.student_id },
@@ -161,7 +191,7 @@ export default function StudentSubmissionForm() {
           <div className="step-indicator">
             {STEPS.map((s, i) => (
               <div key={s.key} className={`step-item ${i <= step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
-                <div className="step-circle">{i < step ? '✓' : i + 1}</div>
+                <div className="step-circle">{i < step ? '\u2713' : i + 1}</div>
                 <div className="step-label">{s.label}</div>
                 {i < STEPS.length - 1 && <div className="step-line" />}
               </div>
@@ -169,28 +199,30 @@ export default function StudentSubmissionForm() {
           </div>
 
           <div className="submission-form-body">
-            {error && <div className="error-box" style={{ marginBottom: 'var(--space-4)' }}>{error}</div>}
+            {error && <div className="error-box" style={{ marginBottom: '16px' }}>{error}</div>}
 
             {step === 0 && (
               <>
                 <div className="form-section-header">
                   <div>
                     <h2 className="form-section-title">Student Information</h2>
-                    <p className="form-section-sub">Please provide accurate information.</p>
+                    <p className="form-section-sub">Please provide accurate information. All fields are required.</p>
                   </div>
                   <div className="form-security-badge">
-                    <span className="form-security-icon">🔒</span>
-                    <span className="form-security-text">Your information is secure and confidential.</span>
+                    <span className="form-security-icon">&#128274;</span>
+                    <span className="form-security-text">Your information is secure and will be kept confidential.</span>
                   </div>
                 </div>
                 <div className="form-grid">
                   <div className="field-group">
                     <label className="field-label">Student ID <span className="required">*</span></label>
-                    <input className="field-input" placeholder="Enter your student ID" value={form.student_id} onChange={update('student_id')} required />
+                    <input className="field-input" placeholder="Enter your student ID"
+                      value={form.student_id} onChange={update('student_id')} required />
                   </div>
                   <div className="field-group">
                     <label className="field-label">Full Name <span className="required">*</span></label>
-                    <input className="field-input" placeholder="Enter your full name" value={form.full_name} onChange={update('full_name')} required />
+                    <input className="field-input" placeholder="Enter your full name"
+                      value={form.full_name} onChange={update('full_name')} required />
                   </div>
                   <div className="field-group">
                     <label className="field-label">Year Level <span className="required">*</span></label>
@@ -214,13 +246,14 @@ export default function StudentSubmissionForm() {
                 <div className="form-grid">
                   {showProgramme && (
                     <div className="field-group">
-                      <label className="field-label">Programme</label>
-                      <input className="field-input" placeholder="Enter your programme" value={form.programme} onChange={update('programme')} />
+                      <label className="field-label">Programme <span className="required">*</span></label>
+                      <input className="field-input" placeholder="Enter your programme"
+                        value={form.programme} onChange={update('programme')} />
                     </div>
                   )}
                   {showBloodType && (
                     <div className="field-group">
-                      <label className="field-label">Blood Type</label>
+                      <label className="field-label">Blood Type <span className="required">*</span></label>
                       <select className="field-input" value={form.blood_type} onChange={update('blood_type')}>
                         <option value="">Select blood type</option>
                         {BLOOD_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
@@ -230,7 +263,8 @@ export default function StudentSubmissionForm() {
                   {showPosition && (
                     <div className="field-group">
                       <label className="field-label">Position</label>
-                      <input className="field-input" placeholder="Enter your position" value={form.position} onChange={update('position')} />
+                      <input className="field-input" placeholder="Enter your position"
+                        value={form.position} onChange={update('position')} />
                     </div>
                   )}
                 </div>
@@ -248,32 +282,38 @@ export default function StudentSubmissionForm() {
                 <div className="form-grid">
                   {showStudentEmail && (
                     <div className="field-group">
-                      <label className="field-label">Email</label>
-                      <input className="field-input" type="email" placeholder="Enter your email address" value={form.student_email} onChange={update('student_email')} />
+                      <label className="field-label">Email <span className="required">*</span></label>
+                      <input className="field-input" type="email" placeholder="Enter your email address"
+                        value={form.student_email} onChange={update('student_email')} />
                     </div>
                   )}
                   {showDateOfBirth && (
                     <div className="field-group">
-                      <label className="field-label">Date of Birth</label>
-                      <input className="field-input" type="date" value={form.date_of_birth} onChange={update('date_of_birth')} />
+                      <label className="field-label">Date of Birth <span className="required">*</span></label>
+                      <input className="field-input" type="date"
+                        value={form.date_of_birth} onChange={update('date_of_birth')} />
                     </div>
                   )}
                   {showNationality && (
                     <div className="field-group">
-                      <label className="field-label">Nationality</label>
-                      <input className="field-input" placeholder="Enter your nationality" value={form.nationality} onChange={update('nationality')} />
+                      <label className="field-label">Nationality <span className="required">*</span></label>
+                      <input className="field-input" placeholder="Enter your nationality"
+                        value={form.nationality} onChange={update('nationality')} />
                     </div>
                   )}
                   {showCountyOfOrigin && (
                     <div className="field-group">
-                      <label className="field-label">County of Origin</label>
-                      <input className="field-input" list="liberia-counties-sub" placeholder="e.g. Montserrado" value={form.county_of_origin} onChange={update('county_of_origin')} />
-                      <datalist id="liberia-counties-sub">{LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}</datalist>
+                      <label className="field-label">County of Origin <span className="required">*</span></label>
+                      <input className="field-input" list="liberia-counties-sub" placeholder="e.g. Montserrado"
+                        value={form.county_of_origin} onChange={update('county_of_origin')} />
+                      <datalist id="liberia-counties-sub">
+                        {LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}
+                      </datalist>
                     </div>
                   )}
                   {showCurrentAddress && (
                     <div className="field-group form-grid-full">
-                      <label className="field-label">Address</label>
+                      <label className="field-label">Address <span className="required">*</span></label>
                       <textarea className="field-input" placeholder="Enter your full address" rows={3}
                         value={form.current_address} onChange={update('current_address')}
                         style={{ resize: 'vertical', minHeight: '60px' }} />
@@ -281,14 +321,16 @@ export default function StudentSubmissionForm() {
                   )}
                   {showEmergencyContactName && (
                     <div className="field-group">
-                      <label className="field-label">Emergency Contact Name</label>
-                      <input className="field-input" placeholder="Enter full name" value={form.emergency_contact_name} onChange={update('emergency_contact_name')} />
+                      <label className="field-label">Emergency Contact Name <span className="required">*</span></label>
+                      <input className="field-input" placeholder="Enter full name"
+                        value={form.emergency_contact_name} onChange={update('emergency_contact_name')} />
                     </div>
                   )}
                   {showEmergencyContactPhone && (
                     <div className="field-group">
-                      <label className="field-label">Emergency Contact Phone</label>
-                      <input className="field-input" placeholder="+231 xxx xxxx" value={form.emergency_contact_phone} onChange={update('emergency_contact_phone')} />
+                      <label className="field-label">Emergency Contact Phone <span className="required">*</span></label>
+                      <input className="field-input" placeholder="+231 xxx xxxx"
+                        value={form.emergency_contact_phone} onChange={update('emergency_contact_phone')} />
                     </div>
                   )}
                 </div>
@@ -303,8 +345,8 @@ export default function StudentSubmissionForm() {
                     <p className="form-section-sub">Please review your information before submitting.</p>
                   </div>
                   <div className="form-security-badge">
-                    <span className="form-security-icon">🔒</span>
-                    <span className="form-security-text">Your information is secure and confidential.</span>
+                    <span className="form-security-icon">&#128274;</span>
+                    <span className="form-security-text">Your information is secure and will be kept confidential.</span>
                   </div>
                 </div>
                 <div className="review-grid">
@@ -316,9 +358,10 @@ export default function StudentSubmissionForm() {
                   ))}
                 </div>
                 <div className="review-agree">
-                  <input type="checkbox" id="agree-tos" checked={agreed} onChange={e => setAgreed(e.target.checked)}
+                  <input type="checkbox" id="agree-tos" checked={agreed}
+                    onChange={e => setAgreed(e.target.checked)}
                     style={{ accentColor: 'var(--gold)', cursor: 'pointer', flexShrink: 0 }} />
-                  <label htmlFor="agree-tos" style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', lineHeight: 1.5, cursor: 'pointer' }}>
+                  <label htmlFor="agree-tos" style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, cursor: 'pointer' }}>
                     I agree to the <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'underline' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'underline' }}>Privacy Policy</a>
                   </label>
                 </div>
@@ -327,17 +370,32 @@ export default function StudentSubmissionForm() {
           </div>
 
           <div className="submission-form-footer">
-            <Button variant="outline" size="md" onClick={() => step === 0 ? window.history.back() : setStep(step - 1)}>
-              {step === 0 ? '← Cancel' : '← Back'}
-            </Button>
+            <button
+              className="submission-btn-cancel"
+              onClick={() => step === 0 ? window.history.back() : setStep(step - 1)}
+            >
+              {step === 0 ? (
+                <>&larr; Cancel</>
+              ) : (
+                <>&larr; Back</>
+              )}
+            </button>
             {step < 3 ? (
-              <Button variant="primary" size="md" onClick={() => setStep(step + 1)} disabled={!canNext()}>
-                Continue →
-              </Button>
+              <button
+                className="submission-btn-next"
+                onClick={() => setStep(step + 1)}
+                disabled={!canNext()}
+              >
+                Continue &rarr;
+              </button>
             ) : (
-              <Button variant="gold" size="md" onClick={doSubmit} disabled={!agreed || submitting} loading={submitting}>
-                Submit
-              </Button>
+              <button
+                className="submission-btn-submit"
+                onClick={doSubmit}
+                disabled={!agreed || submitting}
+              >
+                {submitting ? 'Submitting...' : <>&#10148; Submit &amp; Continue</>}
+              </button>
             )}
           </div>
         </div>

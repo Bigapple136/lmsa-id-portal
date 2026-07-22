@@ -3,15 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { adminFetch } from '../lib/api'
 import SessionTimeout from '../components/SessionTimeout'
+import { useToast } from '../components/Toast'
 import NotificationCenter from '../components/NotificationCenter'
-import { Button, Input, Select, Card, Badge, Table } from '../components/ui'
 
 export default function AdminManagementPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [currentUserId, setCurrentUserId] = useState(null)
+
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('support_admin')
@@ -20,7 +22,10 @@ export default function AdminManagementPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { navigate('/admin'); return }
+      if (!session) {
+        navigate('/admin')
+        return
+      }
       setCurrentUserId(session.user.id)
       fetchAdmins()
     })
@@ -30,11 +35,21 @@ export default function AdminManagementPage() {
     setLoading(true)
     try {
       const res = await adminFetch('/api/admins')
-      if (res.status === 403) { setError('Access denied.'); return }
-      if (!res.ok) { setError('Failed to load admins.'); return }
-      setAdmins(await res.json())
-    } catch { setError('Failed to load admins.') }
-    finally { setLoading(false) }
+      if (res.status === 403) {
+        setError('Access denied.')
+        return
+      }
+      if (!res.ok) {
+        setError('Failed to load admins.')
+        return
+      }
+      const data = await res.json()
+      setAdmins(data)
+    } catch {
+      setError('Failed to load admins.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleInvite(e) {
@@ -49,11 +64,19 @@ export default function AdminManagementPage() {
         body: JSON.stringify({ email: email.trim(), name: name.trim() || undefined, role }),
       })
       const data = await res.json()
-      if (!res.ok) { setInviteMsg(data.error || 'Failed to invite admin.'); return }
+      if (!res.ok) {
+        setInviteMsg(data.error || 'Failed to invite admin.')
+        return
+      }
       setAdmins((prev) => [...prev, data])
-      setEmail(''); setName(''); setInviteMsg('Invite sent! They will receive an email to set their password.')
-    } catch { setInviteMsg('Something went wrong. Please try again.') }
-    finally { setSubmitting(false) }
+      setEmail('')
+      setName('')
+      setInviteMsg('Invite sent! They will receive an email to set their password.')
+    } catch {
+      setInviteMsg('Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   async function handleRemove(id) {
@@ -61,9 +84,14 @@ export default function AdminManagementPage() {
     try {
       const res = await adminFetch(`/api/admins/${id}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!res.ok) { toast?.error(data.error || 'Failed to remove admin.'); return }
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to remove admin.')
+        return
+      }
       setAdmins((prev) => prev.filter((a) => a.id !== id))
-    } catch { toast?.error('Failed to remove admin.') }
+    } catch {
+      toast.error('Failed to remove admin.')
+    }
   }
 
   async function handleRoleChange(id, newRole) {
@@ -74,105 +102,311 @@ export default function AdminManagementPage() {
         body: JSON.stringify({ role: newRole }),
       })
       const data = await res.json()
-      if (!res.ok) { toast?.error(data.error || 'Failed to update role.'); return }
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to update role.')
+        return
+      }
       setAdmins((prev) => prev.map((a) => (a.id === id ? { ...a, role: newRole } : a)))
-    } catch { toast?.error('Failed to update role.') }
+    } catch {
+      toast.error('Failed to update role.')
+    }
+  }
+
+  function formatDate(d) {
+    if (!d) return '—'
+    return new Date(d).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
   }
 
   const isLastAdmin = admins.length === 1
-
-  const headers = [
-    { key: 'name', label: 'Name', render: (row) => (
-      <span style={{ fontWeight: 500 }}>
-        {row.name || <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>—</span>}
-        {row.id === currentUserId && <Badge variant="amber" style={{ marginLeft: '6px' }}>You</Badge>}
-      </span>
-    )},
-    { key: 'email', label: 'Email' },
-    { key: 'role', label: 'Role', render: (row) => (
-      row.id === currentUserId ? (
-        <span style={{ color: 'var(--muted)' }}>{row.role || 'admin'}</span>
-      ) : (
-        <select value={row.role || 'support_admin'} onChange={(e) => handleRoleChange(row.id, e.target.value)}
-          style={{ fontSize: '12px', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', cursor: 'pointer' }}>
-          <option value="support_admin">Support Admin</option>
-          <option value="admin">Full Admin</option>
-        </select>
-      )
-    )},
-    { key: 'created_at', label: 'Added', render: (row) => (
-      <span style={{ color: 'var(--muted)' }}>
-        {row.created_at ? new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-      </span>
-    )},
-    { key: 'actions', label: 'Action', render: (row) => (
-      row.id === currentUserId ? (
-        <span style={{ fontSize: '11px', color: 'var(--muted)' }}>—</span>
-      ) : isLastAdmin ? (
-        <span style={{ fontSize: '11px', color: 'var(--muted)' }} title="Cannot remove the last admin">—</span>
-      ) : (
-        <button onClick={() => handleRemove(row.id)}
-          style={{ fontSize: '10px', color: '#CC0000', background: 'transparent', padding: '2px 8px', borderRadius: '20px', border: '1px solid #CC0000', cursor: 'pointer' }}>
-          Remove
-        </button>
-      )
-    )},
-  ]
 
   return (
     <div className="page-outer">
       <div className="admin-topbar">
         <div className="admin-topbar-left">
-          <Button variant="outline" size="sm" onClick={() => navigate('/admin')}>← Dashboard</Button>
+          <button className="btn-back" onClick={() => navigate('/admin')}>
+            ← Dashboard
+          </button>
           <div className="topbar-title">Manage Admins</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <NotificationCenter />
-          <Button variant="outline" size="sm" onClick={() => supabase.auth.signOut()}>Sign out</Button>
+          <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </button>
         </div>
       </div>
 
       <div className="admin-body">
-        <Card>
+        <div className="admin-card">
           <div className="section-title">Invite new admin</div>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--muted)', marginBottom: 'var(--space-4)' }}>
-            An invitation email will be sent. They will set their own password before gaining access.
+          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>
+            An invitation email will be sent. They will set their own password before gaining
+            access.
           </p>
-          <form onSubmit={handleInvite} style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-3)' }}>
-            <div style={{ flex: '1 1 200px', minWidth: 0 }}>
-              <Input label="Full name" placeholder="Jane Doe" value={name} onChange={(e) => setName(e.target.value)} />
+
+          <form
+            onSubmit={handleInvite}
+            style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}
+          >
+            <div className="field-group" style={{ flex: '1 1 200px' }}>
+              <label className="field-label">Full name</label>
+              <input
+                className="field-input"
+                placeholder="Jane Doe"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="off"
+              />
             </div>
-            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
-              <Input label="Email address" type="email" placeholder="jane@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            <div className="field-group" style={{ flex: '1 1 240px' }}>
+              <label className="field-label">Email address</label>
+              <input
+                className="field-input"
+                type="email"
+                placeholder="jane@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="off"
+              />
             </div>
-            <div style={{ flex: '0 0 140px' }}>
-              <Select label="Role" value={role} onChange={(e) => setRole(e.target.value)}
-                options={[
-                  { value: 'support_admin', label: 'Support Admin' },
-                  { value: 'admin', label: 'Full Admin' },
-                ]} />
+            <div className="field-group" style={{ flex: '0 0 140px' }}>
+              <label className="field-label">Role</label>
+              <select
+                className="field-input"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+              >
+                <option value="support_admin">Support Admin</option>
+                <option value="admin">Full Admin</option>
+              </select>
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '1px' }}>
-              <Button variant="gold" type="submit" disabled={submitting} loading={submitting}>Send Invite</Button>
+            <div style={{ display: 'flex', alignItems: 'flex-end', flexShrink: 0 }}>
+              <button className="btn-gold" type="submit" disabled={submitting}>
+                {submitting ? 'Sending...' : 'Send Invite'}
+              </button>
             </div>
           </form>
+
           {inviteMsg && (
-            <div className={inviteMsg.startsWith('Invite') ? 'success-box' : 'error-box'} style={{ marginBottom: 'var(--space-3)' }}>
+            <div
+              className={inviteMsg.startsWith('Invite') ? 'success-box' : 'error-box'}
+              style={{ marginBottom: '12px' }}
+            >
               {inviteMsg}
             </div>
           )}
-        </Card>
+        </div>
 
-        <Card>
+        <div className="admin-card">
           <div className="section-title">Admin accounts ({admins.length})</div>
+
           {loading ? (
-            <div className="loading">Loading...</div>
+            <div style={{ padding: '16px 0', color: 'var(--muted)', fontSize: '13px' }}>
+              Loading...
+            </div>
           ) : error ? (
             <div className="error-box">{error}</div>
           ) : (
-            <Table headers={headers} rows={admins} emptyMessage="No admin accounts found." />
+            <div
+              className="meta-table"
+              style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1.5fr 1fr 1fr auto',
+                  gap: '8px',
+                  padding: '10px 12px',
+                  borderBottom: '2px solid var(--border)',
+                  marginBottom: '4px',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Name
+                </span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Email
+                </span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Role
+                </span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Added
+                </span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: 'var(--muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Action
+                </span>
+              </div>
+              {admins.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1.5fr 1fr 1fr auto',
+                    gap: '8px',
+                    padding: '10px 12px',
+                    borderBottom: '1px solid var(--border)',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      color: 'var(--text)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {a.name || (
+                      <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>—</span>
+                    )}
+                    {a.id === currentUserId && (
+                      <span
+                        style={{
+                          marginLeft: '6px',
+                          fontSize: '10px',
+                          background: 'var(--gold)',
+                          color: '#fff',
+                          padding: '1px 6px',
+                          borderRadius: '10px',
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        You
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '13px',
+                      color: 'var(--text)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {a.email}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {a.id === currentUserId ? (
+                      <span style={{ color: 'var(--muted)' }}>{a.role || 'admin'}</span>
+                    ) : (
+                      <select
+                        value={a.role || 'support_admin'}
+                        onChange={(e) => handleRoleChange(a.id, e.target.value)}
+                        style={{
+                          fontSize: '12px',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          border: '0.5px solid var(--border)',
+                          background: 'var(--bg)',
+                          color: 'var(--text)',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        <option value="support_admin">Support Admin</option>
+                        <option value="admin">Full Admin</option>
+                      </select>
+                    )}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--muted)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatDate(a.created_at)}
+                  </span>
+                  <span>
+                    {a.id === currentUserId ? (
+                      <span style={{ fontSize: '11px', color: 'var(--muted)' }}>—</span>
+                    ) : isLastAdmin ? (
+                      <span
+                        style={{ fontSize: '11px', color: 'var(--muted)' }}
+                        title="Cannot remove the last admin"
+                      >
+                        —
+                      </span>
+                    ) : (
+                      <button
+                        style={{
+                          fontSize: '10px',
+                          color: '#CC0000',
+                          background: 'transparent',
+                          padding: '2px 8px',
+                          borderRadius: '20px',
+                          border: '0.5px solid #CC0000',
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => handleRemove(a.id)}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
-        </Card>
+        </div>
       </div>
       <SessionTimeout />
     </div>

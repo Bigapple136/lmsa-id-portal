@@ -21,9 +21,14 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
   const startTimers = useCallback(() => {
     clearTimers()
     setShowWarning(false)
+
     warningTimerRef.current = setTimeout(() => setShowWarning(true), timeout - WARNING_BEFORE)
     timerRef.current = setTimeout(async () => {
-      try { await supabase.auth.signOut() } catch {}
+      try {
+        await supabase.auth.signOut()
+      } catch {
+        // sign-out failed — still redirect
+      }
       window.location.href = '/admin'
     }, timeout)
   }, [timeout, clearTimers])
@@ -53,6 +58,20 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
     }
   }, [startTimers, clearTimers, resetTimer])
 
+  async function handleStayLoggedIn() {
+    resetTimer()
+  }
+
+  async function handleLogoutNow() {
+    clearTimers()
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      // sign-out failed — still redirect
+    }
+    window.location.href = '/admin'
+  }
+
   if (!showWarning) return null
 
   return (
@@ -64,14 +83,10 @@ export default function SessionTimeout({ timeout = DEFAULT_TIMEOUT }) {
           Your session will expire in less than 1 minute due to inactivity.
         </div>
         <div className="session-timeout-actions">
-          <button className="btn btn--md btn--gold" onClick={() => { resetTimer() }} style={{ flex: 1 }}>
+          <button className="btn-gold" onClick={handleStayLoggedIn} style={{ flex: 1 }}>
             Stay Logged In
           </button>
-          <button className="btn btn--md btn--outline" onClick={async () => {
-            clearTimers()
-            try { await supabase.auth.signOut() } catch {}
-            window.location.href = '/admin'
-          }} style={{ flex: 1 }}>
+          <button className="btn-outline" onClick={handleLogoutNow} style={{ flex: 1 }}>
             Log Out Now
           </button>
         </div>

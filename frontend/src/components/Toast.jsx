@@ -49,7 +49,9 @@ export function ToastProvider({ children }) {
                 {t.type === 'warn' && '!'}
               </span>
               <span className="toast-msg">{t.message}</span>
-              <button className="toast-close" onClick={() => remove(t.id)} aria-label="Dismiss">×</button>
+              <button className="toast-close" onClick={() => remove(t.id)} aria-label="Dismiss">
+                ×
+              </button>
             </div>
           ))}
         </div>
