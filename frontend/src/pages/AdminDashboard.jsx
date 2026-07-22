@@ -185,7 +185,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (session === null) return // still loading
-    if (!session) navigate('/admin/login')
+    // No session — the login form is rendered inline below (line ~657).
+    // No navigation needed; /admin/login does not exist as a route.
   }, [session])
 
   useEffect(() => {
