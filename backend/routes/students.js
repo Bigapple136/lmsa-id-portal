@@ -8,6 +8,7 @@ const path = require('path')
 const PDFDocument = require('pdfkit')
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
+const { enqueueImport } = require('../queue')
 const { email, maxLength } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 
@@ -415,7 +416,7 @@ router.post(
       }
     }
 
-    const rows = []
+    const validRecords = []
     for (const r of records) {
       const sid = r.student_id?.trim()
       if (!sid) {
@@ -427,34 +428,11 @@ router.post(
         console.warn(`Invalid year_level for ${sid} — skipped`)
         continue
       }
-      let photo_url = null,
-        signature_url = null
-      if (photoMap[sid]) {
-        try {
-          photo_url = await uploadPhoto(
-            photoMap[sid].buffer,
-            photoMap[sid].mimeType,
-            sid,
-            yearLevel,
-          )
-        } catch (err) {
-          console.warn('[Bulk] Photo upload failed for', sid, err.message)
-        }
-      }
-      if (signatureMap[sid]) {
-        try {
-          signature_url = await uploadSignature(signatureMap[sid], sid, yearLevel)
-        } catch (err) {
-          console.warn('[Bulk] Signature upload failed for', sid, err.message)
-        }
-      }
-      rows.push({
+      validRecords.push({
         student_id: sid.slice(0, 50),
         full_name: r.full_name.trim().slice(0, MAX_TEXT_LENGTH),
         year_level: yearLevel,
         position: r.position?.trim().slice(0, MAX_TEXT_LENGTH) || null,
-        photo_url,
-        signature_url,
         blood_type: r.blood_type?.trim() || null,
         emergency_contact_name: r.emergency_contact_name?.trim().slice(0, MAX_TEXT_LENGTH) || null,
         emergency_contact_phone: r.emergency_contact_phone?.trim().slice(0, 30) || null,
@@ -466,36 +444,70 @@ router.post(
         current_address: r.current_address?.trim().slice(0, 500) || null,
       })
     }
-    if (!rows.length) return res.status(400).json({ error: 'No valid rows found.' })
+    if (!validRecords.length) return res.status(400).json({ error: 'No valid rows found.' })
 
     const seen = new Map()
     const deduped = []
-    const totalProvided = rows.length
-    for (const row of rows) {
+    for (const row of validRecords) {
       if (!seen.has(row.student_id)) {
         seen.set(row.student_id, true)
         deduped.push(row)
       }
     }
-    const duplicatesSkipped = totalProvided - deduped.length
+    const duplicatesSkipped = validRecords.length - deduped.length
 
-    const { data, error } = await supabase
-      .from('students')
-      .upsert(deduped, { onConflict: 'student_id' })
-      .select()
-    if (error) return res.status(400).json({ error: error.message })
+    res.json({
+      message: 'Import queued. Processing in background.',
+      queued: deduped.length,
+      duplicates_skipped: duplicatesSkipped,
+    })
 
-    // Auto-generate QR for each upserted student
-    const qrGen = getQRGenerator()
-    for (const student of data) {
-      try {
-        await qrGen(student)
-      } catch (err) {
-        console.warn('[Bulk QR] Failed for', student.student_id, err.message)
+    enqueueImport(async () => {
+      const rows = []
+      for (const r of deduped) {
+        let photo_url = null,
+          signature_url = null
+        if (photoMap[r.student_id]) {
+          try {
+            photo_url = await uploadPhoto(
+              photoMap[r.student_id].buffer,
+              photoMap[r.student_id].mimeType,
+              r.student_id,
+              r.year_level,
+            )
+          } catch (err) {
+            console.warn('[Bulk] Photo upload failed for', r.student_id, err.message)
+          }
+        }
+        if (signatureMap[r.student_id]) {
+          try {
+            signature_url = await uploadSignature(signatureMap[r.student_id], r.student_id, r.year_level)
+          } catch (err) {
+            console.warn('[Bulk] Signature upload failed for', r.student_id, err.message)
+          }
+        }
+        rows.push({ ...r, photo_url, signature_url })
       }
-    }
 
-    res.json({ inserted: data.length, records: data, duplicates_skipped: duplicatesSkipped })
+      const { data, error } = await supabase
+        .from('students')
+        .upsert(rows, { onConflict: 'student_id' })
+        .select()
+      if (error) {
+        console.error('[Bulk] Upsert failed:', error.message)
+        return
+      }
+
+      const qrGen = getQRGenerator()
+      for (const student of data) {
+        try {
+          await qrGen(student)
+        } catch (err) {
+          console.warn('[Bulk QR] Failed for', student.student_id, err.message)
+        }
+      }
+      console.log(`[Bulk] Imported ${data.length} students (${duplicatesSkipped} duplicates skipped)`)
+    })
   },
 )
 
