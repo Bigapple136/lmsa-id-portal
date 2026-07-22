@@ -18,16 +18,11 @@ export default function LandingPage() {
     setLoading(true)
     setError('')
     try {
-      const params = new URLSearchParams({
-        student_id: studentId.trim(),
-        full_name: fullName.trim(),
-      })
+      const params = new URLSearchParams({ student_id: studentId.trim(), full_name: fullName.trim() })
       const res = await apiFetch(`/api/students/lookup?${params}`)
       const data = await res.json()
       if (!res.ok || !data.found) {
-        setError(
-          'No student found with those details. Please check your Student ID and full name and try again.',
-        )
+        setError('No student found with those details. Please check your Student ID and full name and try again.')
         return
       }
       window.location.href = data.preview_url
@@ -44,11 +39,12 @@ export default function LandingPage() {
       <div className="split-landing">
         <div className="split-brand">
           <div className="split-emblem">
-            <img src="/lmsa-logo.png" alt="LMSA Logo" width="72" height="72" style={{ objectFit: 'contain' }} />
+            <img src="/lmsa-logo.png" alt="LMSA Logo" width="48" height="48" />
           </div>
           <h1 className="split-title">A.M. Dogliotti College of Medicine</h1>
           <p className="split-sub">Liberia Medical Students Association</p>
           <p className="split-desc">Student ID verification and card management portal.</p>
+          <div className="split-accent-line" />
         </div>
         <div className="split-form-panel">
           <div className="split-card">
@@ -76,8 +72,8 @@ export default function LandingPage() {
                 />
               </div>
               {error && <div className="error-box">{error}</div>}
-              <button className="btn-primary" type="submit" disabled={loading}>
-                {loading ? (<><span className="spinner" />Searching...</>) : 'View My ID Card'}
+              <button className="btn btn--lg btn--primary btn--full" type="submit" disabled={loading}>
+                {loading ? <><span className="spinner spinner--light" /> Searching...</> : 'View My ID Card'}
               </button>
               <p className="landing-hint">Having trouble? Contact LMSA at your faculty office.</p>
             </form>
