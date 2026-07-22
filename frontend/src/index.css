@@ -25,7 +25,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -513,37 +513,55 @@ body {
   word-wrap: break-word;
 }
 
-.admin-tabs {
+.admin-sidebar-layout {
   display: flex;
-  gap: 0;
-  background: var(--navy);
-  padding: 0 24px;
-  border-bottom: 0.5px solid var(--navy-mid);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  min-height: calc(100vh - 52px);
 }
-
-.admin-tabs::-webkit-scrollbar { display: none; }
-
-.admin-tab {
-  font-size: 13px;
-  color: #8899AA;
-  padding: 10px 18px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-  text-transform: capitalize;
-  white-space: nowrap;
+.admin-sidebar {
+  width: 220px;
+  background: linear-gradient(180deg, #0D1B2A 0%, #152238 100%);
+  border-right: 0.5px solid var(--navy-mid);
+  padding: 24px 16px;
   flex-shrink: 0;
+  position: sticky;
+  top: 52px;
+  height: calc(100vh - 52px);
+  overflow-y: auto;
 }
-
-.admin-tab.active {
+.admin-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  color: #8899AA;
+  font-size: 13px;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+  width: 100%;
+}
+.admin-sidebar-item:hover, .admin-sidebar-item.active {
+  background: rgba(201,168,76,0.12);
   color: var(--gold);
-  border-bottom-color: var(--gold);
 }
+.admin-sidebar-label { font-weight: 500; }
+.admin-sidebar-section {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4A6A8A;
+  padding: 16px 12px 6px;
+}
+.admin-sidebar { display: none; }
 
 .admin-body {
   max-width: 680px;
@@ -2267,3 +2285,17 @@ a:focus:not(:focus-visible) {
   .toast-container { left: 16px; right: 16px; }
   .toast { max-width: 100%; }
 }
+
+/* Split landing redesign */
+.split-landing { display: flex; min-height: calc(100vh - 52px); width: 100%; }
+.split-brand { flex: 1; background: linear-gradient(160deg, #0D1B2A 0%, #152238 60%, #0D1B2A 100%); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; text-align: center; min-height: calc(100vh - 52px); position: relative; overflow: hidden; }
+.split-brand::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 30% 40%, rgba(201,168,76,0.08) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(201,168,76,0.06) 0%, transparent 50%); pointer-events: none; }
+.split-emblem { margin-bottom: 24px; position: relative; z-index: 1; }
+.split-title { font-family: Georgia, 'Times New Roman', serif; font-size: 1.8rem; font-weight: 700; color: #fff; margin-bottom: 8px; letter-spacing: 0.02em; line-height: 1.2; position: relative; z-index: 1; }
+.split-sub { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #C9A84C; margin-bottom: 16px; position: relative; z-index: 1; }
+.split-desc { font-size: 14px; color: #8899AA; max-width: 320px; line-height: 1.6; position: relative; z-index: 1; }
+.split-form-panel { flex: 1; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 48px 32px; min-height: calc(100vh - 52px); }
+.split-card { background: #fff; border-radius: var(--radius-lg); padding: 36px 32px; max-width: 420px; width: 100%; box-shadow: 0 20px 40px rgba(13,27,42,0.06); border: 0.5px solid var(--border); }
+.split-card-title { font-size: 22px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+.split-card-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+@media (max-width: 900px) { .split-landing { flex-direction: column; } .split-brand, .split-form-panel { min-height: auto; padding: 48px 24px; } .split-brand { padding-top: 64px; padding-bottom: 48px; } .split-card { padding: 28px 24px; } }
