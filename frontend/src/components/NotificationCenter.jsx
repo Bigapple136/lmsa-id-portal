@@ -65,6 +65,7 @@ export default function NotificationCenter() {
   // Realtime subscription — wrapped in try/catch so CSP blocks don't crash the app
   useEffect(() => {
     let channel
+    let seenIds = new Set()
     try {
       channel = supabase
         .channel('notifications-realtime')
@@ -72,6 +73,9 @@ export default function NotificationCenter() {
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'notifications' },
           (payload) => {
+            const id = payload.new?.id
+            if (id && seenIds.has(id)) return
+            if (id) seenIds.add(id)
             setNotifications((prev) => [payload.new, ...prev])
             setUnread((prev) => prev + 1)
             setTotal((prev) => prev + 1)
@@ -87,6 +91,7 @@ export default function NotificationCenter() {
     }
 
     return () => {
+      seenIds.clear()
       if (channel) {
         try { supabase.removeChannel(channel) } catch {}
       }

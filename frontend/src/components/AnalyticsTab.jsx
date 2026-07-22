@@ -8,9 +8,12 @@ export default function AnalyticsTab() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const res = await adminFetch('/api/analytics')
-      if (res.ok) setData(await res.json())
-      setLoading(false)
+      try {
+        const res = await adminFetch('/api/analytics')
+        if (res.ok) setData(await res.json())
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])

@@ -178,8 +178,6 @@ router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) 
   if (error) return res.status(500).json({ error: error.message })
   if (!students?.length) return res.json({ generated: 0, message: 'No students found.' })
 
-  await supabase.from('students').update({ qr_url: null }).not('qr_url', 'is', null)
-
   let generated = 0,
     failed = 0
   for (const student of students) {
@@ -588,10 +586,15 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
   }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, students.length) }, downloadWorker))
 
-  const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
-  res.setHeader('Content-Type', 'application/zip')
-  res.setHeader('Content-Disposition', 'attachment; filename="LMSA_QR_Codes.zip"')
-  res.send(zipBuffer)
+  try {
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', 'attachment; filename="LMSA_QR_Codes.zip"')
+    res.send(zipBuffer)
+  } catch (err) {
+    console.error('[QR] Export zip generation failed:', err)
+    res.status(500).json({ error: 'Failed to generate QR export ZIP.' })
+  }
 })
 
 module.exports = router

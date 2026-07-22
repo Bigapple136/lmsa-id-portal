@@ -21,7 +21,7 @@ async function requireAdmin(req, res, next) {
       .maybeSingle()
     if (!adminRecord) return res.status(403).json({ error: 'Forbidden.' })
     req.user = user
-    req.userRole = adminRecord.role || 'admin'
+    req.userRole = adminRecord.role || 'support_admin'
     next()
   } catch (err) {
     console.error('[AUTH] Unexpected error:', err)

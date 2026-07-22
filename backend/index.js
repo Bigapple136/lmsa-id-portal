@@ -2,6 +2,7 @@ require('dotenv').config()
 const { validateEnv } = require('./env')
 validateEnv()
 
+const Sentry = require('@sentry/node')
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -25,7 +26,6 @@ const app = express()
 app.set('trust proxy', 1)
 
 if (process.env.SENTRY_DSN) {
-  const Sentry = require('@sentry/node')
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || 'development',
@@ -148,7 +148,6 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }))
 
 // ---- Global Express error handler ----
 if (process.env.SENTRY_DSN) {
-  const Sentry = require('@sentry/node')
   app.use(Sentry.Handlers.errorHandler())
 }
 
@@ -214,6 +213,10 @@ if (require.main === module) {
 }
 
 // Background import worker (lightweight queue)
+// NOTE: In cluster mode, each worker has its own queue. Tasks enqueued via
+// API requests are processed by the worker that handled the request, which
+// is correct since imports are per-request. The queue exists to serialize
+// multiple import requests within a single worker process.
 const importQueue = []
 let importWorkerRunning = false
 

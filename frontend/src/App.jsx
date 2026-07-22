@@ -11,6 +11,7 @@ import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import QrViewPage from './pages/QrViewPage'
 import StudentSubmissionForm from './pages/StudentSubmissionForm'
+import StudentStatusPage from './pages/StudentStatusPage'
 
 const SentryErrorBoundary = Sentry.ErrorBoundary || ErrorBoundary
 
@@ -82,14 +83,8 @@ export default function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
-          <Route
-            path="/submit"
-            element={
-              <SentryErrorBoundary>
-                <StudentSubmissionForm />
-              </SentryErrorBoundary>
-            }
-          />
+          <Route path="/submit" element={<StudentSubmissionForm />} />
+          <Route path="/status" element={<StudentStatusPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

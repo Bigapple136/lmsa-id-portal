@@ -226,19 +226,22 @@ export default function AdminDashboard() {
 
   async function loadAll() {
     setDataLoading(true)
-    await eachLimit(
-      [
-        loadStudents,
-        loadTemplate,
-        loadFields,
-        loadQrFields,
-        loadLayout,
-        loadSubmissions,
-        loadSubmissionForm,
-      ],
-      3,
-    )
-    setDataLoading(false)
+    try {
+      await eachLimit(
+        [
+          loadStudents,
+          loadTemplate,
+          loadFields,
+          loadQrFields,
+          loadLayout,
+          loadSubmissions,
+          loadSubmissionForm,
+        ],
+        3,
+      )
+    } finally {
+      setDataLoading(false)
+    }
   }
 
   async function loadStudents() {
@@ -303,7 +306,10 @@ export default function AdminDashboard() {
   }
 
   function toggleQrField(key) {
-    setQrFields((prev) => ({ ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }))
+    setQrFields((prev) => {
+      if (!prev?.[key]) return prev
+      return { ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }
+    })
   }
 
   async function loadLayout() {
@@ -313,11 +319,14 @@ export default function AdminDashboard() {
 
   async function loadSubmissions(statusFilter) {
     setSubmissionsLoading(true)
-    const filter = statusFilter ?? submissionsFilter
-    const statusParam = filter !== 'all' ? `?status=${filter}` : ''
-    const res = await adminFetch(`/api/submissions${statusParam}`)
-    if (res.ok) setSubmissions(await res.json())
-    setSubmissionsLoading(false)
+    try {
+      const filter = statusFilter ?? submissionsFilter
+      const statusParam = filter !== 'all' ? `?status=${filter}` : ''
+      const res = await adminFetch(`/api/submissions${statusParam}`)
+      if (res.ok) setSubmissions(await res.json())
+    } finally {
+      setSubmissionsLoading(false)
+    }
   }
 
   async function loadSubmissionForm() {
@@ -441,6 +450,10 @@ export default function AdminDashboard() {
         student_email: '',
         emergency_contact_name: '',
         emergency_contact_phone: '',
+        date_of_birth: '',
+        nationality: '',
+        county_of_origin: '',
+        current_address: '',
       })
       setManualPhoto(null)
       setManualSig(null)
@@ -505,46 +518,59 @@ export default function AdminDashboard() {
   }
 
   async function handleGenerateQR(studentId) {
-    const res = await adminFetch(`/api/qr/generate/${encodeURIComponent(studentId)}`, {
-      method: 'POST',
-    })
-    if (res.ok) {
-      loadStudents()
-      return true
+    try {
+      const res = await adminFetch(`/api/qr/generate/${encodeURIComponent(studentId)}`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        loadStudents()
+        return true
+      }
+      return false
+    } catch {
+      return false
     }
-    return false
   }
 
   async function handleRegenerateQR(studentId) {
-    const res = await adminFetch(`/api/qr/regenerate/${encodeURIComponent(studentId)}`, {
-      method: 'POST',
-    })
-    const data = await res.json()
-    if (res.ok) {
-      loadStudents()
-      return true
+    try {
+      const res = await adminFetch(`/api/qr/regenerate/${encodeURIComponent(studentId)}`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        loadStudents()
+        return true
+      }
+      return false
+    } catch {
+      return false
     }
-    return false
   }
 
   async function handleGenerateAllQR() {
     setQrGenerating(true)
     setQrMsg(null)
-    const res = await adminFetch('/api/qr/generate-all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ force: false }),
-    })
-    const data = await res.json()
-    setQrGenerating(false)
-    if (res.ok)
-      setQrMsg({
-        ok: true,
-        text: `Generated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}`,
+    try {
+      const res = await adminFetch('/api/qr/generate-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: false }),
       })
-    else setQrMsg({ ok: false, text: data.error || 'Generation failed.' })
-    loadStudents()
-    setTimeout(() => setQrMsg(null), 4000)
+      const data = await res.json()
+      if (res.ok)
+        setQrMsg({
+          ok: true,
+          text: `Generated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}`,
+        })
+      else setQrMsg({ ok: false, text: data.error || 'Generation failed.' })
+      loadStudents()
+      setTimeout(() => setQrMsg(null), 4000)
+    } catch {
+      setQrMsg({ ok: false, text: 'Network error. Please try again.' })
+      setTimeout(() => setQrMsg(null), 4000)
+    } finally {
+      setQrGenerating(false)
+    }
   }
 
   async function handleRegenerateAllQR() {
@@ -552,62 +578,80 @@ export default function AdminDashboard() {
       return
     setQrGenerating(true)
     setQrMsg(null)
-    const res = await adminFetch('/api/qr/regenerate-all', { method: 'POST' })
-    const data = await res.json()
-    setQrGenerating(false)
-    if (res.ok)
-      setQrMsg({
-        ok: true,
-        text: `Regenerated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}`,
-      })
-    else setQrMsg({ ok: false, text: data.error || 'Regeneration failed.' })
-    loadStudents()
-    setTimeout(() => setQrMsg(null), 6000)
+    try {
+      const res = await adminFetch('/api/qr/regenerate-all', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok)
+        setQrMsg({
+          ok: true,
+          text: `Regenerated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}`,
+        })
+      else setQrMsg({ ok: false, text: data.error || 'Regeneration failed.' })
+      loadStudents()
+      setTimeout(() => setQrMsg(null), 6000)
+    } catch {
+      setQrMsg({ ok: false, text: 'Network error. Please try again.' })
+      setTimeout(() => setQrMsg(null), 6000)
+    } finally {
+      setQrGenerating(false)
+    }
   }
 
   // ── Submission handlers ──
   async function handleToggleSubmissionForm() {
     const newState = !submissionFormEnabled
-    const res = await adminJson('/api/settings/submission-form', 'PUT', { enabled: newState })
-    if (res.ok) {
-      setSubmissionFormEnabled(newState)
-      setSubmissionMsg({
-        ok: true,
-        text: newState ? 'Form enabled. Share the link with students.' : 'Form disabled.',
-      })
-    } else {
-      setSubmissionMsg({ ok: false, text: 'Failed to update form settings.' })
+    try {
+      const res = await adminJson('/api/settings/submission-form', 'PUT', { enabled: newState })
+      if (res.ok) {
+        setSubmissionFormEnabled(newState)
+        setSubmissionMsg({
+          ok: true,
+          text: newState ? 'Form enabled. Share the link with students.' : 'Form disabled.',
+        })
+      } else {
+        setSubmissionMsg({ ok: false, text: 'Failed to update form settings.' })
+      }
+    } catch {
+      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
     }
     setTimeout(() => setSubmissionMsg(null), 3000)
   }
 
   async function handleApproveSubmission(id) {
-    const res = await adminFetch(`/api/submissions/${id}/approve`, { method: 'POST' })
-    const data = await res.json()
-    if (res.ok) {
-      const msg = data.name_warning
-        ? { ok: true, text: 'Student approved. ' + data.name_warning, warn: true }
-        : { ok: true, text: 'Student approved and record created.' }
-      setSubmissionMsg(msg)
-      loadSubmissions()
-      loadStudents()
-    } else {
-      setSubmissionMsg({ ok: false, text: data.error || 'Approval failed.' })
+    try {
+      const res = await adminFetch(`/api/submissions/${id}/approve`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        const msg = data.name_warning
+          ? { ok: true, text: 'Student approved. ' + data.name_warning, warn: true }
+          : { ok: true, text: 'Student approved and record created.' }
+        setSubmissionMsg(msg)
+        loadSubmissions()
+        loadStudents()
+      } else {
+        setSubmissionMsg({ ok: false, text: data.error || 'Approval failed.' })
+      }
+    } catch {
+      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
     }
     setTimeout(() => setSubmissionMsg(null), 5000)
   }
 
   async function handleRejectSubmission(id) {
     const notes = prompt('Reason for rejection (optional):')
-    const res = await adminJson(`/api/submissions/${id}/reject`, 'PATCH', {
-      admin_notes: notes || '',
-    })
-    const data = await res.json()
-    if (res.ok) {
-      setSubmissionMsg({ ok: true, text: 'Submission rejected.' })
-      loadSubmissions()
-    } else {
-      setSubmissionMsg({ ok: false, text: data.error || 'Rejection failed.' })
+    try {
+      const res = await adminJson(`/api/submissions/${id}/reject`, 'PATCH', {
+        admin_notes: notes || '',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSubmissionMsg({ ok: true, text: 'Submission rejected.' })
+        loadSubmissions()
+      } else {
+        setSubmissionMsg({ ok: false, text: data.error || 'Rejection failed.' })
+      }
+    } catch {
+      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
     }
     setTimeout(() => setSubmissionMsg(null), 3000)
   }
@@ -616,12 +660,17 @@ export default function AdminDashboard() {
     if (!window.confirm('Delete this submission? This cannot be undone.')) return
     const prevSubmissions = submissions
     setSubmissions((prev) => prev.filter((s) => s.id !== id))
-    const res = await adminFetch(`/api/submissions/${id}`, { method: 'DELETE' })
-    if (res.ok) {
-      setSubmissionMsg({ ok: true, text: 'Submission deleted.' })
-    } else {
+    try {
+      const res = await adminFetch(`/api/submissions/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setSubmissionMsg({ ok: true, text: 'Submission deleted.' })
+      } else {
+        setSubmissions(prevSubmissions)
+        setSubmissionMsg({ ok: false, text: 'Failed to delete submission.' })
+      }
+    } catch {
       setSubmissions(prevSubmissions)
-      setSubmissionMsg({ ok: false, text: 'Failed to delete submission.' })
+      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
     }
     setTimeout(() => setSubmissionMsg(null), 3000)
   }

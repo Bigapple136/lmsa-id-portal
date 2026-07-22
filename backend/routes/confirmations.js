@@ -62,17 +62,17 @@ router.post('/', requireAdmin, async (req, res) => {
     .maybeSingle()
   if (lookupErr || !student) return res.status(404).json({ error: 'Student not found.' })
 
-  const { error: confError } = await supabase
-    .from('confirmations')
-    .insert({ student_id, action, note: note?.slice(0, MAX_NOTE_LENGTH) || null })
-  if (confError) return res.status(400).json({ error: confError.message })
-
   const newStatus = action === 'confirmed' ? 'confirmed' : 'issue'
   const { error: updateError } = await supabase
     .from('students')
     .update({ status: newStatus })
     .eq('student_id', student_id)
   if (updateError) return res.status(400).json({ error: updateError.message })
+
+  const { error: confError } = await supabase
+    .from('confirmations')
+    .insert({ student_id, action, note: note?.slice(0, MAX_NOTE_LENGTH) || null })
+  if (confError) return res.status(400).json({ error: confError.message })
 
   res.json({ success: true, status: newStatus })
 })

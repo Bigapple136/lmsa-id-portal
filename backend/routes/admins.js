@@ -42,7 +42,11 @@ router.post('/', requireAdmin, requireFullAdmin, async (req, res) => {
       .select('id, email, name, role, created_at')
       .single()
 
-    if (insertError) return res.status(400).json({ error: insertError.message })
+    if (insertError) {
+      // Rollback: delete the orphaned auth user
+      await supabase.auth.admin.deleteUser(userId).catch(() => {})
+      return res.status(400).json({ error: insertError.message })
+    }
 
     const { error: logErr } = await supabase.rpc('log_admin_action', {
       p_admin_id: userId,
@@ -81,12 +85,12 @@ router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Role is already set to ' + newRole })
   }
 
-  const { data: adminCount } = await supabase
+  const { count: adminCount } = await supabase
     .from('admins')
-    .select('id', { count: 'exact' })
+    .select('id', { count: 'exact', head: true })
     .eq('role', 'admin')
     .neq('id', targetId)
-  const adminCountAfter = (adminCount?.length || 0) + (newRole === 'admin' ? 1 : 0)
+  const adminCountAfter = (adminCount || 0) + (newRole === 'admin' ? 1 : 0)
   if (adminCountAfter === 0) {
     return res
       .status(400)
@@ -133,12 +137,12 @@ router.delete('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     .maybeSingle()
   if (!targetAdmin) return res.status(404).json({ error: 'Admin not found.' })
 
-  const { data: adminCount } = await supabase
+  const { count: deleteAdminCount } = await supabase
     .from('admins')
-    .select('id', { count: 'exact' })
+    .select('id', { count: 'exact', head: true })
     .eq('role', 'admin')
     .neq('id', targetId)
-  if ((adminCount?.length || 0) === 0) {
+  if ((deleteAdminCount || 0) === 0) {
     return res.status(400).json({ error: 'Cannot remove the last full admin.' })
   }
 

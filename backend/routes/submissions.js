@@ -14,8 +14,29 @@ const {
 
 const ALLOWED_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 
-// Public: Check if submission form is enabled
+// Public: Check submission status by token
 router.get('/status', async (req, res) => {
+  const { token } = req.query
+
+  if (token) {
+    const { data: submission, error } = await supabase
+      .from('student_submissions')
+      .select('status, full_name, student_id, updated_at, admin_notes')
+      .eq('id', token)
+      .maybeSingle()
+    if (error || !submission) {
+      return res.json({ found: false })
+    }
+    return res.json({
+      found: true,
+      status: submission.status,
+      full_name: submission.full_name,
+      student_id: submission.student_id,
+      updated_at: submission.updated_at,
+      admin_notes: submission.admin_notes,
+    })
+  }
+
   const { data } = await supabase
     .from('portal_settings')
     .select('value')

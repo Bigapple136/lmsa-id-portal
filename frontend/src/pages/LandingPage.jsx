@@ -39,7 +39,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="page-outer landing-split">
+    <div className="page-outer">
       <Navbar showLogin={true} />
       <div className="split-landing">
         <div className="split-brand">

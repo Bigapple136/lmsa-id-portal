@@ -2,7 +2,6 @@ const express = require('express')
 const router = express.Router()
 const multer = require('multer')
 const { parse } = require('csv-parse/sync')
-const sharp = require("sharp")
 const JSZip = require('jszip')
 const path = require('path')
 const PDFDocument = require('pdfkit')
@@ -111,11 +110,12 @@ async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
     await supabase.from('students').update({ photo_url: publicUrl }).eq('student_id', studentId)
   }
 
-  const { data: sigData } = await supabase.storage
+  const sigResult = await supabase.storage
     .from('id-cards')
     .download(oldSigPath)
-    .catch(() => null)
-  if (sigData) {
+    .catch(() => ({ data: null }))
+  if (sigResult?.data) {
+    const sigData = sigResult.data
     const buffer = Buffer.from(await sigData.arrayBuffer())
     const newPath = `signatures/${newFolder}/${safeSid}.png`
     await supabase.storage
@@ -136,8 +136,8 @@ router.get('/lookup', async (req, res) => {
     return res.status(400).json({ found: false, error: 'Missing fields.' })
   if (!validateTextLength(student_id, 50) || !validateTextLength(full_name))
     return res.status(400).json({ found: false, error: 'Input too long.' })
-  const safeId = student_id.trim().replace(/[%_]/g, (c) => `\\${c}`)
-  const safeName = full_name.trim().replace(/[%_]/g, (c) => `\\${c}`)
+  const safeId = student_id.trim().replace(/[\\%_]/g, (c) => `\\${c}`)
+  const safeName = full_name.trim().replace(/[\\%_]/g, (c) => `\\${c}`)
   const { data, error } = await supabase
     .from('students')
     .select('student_id')
@@ -187,7 +187,7 @@ router.get('/:studentId', requireAdmin, async (req, res) => {
   res.json(data)
 })
 
-router.delete('/:studentId?', requireAdmin, requireFullAdmin, async (req, res) => {
+router.delete('/:studentId', requireAdmin, requireFullAdmin, async (req, res) => {
   const studentId = req.params.studentId
   if (!studentId) return res.status(400).json({ error: 'student_id is required.' })
   const sidErr = maxLength(studentId, 50, 'studentId')
@@ -217,10 +217,10 @@ router.delete('/:studentId?', requireAdmin, requireFullAdmin, async (req, res) =
     supabase.storage.from('qr-codes').remove([filesToRemove[3]]),
   ])
 
-  await supabase.from('confirmations').delete().eq('student_id', studentId)
-
   const { error: deleteErr } = await supabase.from('students').delete().eq('student_id', studentId)
   if (deleteErr) return res.status(500).json({ error: 'Failed to delete student.' })
+
+  await supabase.from('confirmations').delete().eq('student_id', studentId)
 
   res.status(204).send()
 })
@@ -401,7 +401,8 @@ router.post(
         console.warn('Skipping row with empty student_id')
         continue
       }
-      if (r.year_level && !validateYear(r.year_level.trim())) {
+      const yearLevel = r.year_level?.trim()
+      if (!yearLevel || !validateYear(yearLevel)) {
         console.warn(`Invalid year_level for ${sid} — skipped`)
         continue
       }
@@ -413,7 +414,7 @@ router.post(
             photoMap[sid].buffer,
             photoMap[sid].mimeType,
             sid,
-            r.year_level?.trim(),
+            yearLevel,
           )
         } catch (err) {
           console.warn('[Bulk] Photo upload failed for', sid, err.message)
@@ -421,7 +422,7 @@ router.post(
       }
       if (signatureMap[sid]) {
         try {
-          signature_url = await uploadSignature(signatureMap[sid], sid, r.year_level?.trim())
+          signature_url = await uploadSignature(signatureMap[sid], sid, yearLevel)
         } catch (err) {
           console.warn('[Bulk] Signature upload failed for', sid, err.message)
         }
@@ -429,7 +430,7 @@ router.post(
       rows.push({
         student_id: sid.slice(0, 50),
         full_name: r.full_name.trim().slice(0, MAX_TEXT_LENGTH),
-        year_level: r.year_level.trim(),
+        year_level: yearLevel,
         position: r.position?.trim().slice(0, MAX_TEXT_LENGTH) || null,
         photo_url,
         signature_url,
@@ -549,7 +550,7 @@ router.patch(
     if (current_address !== undefined) updates.current_address = current_address?.trim() || null
 
     const identityFields = ['full_name', 'year_level', 'photo_url', 'signature_url']
-    const identityChanged = Object.keys(updates).some((k) => identityFields.includes(k))
+    let identityChanged = Object.keys(updates).some((k) => identityFields.includes(k))
     if (req.files?.photo?.[0]) {
       identityChanged = true
     }
@@ -890,6 +891,8 @@ router.get('/export/photoshoot', requireAdmin, async (req, res) => {
 router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => {
   const { year_level, new_valid_until } = req.body
   if (!year_level || !new_valid_until) return res.status(400).json({ error: 'Missing fields' })
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(new_valid_until))
+    return res.status(400).json({ error: 'new_valid_until must be YYYY-MM-DD format.' })
   const { data, error } = await supabase
     .from('students')
     .update({ valid_until: new_valid_until, status: 'confirmed' })
