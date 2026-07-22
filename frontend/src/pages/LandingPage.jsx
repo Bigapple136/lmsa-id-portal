@@ -44,10 +44,7 @@ export default function LandingPage() {
       <div className="split-landing">
         <div className="split-brand">
           <div className="split-emblem">
-            <svg width="72" height="72" viewBox="0 0 40 40" fill="none">
-              <path d="M20 4l16 10v12L20 36 4 26V14L20 4z" stroke="#C9A84C" strokeWidth="2" fill="none" />
-              <text x="20" y="25" textAnchor="middle" fill="#C9A84C" fontSize="10" fontWeight="900" fontFamily="serif">LM</text>
-            </svg>
+            <img src="/lmsa-logo.png" alt="LMSA Logo" width="72" height="72" style={{ objectFit: 'contain' }} />
           </div>
           <h1 className="split-title">A.M. Dogliotti College of Medicine</h1>
           <p className="split-sub">Liberia Medical Students Association</p>
