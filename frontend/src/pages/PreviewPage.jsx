@@ -105,10 +105,10 @@ export default function PreviewPage() {
   async function handleConfirm() {
     setSubmitting(true)
     try {
-      const res = await apiFetch('/api/confirmations', {
+      const res = await apiFetch('/api/confirmations/student', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: student.student_id, action: 'confirmed' }),
+        body: JSON.stringify({ token, action: 'confirmed' }),
       })
       if (!res.ok) throw new Error('Confirmation failed')
       setConfirmed(true)

@@ -886,8 +886,6 @@ router.get('/export/photoshoot', requireAdmin, async (req, res) => {
   doc.end()
 })
 
-module.exports = router
-
 // Card expiry / renewal
 router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => {
   const { year_level, new_valid_until } = req.body
@@ -900,3 +898,5 @@ router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => 
   if (error) return res.status(500).json({ error: error.message })
   res.json({ renewed: data?.length || 0 })
 })
+
+module.exports = router

@@ -93,12 +93,19 @@ async function deleteQRFile(studentId, yearLevel) {
 }
 
 async function generateForStudent(student) {
-  if (student.year_level) {
-    await deleteQRFile(student.student_id, student.year_level)
-  }
+  // Generate and upload the new QR first, then delete the old file.
+  // This prevents data loss if generation fails partway through.
   const buffer = await generateQRBuffer(student)
   const url = await uploadQR(buffer, student)
   await saveQRUrl(student.student_id, url)
+  // Clean up old QR file (best-effort — the new one is already saved)
+  if (student.year_level) {
+    try {
+      await deleteQRFile(student.student_id, student.year_level)
+    } catch (err) {
+      console.warn('[QR] Failed to clean up old QR file for', student.student_id, err.message)
+    }
+  }
   return url
 }
 

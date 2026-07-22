@@ -1,5 +1,7 @@
 const express = require('express')
 const router = express.Router()
+const path = require('path')
+const fs = require('fs')
 const JSZip = require('jszip')
 const { supabase } = require('../db')
 const cache = require('../cache')
