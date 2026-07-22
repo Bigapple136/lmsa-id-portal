@@ -593,8 +593,8 @@ body {
 }
 
 .admin-body {
-  max-width: 680px;
-  margin: 0 auto;
+  flex: 1;
+  min-width: 0;
   padding: 20px 24px;
   overflow-wrap: break-word;
   word-wrap: break-word;
