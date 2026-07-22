@@ -39,61 +39,52 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="page-outer">
+    <div className="page-outer landing-split">
       <Navbar showLogin={true} />
-      <div className="page-center">
-        <div className="landing-card">
-          <div className="landing-header">
-            <div className="landing-emblem">
-              <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-                <path d="M20 4l16 10v12L20 36 4 26V14L20 4z" stroke="#C9A84C" strokeWidth="1.8" fill="none" />
-                <text x="20" y="24" textAnchor="middle" fill="#C9A84C" fontSize="10" fontWeight="900" fontFamily="serif">LM</text>
-              </svg>
-            </div>
-            <p className="landing-subtitle">Liberia Medical Students Association</p>
-            <h1 className="landing-title">ID Card Verification Portal</h1>
-            <p className="landing-desc">A.M. Dogliotti College of Medicine</p>
-            <div className="landing-accent-line" />
+      <div className="split-landing">
+        <div className="split-brand">
+          <div className="split-emblem">
+            <svg width="72" height="72" viewBox="0 0 40 40" fill="none">
+              <path d="M20 4l16 10v12L20 36 4 26V14L20 4z" stroke="#C9A84C" strokeWidth="2" fill="none" />
+              <text x="20" y="25" textAnchor="middle" fill="#C9A84C" fontSize="10" fontWeight="900" fontFamily="serif">LM</text>
+            </svg>
           </div>
-
-          <form className="landing-form" onSubmit={handleSearch}>
-            <div className="field-group">
-              <label className="field-label">Student ID Number</label>
-              <input
-                className="field-input"
-                placeholder="e.g. 123456"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
-
-            <div className="field-group">
-              <label className="field-label">Full Name</label>
-              <input
-                className="field-input"
-                placeholder="As it appears on your enrollment form"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
-
-            {error && <div className="error-box">{error}</div>}
-
-            <button className="btn-primary" type="submit" disabled={loading}>
-              {loading ? (
-                <>
-                  <span className="spinner" />
-                  Searching...
-                </>
-              ) : (
-                'View My ID Card'
-              )}
-            </button>
-
-            <p className="landing-hint">Having trouble? Contact LMSA at your faculty office.</p>
-          </form>
+          <h1 className="split-title">A.M. Dogliotti College of Medicine</h1>
+          <p className="split-sub">Liberia Medical Students Association</p>
+          <p className="split-desc">Student ID verification and card management portal.</p>
+        </div>
+        <div className="split-form-panel">
+          <div className="split-card">
+            <h2 className="split-card-title">Verify Your ID</h2>
+            <p className="split-card-sub">Enter your details to view or confirm your student card.</p>
+            <form className="landing-form" onSubmit={handleSearch}>
+              <div className="field-group">
+                <label className="field-label">Student ID Number</label>
+                <input
+                  className="field-input"
+                  placeholder="e.g. AMD-2024-0001"
+                  value={studentId}
+                  onChange={(e) => setStudentId(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="field-group">
+                <label className="field-label">Full Name</label>
+                <input
+                  className="field-input"
+                  placeholder="As it appears on enrollment"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              {error && <div className="error-box">{error}</div>}
+              <button className="btn-primary" type="submit" disabled={loading}>
+                {loading ? (<><span className="spinner" />Searching...</>) : 'View My ID Card'}
+              </button>
+              <p className="landing-hint">Having trouble? Contact LMSA at your faculty office.</p>
+            </form>
+          </div>
         </div>
       </div>
       <Footer />

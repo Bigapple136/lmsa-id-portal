@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const multer = require('multer')
 const { parse } = require('csv-parse/sync')
+const sharp = require("sharp")
 const JSZip = require('jszip')
 const path = require('path')
 const PDFDocument = require('pdfkit')
@@ -886,3 +887,16 @@ router.get('/export/photoshoot', requireAdmin, async (req, res) => {
 })
 
 module.exports = router
+
+// Card expiry / renewal
+router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => {
+  const { year_level, new_valid_until } = req.body
+  if (!year_level || !new_valid_until) return res.status(400).json({ error: 'Missing fields' })
+  const { data, error } = await supabase
+    .from('students')
+    .update({ valid_until: new_valid_until, status: 'confirmed' })
+    .eq('year_level', year_level)
+    .select()
+  if (error) return res.status(500).json({ error: error.message })
+  res.json({ renewed: data?.length || 0 })
+})
