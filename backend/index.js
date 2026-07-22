@@ -19,6 +19,7 @@ const adminsRouter = require('./routes/admins')
 const submissionsRouter = require('./routes/submissions')
 const backupRouter = require('./routes/backup')
 const notificationsRouter = require('./routes/notifications')
+const analyticsRouter = require('./routes/analytics')
 
 const app = express()
 
@@ -138,6 +139,7 @@ app.use('/api/admins', adminsRouter)
 app.use('/api/submissions', submissionsRouter)
 app.use('/api/backup', backupRouter)
 app.use('/api/notifications', notificationsRouter)
+app.use('/api/analytics', analyticsRouter)
 
 app.get('/api/auth/me', requireAdmin, async (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, role: req.userRole })
@@ -211,32 +213,3 @@ module.exports = { createServer, startServer, app }
 if (require.main === module) {
   startServer()
 }
-
-// Background import worker (lightweight queue)
-// NOTE: In cluster mode, each worker has its own queue. Tasks enqueued via
-// API requests are processed by the worker that handled the request, which
-// is correct since imports are per-request. The queue exists to serialize
-// multiple import requests within a single worker process.
-const importQueue = []
-let importWorkerRunning = false
-
-async function importWorker() {
-  if (importWorkerRunning) return
-  importWorkerRunning = true
-  while (importQueue.length > 0) {
-    const task = importQueue.shift()
-    try {
-      await task()
-    } catch (e) {
-      console.error('[ImportWorker] Task failed:', e)
-    }
-  }
-  importWorkerRunning = false
-}
-
-function enqueueImport(task) {
-  importQueue.push(task)
-  importWorker()
-}
-
-module.exports.enqueueImport = enqueueImport

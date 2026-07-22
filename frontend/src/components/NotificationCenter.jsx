@@ -65,7 +65,7 @@ export default function NotificationCenter() {
   // Realtime subscription — wrapped in try/catch so CSP blocks don't crash the app
   useEffect(() => {
     let channel
-    let seenIds = new Set()
+    const seenIds = new Set()
     try {
       channel = supabase
         .channel('notifications-realtime')

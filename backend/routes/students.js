@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const multer = require('multer')
 const { parse } = require('csv-parse/sync')
+const sharp = require('sharp')
 const JSZip = require('jszip')
 const path = require('path')
 const PDFDocument = require('pdfkit')
@@ -46,9 +47,21 @@ async function uploadPhoto(buffer, mimeType, studentId, yearLevel) {
   const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
   const folder = normaliseYearFolder(yearLevel)
   const filePath = `photos/${folder}/${safeSid}.${ext}`
+
+  let optimized = buffer
+  try {
+    if (ext === 'jpg') {
+      optimized = await sharp(buffer).resize(800, 1000, { fit: 'cover' }).jpeg({ quality: 82 }).toBuffer()
+    } else {
+      optimized = await sharp(buffer).resize(800, 1000, { fit: 'cover' }).png({ compressionLevel: 8 }).toBuffer()
+    }
+  } catch (err) {
+    console.warn('[Sharp] Photo optimization failed, uploading raw:', err.message)
+  }
+
   const { error } = await supabase.storage
     .from('id-cards')
-    .upload(filePath, buffer, { contentType: mimeType, upsert: true })
+    .upload(filePath, optimized, { contentType: mimeType, upsert: true })
   if (error) throw new Error(error.message)
   const {
     data: { publicUrl },
@@ -60,9 +73,17 @@ async function uploadSignature(buffer, studentId, yearLevel) {
   const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
   const folder = normaliseYearFolder(yearLevel)
   const filePath = `signatures/${folder}/${safeSid}.png`
+
+  let optimized = buffer
+  try {
+    optimized = await sharp(buffer).resize(600, 200, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer()
+  } catch (err) {
+    console.warn('[Sharp] Signature optimization failed, uploading raw:', err.message)
+  }
+
   const { error } = await supabase.storage
     .from('id-cards')
-    .upload(filePath, buffer, { contentType: 'image/png', upsert: true })
+    .upload(filePath, optimized, { contentType: 'image/png', upsert: true })
   if (error) throw new Error(error.message)
   const {
     data: { publicUrl },

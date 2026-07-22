@@ -557,7 +557,6 @@ body {
   top: 52px;
   height: calc(100vh - 52px);
   overflow-y: auto;
-  display: none;
 }
 .admin-sidebar-nav {
   display: flex;
@@ -777,6 +776,10 @@ body {
 }
 
 /* ── Responsive ── */
+@media (max-width: 900px) {
+  .admin-sidebar { display: none; }
+  .admin-sidebar-layout { flex-direction: column; }
+}
 @media (max-width: 768px) {
   .admin-tabs { padding: 0 16px; }
   .admin-tabs::after, .admin-tabs::before { display: none; }

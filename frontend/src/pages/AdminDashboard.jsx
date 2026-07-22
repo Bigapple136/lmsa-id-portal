@@ -5,6 +5,7 @@ import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 import { useToast } from '../components/Toast'
 import NotificationCenter from '../components/NotificationCenter'
+import AnalyticsTab from '../components/AnalyticsTab'
 
 import SessionTimeout from '../components/SessionTimeout'
 
@@ -33,6 +34,69 @@ const FIELD_META = {
   year_level: { label: 'Level', locked: false },
   position: { label: 'Position', locked: false },
   signature: { label: 'Signature', locked: false },
+}
+
+function RenewCohortSection() {
+  const toast = useToast()
+  const [yearLevel, setYearLevel] = useState(YEARS[0])
+  const [newValidUntil, setNewValidUntil] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleRenew() {
+    if (!newValidUntil) return toast.error('Please select an expiry date.')
+    setLoading(true)
+    try {
+      const res = await adminJson('/api/students/renew-cohort', 'PUT', {
+        year_level: yearLevel,
+        new_valid_until: newValidUntil,
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Renewed ${data.renewed} student(s) in ${yearLevel}.`)
+        setNewValidUntil('')
+      } else {
+        toast.error(data.error || 'Renewal failed.')
+      }
+    } catch {
+      toast.error('Network error.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: '10px', alignItems: 'end', flexWrap: 'wrap' }}>
+      <div className="field-group" style={{ flex: '0 0 auto' }}>
+        <label className="field-label">Year level</label>
+        <select
+          className="field-input"
+          value={yearLevel}
+          onChange={(e) => setYearLevel(e.target.value)}
+          style={{ fontSize: '13px', padding: '7px 10px' }}
+        >
+          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+      <div className="field-group" style={{ flex: '0 0 auto' }}>
+        <label className="field-label">New expiry date</label>
+        <input
+          type="date"
+          className="field-input"
+          value={newValidUntil}
+          onChange={(e) => setNewValidUntil(e.target.value)}
+          style={{ fontSize: '13px', padding: '7px 10px' }}
+        />
+      </div>
+      <button
+        className="btn-gold"
+        onClick={handleRenew}
+        disabled={loading}
+        style={{ fontSize: '12px', padding: '7px 14px', marginBottom: '2px' }}
+      >
+        {loading ? 'Renewing...' : 'Renew Cohort'}
+      </button>
+    </div>
+  )
 }
 
 export default function AdminDashboard() {
@@ -1019,32 +1083,64 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="admin-tabs">
-        {['overview', 'upload', 'layout', 'students', 'submissions', 'settings'].map((tab) => (
-          <button
-            key={tab}
-            className={`admin-tab ${activeTab === tab ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab(tab)
-              if (tab === 'submissions') loadSubmissions()
-            }}
-          >
-            {tab === 'settings'
-              ? 'Settings'
-              : tab === 'submissions'
-                ? 'Submission Form'
-                : tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-        {userRole === 'admin' && (
-          <button
-            className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`}
-            onClick={() => navigate('/admin/admins')}
-          >
-            Admins
-          </button>
-        )}
-      </div>
+      <div className="admin-sidebar-layout">
+        <aside className="admin-sidebar">
+          <nav className="admin-sidebar-nav">
+            {['overview', 'upload', 'layout', 'students', 'submissions', 'analytics', 'settings'].map((tab) => (
+              <button
+                key={tab}
+                className={`admin-sidebar-item ${activeTab === tab ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab(tab)
+                  if (tab === 'submissions') loadSubmissions()
+                }}
+              >
+                <span className="admin-sidebar-label">
+                  {tab === 'settings'
+                    ? 'Settings'
+                    : tab === 'submissions'
+                      ? 'Submissions'
+                      : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </span>
+              </button>
+            ))}
+            {userRole === 'admin' && (
+              <button
+                className="admin-sidebar-item"
+                onClick={() => navigate('/admin/admins')}
+              >
+                <span className="admin-sidebar-label">Admins</span>
+              </button>
+            )}
+          </nav>
+        </aside>
+
+        <div className="admin-tabs">
+          {['overview', 'upload', 'layout', 'students', 'submissions', 'analytics', 'settings'].map((tab) => (
+            <button
+              key={tab}
+              className={`admin-tab ${activeTab === tab ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab(tab)
+                if (tab === 'submissions') loadSubmissions()
+              }}
+            >
+              {tab === 'settings'
+                ? 'Settings'
+                : tab === 'submissions'
+                  ? 'Submissions'
+                  : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+          {userRole === 'admin' && (
+            <button
+              className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`}
+              onClick={() => navigate('/admin/admins')}
+            >
+              Admins
+            </button>
+          )}
+        </div>
 
       <div className="admin-body">
         {/* ── OVERVIEW ── */}
@@ -1931,6 +2027,20 @@ export default function AdminDashboard() {
 
             <div className="divider" />
 
+            {/* Card expiry / renewal */}
+            {userRole === 'admin' && (
+              <>
+                <div className="section-title">Card expiry / renewal</div>
+                <p className="section-desc">
+                  Renew all cards for a given year level by setting a new expiry date. This resets
+                  those students' status to confirmed.
+                </p>
+                <RenewCohortSection userRole={userRole} />
+              </>
+            )}
+
+            <div className="divider" />
+
             {/* Backup */}
             {userRole === 'admin' && (
               <>
@@ -2421,6 +2531,10 @@ export default function AdminDashboard() {
             })()}
           </div>
         )}
+
+        {/* ── ANALYTICS ── */}
+        {activeTab === 'analytics' && <AnalyticsTab />}
+      </div>
       </div>
 
       <SessionTimeout />
