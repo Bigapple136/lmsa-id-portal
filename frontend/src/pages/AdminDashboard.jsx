@@ -358,14 +358,19 @@ export default function AdminDashboard() {
   async function saveQrFields() {
     setQrFieldsSaving(true)
     setQrFieldsMsg(null)
-    const res = await adminJson('/api/settings/qr-fields', 'PUT', qrFields)
-    setQrFieldsSaving(false)
-    if (res.ok) setQrFieldsMsg({ ok: true, text: 'QR field settings saved.' })
-    else
-      setQrFieldsMsg({
-        ok: false,
-        text: (await res.json().catch(() => ({}))).error || 'Failed to save QR settings.',
-      })
+    try {
+      const res = await adminJson('/api/settings/qr-fields', 'PUT', qrFields)
+      if (res.ok) setQrFieldsMsg({ ok: true, text: 'QR field settings saved.' })
+      else
+        setQrFieldsMsg({
+          ok: false,
+          text: (await res.json().catch(() => ({}))).error || 'Failed to save QR settings.',
+        })
+    } catch {
+      setQrFieldsMsg({ ok: false, text: 'Network error. Please try again.' })
+    } finally {
+      setQrFieldsSaving(false)
+    }
     setTimeout(() => setQrFieldsMsg(null), 2500)
   }
 
@@ -414,14 +419,19 @@ export default function AdminDashboard() {
   async function saveFields() {
     setFieldsSaving(true)
     setFieldsMsg(null)
-    const res = await adminJson('/api/settings/fields', 'PUT', fields)
-    setFieldsSaving(false)
-    if (res.ok) setFieldsMsg({ ok: true, text: 'Field settings saved.' })
-    else
-      setFieldsMsg({
-        ok: false,
-        text: (await res.json().catch(() => ({}))).error || 'Failed to save settings.',
-      })
+    try {
+      const res = await adminJson('/api/settings/fields', 'PUT', fields)
+      if (res.ok) setFieldsMsg({ ok: true, text: 'Field settings saved.' })
+      else
+        setFieldsMsg({
+          ok: false,
+          text: (await res.json().catch(() => ({}))).error || 'Failed to save settings.',
+        })
+    } catch {
+      setFieldsMsg({ ok: false, text: 'Network error. Please try again.' })
+    } finally {
+      setFieldsSaving(false)
+    }
     setTimeout(() => setFieldsMsg(null), 2500)
   }
 
@@ -461,69 +471,84 @@ export default function AdminDashboard() {
     if (!templateFile) return
     setUploading(true)
     setUploadMsg(null)
-    const form = new FormData()
-    form.append('file', templateFile)
-    const res = await adminForm('/api/templates', 'POST', form)
-    const data = await res.json()
-    setUploading(false)
-    if (res.ok) {
-      setActiveTemplate(data)
-      setTemplateFile(null)
-      setUploadMsg({ ok: true, text: 'Template uploaded and set as active.' })
-    } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
+    try {
+      const form = new FormData()
+      form.append('file', templateFile)
+      const res = await adminForm('/api/templates', 'POST', form)
+      const data = await res.json()
+      if (res.ok) {
+        setActiveTemplate(data)
+        setTemplateFile(null)
+        setUploadMsg({ ok: true, text: 'Template uploaded and set as active.' })
+      } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
+    } catch {
+      setUploadMsg({ ok: false, text: 'Upload failed. Please check your connection.' })
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function handleCSVUpload() {
     if (!csvFile) return
     setUploading(true)
     setUploadMsg(null)
-    const form = new FormData()
-    form.append('csv', csvFile)
-    if (zipFile) form.append('zip', zipFile)
-    const res = await adminForm('/api/students/bulk', 'POST', form)
-    const data = await res.json()
-    setUploading(false)
-    if (res.ok) {
-      setCsvFile(null)
-      setZipFile(null)
-      setUploadMsg({ ok: true, text: `${data.inserted} student records uploaded successfully.` })
-      loadStudents()
-    } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
+    try {
+      const form = new FormData()
+      form.append('csv', csvFile)
+      if (zipFile) form.append('zip', zipFile)
+      const res = await adminForm('/api/students/bulk', 'POST', form)
+      const data = await res.json()
+      if (res.ok) {
+        setCsvFile(null)
+        setZipFile(null)
+        setUploadMsg({ ok: true, text: `${data.queued} student record${data.queued !== 1 ? 's' : ''} queued for import.` })
+        loadStudents()
+      } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
+    } catch {
+      setUploadMsg({ ok: false, text: 'Upload failed. Please check your connection.' })
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function handleManualAdd(e) {
     e.preventDefault()
     setManualSubmitting(true)
     setManualMsg(null)
-    const form = new FormData()
-    Object.entries(manualForm).forEach(([k, v]) => form.append(k, v))
-    if (manualPhoto) form.append('photo', manualPhoto)
-    if (manualSig) form.append('signature', manualSig)
-    const res = await adminForm('/api/students', 'POST', form)
-    const data = await res.json()
-    setManualSubmitting(false)
-    if (res.ok) {
-      setManualMsg({ ok: true, text: `${data.full_name} added successfully. QR code generated.` })
-      setManualForm({
-        student_id: '',
-        full_name: '',
-        year_level: '1st Year',
-        position: '',
-        programme: '',
-        blood_type: '',
-        student_email: '',
-        emergency_contact_name: '',
-        emergency_contact_phone: '',
-        date_of_birth: '',
-        nationality: '',
-        county_of_origin: '',
-        current_address: '',
-      })
-      setManualPhoto(null)
-      setManualSig(null)
-      sessionStorage.removeItem(DRAFT_KEY)
-      loadStudents()
-    } else setManualMsg({ ok: false, text: data.error || 'Could not add student.' })
+    try {
+      const form = new FormData()
+      Object.entries(manualForm).forEach(([k, v]) => form.append(k, v))
+      if (manualPhoto) form.append('photo', manualPhoto)
+      if (manualSig) form.append('signature', manualSig)
+      const res = await adminForm('/api/students', 'POST', form)
+      const data = await res.json()
+      if (res.ok) {
+        setManualMsg({ ok: true, text: `${data.full_name} added successfully. QR code generated.` })
+        setManualForm({
+          student_id: '',
+          full_name: '',
+          year_level: '1st Year',
+          position: '',
+          programme: '',
+          blood_type: '',
+          student_email: '',
+          emergency_contact_name: '',
+          emergency_contact_phone: '',
+          date_of_birth: '',
+          nationality: '',
+          county_of_origin: '',
+          current_address: '',
+        })
+        setManualPhoto(null)
+        setManualSig(null)
+        sessionStorage.removeItem(DRAFT_KEY)
+        loadStudents()
+      } else setManualMsg({ ok: false, text: data.error || 'Could not add student.' })
+    } catch {
+      setManualMsg({ ok: false, text: 'Network error. Please try again.' })
+    } finally {
+      setManualSubmitting(false)
+    }
   }
 
   function openEdit(s) {
@@ -551,34 +576,39 @@ export default function AdminDashboard() {
     e.preventDefault()
     setEditSubmitting(true)
     setEditMsg(null)
-    const form = new FormData()
-    form.append('full_name', editForm.full_name)
-    form.append('year_level', editForm.year_level)
-    form.append('position', editForm.position || '')
-    form.append('programme', editForm.programme || '')
-    form.append('blood_type', editForm.blood_type || '')
-    form.append('student_email', editForm.student_email || '')
-    form.append('emergency_contact_name', editForm.emergency_contact_name || '')
-    form.append('emergency_contact_phone', editForm.emergency_contact_phone || '')
-    form.append('date_of_birth', editForm.date_of_birth || '')
-    form.append('nationality', editForm.nationality || '')
-    form.append('county_of_origin', editForm.county_of_origin || '')
-    form.append('current_address', editForm.current_address || '')
-    if (editPhoto) form.append('photo', editPhoto)
-    if (editSig) form.append('signature', editSig)
-    const res = await adminForm(
-      `/api/students/${encodeURIComponent(editStudent.student_id)}`,
-      'PATCH',
-      form,
-    )
-    const data = await res.json()
-    setEditSubmitting(false)
-    if (res.ok) {
-      setEditMsg({ ok: true, text: 'Student updated. QR code regenerated.' })
-      sessionStorage.removeItem(DRAFT_KEY)
-      loadStudents()
-      setTimeout(() => setEditStudent(null), 1200)
-    } else setEditMsg({ ok: false, text: data.error || 'Update failed.' })
+    try {
+      const form = new FormData()
+      form.append('full_name', editForm.full_name)
+      form.append('year_level', editForm.year_level)
+      form.append('position', editForm.position || '')
+      form.append('programme', editForm.programme || '')
+      form.append('blood_type', editForm.blood_type || '')
+      form.append('student_email', editForm.student_email || '')
+      form.append('emergency_contact_name', editForm.emergency_contact_name || '')
+      form.append('emergency_contact_phone', editForm.emergency_contact_phone || '')
+      form.append('date_of_birth', editForm.date_of_birth || '')
+      form.append('nationality', editForm.nationality || '')
+      form.append('county_of_origin', editForm.county_of_origin || '')
+      form.append('current_address', editForm.current_address || '')
+      if (editPhoto) form.append('photo', editPhoto)
+      if (editSig) form.append('signature', editSig)
+      const res = await adminForm(
+        `/api/students/${encodeURIComponent(editStudent.student_id)}`,
+        'PATCH',
+        form,
+      )
+      const data = await res.json()
+      if (res.ok) {
+        setEditMsg({ ok: true, text: 'Student updated. QR code regenerated.' })
+        sessionStorage.removeItem(DRAFT_KEY)
+        loadStudents()
+        setTimeout(() => setEditStudent(null), 1200)
+      } else setEditMsg({ ok: false, text: data.error || 'Update failed.' })
+    } catch {
+      setEditMsg({ ok: false, text: 'Network error. Please try again.' })
+    } finally {
+      setEditSubmitting(false)
+    }
   }
 
   async function handleGenerateQR(studentId) {

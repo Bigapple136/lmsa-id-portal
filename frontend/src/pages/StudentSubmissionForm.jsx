@@ -10,21 +10,17 @@ const LIBERIA_COUNTIES = [
   'Montserrado', 'Nimba', 'River Cess', 'River Gee', 'Sinoe',
 ]
 
-const PARTICLES = [
-  { color: 'var(--navy)', size: 200, left: '5%',   duration: 35, delay: 0,   opacity: 0.06, drift: 20 },
-  { color: 'var(--gold)', size: 150, left: '25%',  duration: 40, delay: 3,   opacity: 0.05, drift: -15 },
-  { color: 'var(--navy-light)', size: 180, left: '50%',  duration: 30, delay: 7,   opacity: 0.04, drift: 30 },
-  { color: 'var(--gold-light)', size: 120, left: '70%',  duration: 45, delay: 1,   opacity: 0.04, drift: -10 },
-  { color: 'var(--navy-mid)', size: 250, left: '85%',  duration: 38, delay: 5,   opacity: 0.05, drift: 25 },
-  { color: 'var(--gold)', size: 100, left: '40%',  duration: 50, delay: 12,  opacity: 0.03, drift: -20 },
-  { color: 'var(--navy)', size: 160, left: '15%',  duration: 32, delay: 9,   opacity: 0.05, drift: 15 },
-  { color: 'var(--navy-light)', size: 220, left: '65%',  duration: 42, delay: 15,  opacity: 0.04, drift: -25 },
+const STEPS = [
+  { key: 'personal', label: 'Personal Information' },
+  { key: 'academic', label: 'Academic Information' },
+  { key: 'additional', label: 'Additional Information' },
+  { key: 'review', label: 'Review & Submit' },
 ]
 
 export default function StudentSubmissionForm() {
   const [enabled, setEnabled] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [confirming, setConfirming] = useState(false)
+  const [step, setStep] = useState(0)
   const [agreed, setAgreed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -60,15 +56,29 @@ export default function StudentSubmissionForm() {
     init()
   }, [])
 
-  function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-    setConfirming(true)
+  const update = (field) => (e) => setForm({ ...form, [field]: e.target.value })
+
+  const showPosition = fieldsConfig?.position?.enabled === true
+  const showProgramme = qrFieldsConfig?.programme?.enabled === true
+  const showBloodType = qrFieldsConfig?.blood_type?.enabled === true
+  const showStudentEmail = qrFieldsConfig?.student_email?.enabled === true
+  const showEmergencyContactName = qrFieldsConfig?.emergency_contact_name?.enabled === true
+  const showEmergencyContactPhone = qrFieldsConfig?.emergency_contact_phone?.enabled === true
+  const showDateOfBirth = qrFieldsConfig?.date_of_birth?.enabled === true
+  const showNationality = qrFieldsConfig?.nationality?.enabled === true
+  const showCountyOfOrigin = qrFieldsConfig?.county_of_origin?.enabled === true
+  const showCurrentAddress = qrFieldsConfig?.current_address?.enabled === true
+
+  function canNext() {
+    if (step === 0) return form.student_id.trim() && form.full_name.trim()
+    if (step === 1) return true
+    if (step === 2) return true
+    return false
   }
 
   async function doSubmit() {
-    setConfirming(false)
     setSubmitting(true)
+    setError('')
     try {
       const res = await apiFetch('/api/submissions', {
         method: 'POST',
@@ -102,7 +112,7 @@ export default function StudentSubmissionForm() {
     return (
       <div className="page-center">
         <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔒</div>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#128274;</div>
           <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
             Form is currently closed
           </h2>
@@ -116,289 +126,278 @@ export default function StudentSubmissionForm() {
 
   if (submitted) {
     return (
-      <div className="page-center">
-        <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{ fontSize: '36px', marginBottom: '12px' }}>✅</div>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
-            Submission Received!
-          </h2>
-          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>
-            Your details have been submitted successfully. An admin will review your information shortly.
-          </p>
-          <p style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 500 }}>
-            You may now close this tab.
-          </p>
+      <div className="submission-page">
+        <div className="submission-topbar">
+          <div className="submission-topbar-inner">
+            <div className="submission-topbar-brand">
+              <img src="/lmsa-logo.png" alt="LMSA" className="submission-topbar-logo" />
+              <span className="submission-topbar-name">LMSA</span>
+            </div>
+          </div>
         </div>
+        <div className="submission-wizard-body">
+          <div className="submission-wizard-card">
+            <div style={{ textAlign: 'center', padding: '48px 32px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#9989;</div>
+              <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: 'var(--text)' }}>
+                Submission Received!
+              </h2>
+              <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px', lineHeight: 1.6 }}>
+                Your details have been submitted successfully. An admin will review your information shortly.
+              </p>
+              <p style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 500 }}>
+                You may now close this tab.
+              </p>
+            </div>
+          </div>
+        </div>
+        <Footer />
       </div>
     )
   }
 
-  const showPosition = fieldsConfig?.position?.enabled === true
-  const showProgramme = qrFieldsConfig?.programme?.enabled === true
-  const showBloodType = qrFieldsConfig?.blood_type?.enabled === true
-  const showStudentEmail = qrFieldsConfig?.student_email?.enabled === true
-  const showEmergencyContactName = qrFieldsConfig?.emergency_contact_name?.enabled === true
-  const showEmergencyContactPhone = qrFieldsConfig?.emergency_contact_phone?.enabled === true
-  const showDateOfBirth = qrFieldsConfig?.date_of_birth?.enabled === true
-  const showNationality = qrFieldsConfig?.nationality?.enabled === true
-  const showCountyOfOrigin = qrFieldsConfig?.county_of_origin?.enabled === true
-  const showCurrentAddress = qrFieldsConfig?.current_address?.enabled === true
-  const hasAdditionalFields =
-    showProgramme || showBloodType || showStudentEmail || showEmergencyContactName ||
-    showEmergencyContactPhone || showDateOfBirth || showNationality || showCountyOfOrigin || showCurrentAddress
+  const reviewRows = [
+    { label: 'Student ID', value: form.student_id },
+    { label: 'Full Name', value: form.full_name },
+    { label: 'Year / Level', value: form.year_level },
+    showPosition && form.position && { label: 'Position', value: form.position },
+    showProgramme && form.programme && { label: 'Programme', value: form.programme },
+    showBloodType && form.blood_type && { label: 'Blood Type', value: form.blood_type },
+    showStudentEmail && form.student_email && { label: 'Email', value: form.student_email },
+    showEmergencyContactName && form.emergency_contact_name && { label: 'Emergency Contact', value: form.emergency_contact_name },
+    showEmergencyContactPhone && form.emergency_contact_phone && { label: 'Emergency Phone', value: form.emergency_contact_phone },
+    showDateOfBirth && form.date_of_birth && { label: 'Date of Birth', value: form.date_of_birth },
+    showNationality && form.nationality && { label: 'Nationality', value: form.nationality },
+    showCountyOfOrigin && form.county_of_origin && { label: 'County of Origin', value: form.county_of_origin },
+    showCurrentAddress && form.current_address && { label: 'Address', value: form.current_address },
+  ].filter(Boolean)
 
   return (
-    <div className="submission-page" style={{ position: 'relative', background: 'linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 50%, #122a44 100%)', flexDirection: 'column', alignItems: 'center' }}>
-      <div className="form-particles">
-        {PARTICLES.map((p, i) => (
-          <div key={i} className="particle" style={{
-            '--p-size': p.size + 'px',
-            '--p-left': p.left,
-            '--p-color': p.color,
-            '--p-duration': p.duration + 's',
-            '--p-delay': p.delay + 's',
-            '--p-opacity': p.opacity,
-            '--p-drift': p.drift + 'px',
-          }}/>
-        ))}
+    <div className="submission-page">
+      <div className="submission-topbar">
+        <div className="submission-topbar-inner">
+          <div className="submission-topbar-brand">
+            <img src="/lmsa-logo.png" alt="LMSA" className="submission-topbar-logo" />
+            <span className="submission-topbar-name">LMSA</span>
+          </div>
+          <div className="submission-topbar-right">
+            <span className="submission-topbar-portal">Student Portal</span>
+          </div>
+        </div>
       </div>
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '480px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '32px 16px' }}>
-        <div className="landing-card">
-          <div className="landing-header">
-            <h1 className="landing-title">Student Details Form</h1>
-            <p className="landing-desc">Submit your information for your ID card</p>
+
+      <div className="submission-wizard-body">
+        <div className="submission-wizard-card">
+          <div className="step-indicator">
+            {STEPS.map((s, i) => (
+              <div key={s.key} className={`step-item ${i <= step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
+                <div className="step-circle">{i < step ? '\u2713' : i + 1}</div>
+                <div className="step-label">{s.label}</div>
+                {i < STEPS.length - 1 && <div className="step-line" />}
+              </div>
+            ))}
           </div>
 
-          <form onSubmit={handleSubmit} style={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="field-group">
-                <label className="field-label">Full Name</label>
-                <input className="field-input" placeholder="e.g. Josephine K. Freeman"
-                  value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} required />
-              </div>
+          <div className="submission-form-body">
+            {error && <div className="error-box" style={{ marginBottom: '16px' }}>{error}</div>}
 
-              <div className="field-group">
-                <label className="field-label">Student ID Number</label>
-                <input className="field-input" placeholder="e.g. 123456"
-                  value={form.student_id} onChange={e => setForm({...form, student_id: e.target.value})} required />
-              </div>
-
-              <div className="field-group">
-                <label className="field-label">Year / Level</label>
-                <select className="field-input" value={form.year_level}
-                  onChange={e => setForm({...form, year_level: e.target.value})}>
-                  {YEARS.map(y => <option key={y}>{y}</option>)}
-                </select>
-              </div>
-
-              {showPosition && (
-                <div className="field-group">
-                  <label className="field-label">Position (optional)</label>
-                  <input className="field-input" placeholder="e.g. Member"
-                    value={form.position} onChange={e => setForm({...form, position: e.target.value})} />
-                </div>
-              )}
-
-              {hasAdditionalFields && (
-                <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
-                    Additional Details
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {showProgramme && (
-                      <div className="field-group">
-                        <label className="field-label">Programme</label>
-                        <input className="field-input" placeholder="e.g. MBBS, Pharm.D"
-                          value={form.programme} onChange={e => setForm({...form, programme: e.target.value})} />
-                      </div>
-                    )}
-                    {showBloodType && (
-                      <div className="field-group">
-                        <label className="field-label">Blood Type</label>
-                        <select className="field-input" value={form.blood_type}
-                          onChange={e => setForm({...form, blood_type: e.target.value})}>
-                          <option value="">— Select —</option>
-                          {BLOOD_TYPES.map(b => <option key={b}>{b}</option>)}
-                        </select>
-                      </div>
-                    )}
-                    {showStudentEmail && (
-                      <div className="field-group">
-                        <label className="field-label">Student Email</label>
-                        <input className="field-input" type="email" placeholder="student@email.com"
-                          value={form.student_email} onChange={e => setForm({...form, student_email: e.target.value})} />
-                      </div>
-                    )}
-                    {showEmergencyContactName && (
-                      <div className="field-group">
-                        <label className="field-label">Emergency Contact Name</label>
-                        <input className="field-input" placeholder="Full name"
-                          value={form.emergency_contact_name} onChange={e => setForm({...form, emergency_contact_name: e.target.value})} />
-                      </div>
-                    )}
-                    {showEmergencyContactPhone && (
-                      <div className="field-group">
-                        <label className="field-label">Emergency Contact Phone</label>
-                        <input className="field-input" placeholder="+231 xxx xxxx"
-                          value={form.emergency_contact_phone} onChange={e => setForm({...form, emergency_contact_phone: e.target.value})} />
-                      </div>
-                    )}
-                    {showDateOfBirth && (
-                      <div className="field-group">
-                        <label className="field-label">Date of Birth</label>
-                        <input className="field-input" type="date"
-                          value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} required />
-                      </div>
-                    )}
-                    {showNationality && (
-                      <div className="field-group">
-                        <label className="field-label">Nationality</label>
-                        <input className="field-input" placeholder="Liberian"
-                          value={form.nationality} onChange={e => setForm({...form, nationality: e.target.value})} required />
-                      </div>
-                    )}
-                    {showCountyOfOrigin && (
-                      <div className="field-group">
-                        <label className="field-label">County of Origin</label>
-                        <input className="field-input" list="liberia-counties" placeholder="e.g. Montserrado"
-                          value={form.county_of_origin} onChange={e => setForm({...form, county_of_origin: e.target.value})} required />
-                        <datalist id="liberia-counties">
-                          {LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}
-                        </datalist>
-                      </div>
-                    )}
-                    {showCurrentAddress && (
-                      <div className="field-group">
-                        <label className="field-label">Current Address</label>
-                        <input className="field-input" placeholder="e.g. 123 Broad Street, Monrovia"
-                          value={form.current_address} onChange={e => setForm({...form, current_address: e.target.value})} required />
-                      </div>
-                    )}
+            {step === 0 && (
+              <>
+                <div className="form-section-header">
+                  <div>
+                    <h2 className="form-section-title">Student Information</h2>
+                    <p className="form-section-sub">Please provide accurate information. All fields are required.</p>
+                  </div>
+                  <div className="form-security-badge">
+                    <span className="form-security-icon">&#128274;</span>
+                    <span className="form-security-text">Your information is secure and will be kept confidential.</span>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {error && <div className="error-box" style={{ marginTop: '12px' }}>{error}</div>}
-
-            <div className="btn-row" style={{ marginTop: '16px' }}>
-              <button className="btn-gold-full" type="submit" disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit Details'}
-              </button>
-            </div>
-          </form>
-
-          {confirming && (
-            <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex',
-              alignItems:'center', justifyContent:'center', zIndex:1000, padding:'16px' }}
-              onClick={() => setConfirming(false)}>
-              <div style={{ background:'var(--white)', borderRadius:'var(--radius-lg)',
-                maxWidth:'400px', width:'100%', padding:'24px', maxHeight:'90vh', overflowY:'auto' }}
-                onClick={e => e.stopPropagation()}>
-                <h3 style={{ fontSize:'16px', fontWeight:600, marginBottom:'16px', color:'var(--text)' }}>
-                  Verify Your Details
-                </h3>
-                <p style={{ fontSize:'13px', color:'var(--muted)', marginBottom:'16px', lineHeight:1.5 }}>
-                  Please review your information carefully before submitting. You will not be able to edit this submission after it is sent.
-                </p>
-                <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'20px' }}>
-                  <div>
-                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Full Name</span>
-                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.full_name}</div>
+                <div className="form-grid">
+                  <div className="field-group">
+                    <label className="field-label">Student ID <span className="required">*</span></label>
+                    <input className="field-input" placeholder="Enter your student ID"
+                      value={form.student_id} onChange={update('student_id')} required />
                   </div>
-                  <div>
-                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Student ID</span>
-                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.student_id}</div>
+                  <div className="field-group">
+                    <label className="field-label">Full Name <span className="required">*</span></label>
+                    <input className="field-input" placeholder="Enter your full name"
+                      value={form.full_name} onChange={update('full_name')} required />
                   </div>
-                  <div>
-                    <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Year / Level</span>
-                    <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.year_level}</div>
+                  <div className="field-group">
+                    <label className="field-label">Year Level <span className="required">*</span></label>
+                    <select className="field-input" value={form.year_level} onChange={update('year_level')}>
+                      <option value="">Select year level</option>
+                      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
                   </div>
-                  {showPosition && form.position && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Position</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.position}</div>
+                </div>
+              </>
+            )}
+
+            {step === 1 && (
+              <>
+                <div className="form-section-header">
+                  <div>
+                    <h2 className="form-section-title">Academic Information</h2>
+                    <p className="form-section-sub">Tell us about your programme and role.</p>
+                  </div>
+                </div>
+                <div className="form-grid">
+                  {showProgramme && (
+                    <div className="field-group">
+                      <label className="field-label">Programme <span className="required">*</span></label>
+                      <input className="field-input" placeholder="Enter your programme"
+                        value={form.programme} onChange={update('programme')} />
                     </div>
                   )}
-                  {showProgramme && form.programme && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Programme</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.programme}</div>
+                  {showBloodType && (
+                    <div className="field-group">
+                      <label className="field-label">Blood Type <span className="required">*</span></label>
+                      <select className="field-input" value={form.blood_type} onChange={update('blood_type')}>
+                        <option value="">Select blood type</option>
+                        {BLOOD_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
                     </div>
                   )}
-                  {showBloodType && form.blood_type && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Blood Type</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.blood_type}</div>
-                    </div>
-                  )}
-                  {showStudentEmail && form.student_email && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Student Email</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.student_email}</div>
-                    </div>
-                  )}
-                  {showEmergencyContactName && form.emergency_contact_name && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Emergency Contact</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.emergency_contact_name}</div>
-                    </div>
-                  )}
-                  {showEmergencyContactPhone && form.emergency_contact_phone && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Emergency Phone</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.emergency_contact_phone}</div>
-                    </div>
-                  )}
-                  {showDateOfBirth && form.date_of_birth && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Date of Birth</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.date_of_birth}</div>
-                    </div>
-                  )}
-                  {showNationality && form.nationality && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Nationality</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.nationality}</div>
-                    </div>
-                  )}
-                  {showCountyOfOrigin && form.county_of_origin && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>County of Origin</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.county_of_origin}</div>
-                    </div>
-                  )}
-                  {showCurrentAddress && form.current_address && (
-                    <div>
-                      <span style={{ fontSize:'11px', color:'var(--muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Current Address</span>
-                      <div style={{ fontSize:'14px', fontWeight:500, color:'var(--text)', marginTop:'2px' }}>{form.current_address}</div>
+                  {showPosition && (
+                    <div className="field-group">
+                      <label className="field-label">Position</label>
+                      <input className="field-input" placeholder="Enter your position"
+                        value={form.position} onChange={update('position')} />
                     </div>
                   )}
                 </div>
-                <div style={{ marginBottom:'16px', display:'flex', alignItems:'flex-start', gap:'8px' }}>
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <div className="form-section-header">
+                  <div>
+                    <h2 className="form-section-title">Additional Information</h2>
+                    <p className="form-section-sub">Emergency contact and personal details.</p>
+                  </div>
+                </div>
+                <div className="form-grid">
+                  {showEmergencyContactName && (
+                    <div className="field-group">
+                      <label className="field-label">Emergency Contact Name <span className="required">*</span></label>
+                      <input className="field-input" placeholder="Enter name and phone number"
+                        value={form.emergency_contact_name} onChange={update('emergency_contact_name')} />
+                    </div>
+                  )}
+                  {showEmergencyContactPhone && (
+                    <div className="field-group">
+                      <label className="field-label">Emergency Contact Phone <span className="required">*</span></label>
+                      <input className="field-input" placeholder="+231 xxx xxxx"
+                        value={form.emergency_contact_phone} onChange={update('emergency_contact_phone')} />
+                    </div>
+                  )}
+                  {showStudentEmail && (
+                    <div className="field-group">
+                      <label className="field-label">Email <span className="required">*</span></label>
+                      <input className="field-input" type="email" placeholder="Enter your email address"
+                        value={form.student_email} onChange={update('student_email')} />
+                    </div>
+                  )}
+                  {showDateOfBirth && (
+                    <div className="field-group">
+                      <label className="field-label">Date of Birth <span className="required">*</span></label>
+                      <input className="field-input" type="date"
+                        value={form.date_of_birth} onChange={update('date_of_birth')} />
+                    </div>
+                  )}
+                  {showNationality && (
+                    <div className="field-group">
+                      <label className="field-label">Nationality <span className="required">*</span></label>
+                      <input className="field-input" placeholder="Enter your nationality"
+                        value={form.nationality} onChange={update('nationality')} />
+                    </div>
+                  )}
+                  {showCountyOfOrigin && (
+                    <div className="field-group">
+                      <label className="field-label">County of Origin <span className="required">*</span></label>
+                      <input className="field-input" list="liberia-counties-sub" placeholder="e.g. Montserrado"
+                        value={form.county_of_origin} onChange={update('county_of_origin')} />
+                      <datalist id="liberia-counties-sub">
+                        {LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}
+                      </datalist>
+                    </div>
+                  )}
+                  {showCurrentAddress && (
+                    <div className="field-group form-grid-full">
+                      <label className="field-label">Address <span className="required">*</span></label>
+                      <textarea className="field-input" placeholder="Enter your full address" rows={3}
+                        value={form.current_address} onChange={update('current_address')}
+                        style={{ resize: 'vertical', minHeight: '60px' }} />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <div className="form-section-header">
+                  <div>
+                    <h2 className="form-section-title">Review &amp; Submit</h2>
+                    <p className="form-section-sub">Please review your information before submitting.</p>
+                  </div>
+                  <div className="form-security-badge">
+                    <span className="form-security-icon">&#128274;</span>
+                    <span className="form-security-text">Your information is secure and will be kept confidential.</span>
+                  </div>
+                </div>
+                <div className="review-grid">
+                  {reviewRows.map(r => (
+                    <div key={r.label} className="review-row">
+                      <span className="review-label">{r.label}</span>
+                      <span className="review-value">{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="review-agree">
                   <input type="checkbox" id="agree-tos" checked={agreed}
                     onChange={e => setAgreed(e.target.checked)}
-                    style={{ marginTop:'3px', accentColor:'var(--gold)', cursor:'pointer', flexShrink:0 }}/>
-                  <label htmlFor="agree-tos" style={{ fontSize:'12px', color:'var(--muted)', lineHeight:1.5, cursor:'pointer' }}>
-                    I agree to the <span onClick={(e) => { e.preventDefault(); window.open('/terms', '_blank') }} style={{ color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px' }}>Terms of Service</span> and <span onClick={(e) => { e.preventDefault(); window.open('/privacy', '_blank') }} style={{ color:'var(--gold)', textDecoration:'underline', cursor:'pointer', fontSize:'12px' }}>Privacy Policy</span>
+                    style={{ accentColor: 'var(--gold)', cursor: 'pointer', flexShrink: 0 }} />
+                  <label htmlFor="agree-tos" style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, cursor: 'pointer' }}>
+                    I agree to the <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'underline' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'underline' }}>Privacy Policy</a>
                   </label>
                 </div>
-                <div style={{ display:'flex', gap:'10px' }}>
-                  <button onClick={() => setConfirming(false)}
-                    style={{ flex:1, padding:'10px', border:'0.5px solid var(--border)',
-                      borderRadius:'var(--radius)', background:'var(--bg)', color:'var(--text)',
-                      cursor:'pointer', fontSize:'14px', fontWeight:500 }}>
-                    Edit
-                  </button>
-                  <button onClick={doSubmit} disabled={!agreed}
-                    style={{ flex:1, padding:'10px', background:'var(--gold)', color:'var(--navy)',
-                      border:'none', borderRadius:'var(--radius)', cursor: agreed ? 'pointer' : 'not-allowed', fontSize:'14px', fontWeight:600, opacity: agreed ? 1 : 0.5 }}>
-                    Confirm &amp; Submit
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+              </>
+            )}
+          </div>
+
+          <div className="submission-form-footer">
+            <button
+              className="submission-btn-cancel"
+              onClick={() => step === 0 ? window.history.back() : setStep(step - 1)}
+            >
+              {step === 0 ? (
+                <>&larr; Cancel</>
+              ) : (
+                <>&larr; Back</>
+              )}
+            </button>
+            {step < 3 ? (
+              <button
+                className="submission-btn-next"
+                onClick={() => setStep(step + 1)}
+                disabled={!canNext()}
+              >
+                Continue &rarr;
+              </button>
+            ) : (
+              <button
+                className="submission-btn-submit"
+                onClick={doSubmit}
+                disabled={!agreed || submitting}
+              >
+                {submitting ? 'Submitting...' : <>&#10148; Submit &amp; Continue</>}
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <Footer />

@@ -1301,6 +1301,312 @@ a.about-contact-item:hover .about-contact-value { text-decoration: underline; }
   color: var(--muted);
 }
 
+/* ── Wizard form topbar ── */
+.submission-topbar {
+  background: var(--navy);
+  border-bottom: 2px solid var(--gold);
+  padding: 0 24px;
+  width: 100%;
+}
+.submission-topbar-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+.submission-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.submission-topbar-logo {
+  height: 32px;
+  width: auto;
+  border-radius: 4px;
+}
+.submission-topbar-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+.submission-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.submission-topbar-portal {
+  font-size: 13px;
+  color: #8899AA;
+}
+
+/* ── Wizard body ── */
+.submission-wizard-body {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px 48px;
+  width: 100%;
+}
+.submission-wizard-card {
+  width: 100%;
+  max-width: 860px;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 0.5px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+/* ── Step indicator ── */
+.step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 32px 24px;
+  border-bottom: 0.5px solid var(--border);
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.step-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px solid var(--border);
+  color: var(--muted);
+  background: var(--white);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+.step-item.active .step-circle {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: var(--white);
+}
+.step-item.done .step-circle {
+  border-color: var(--gold);
+  background: var(--gold);
+  color: var(--navy);
+}
+.step-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.step-item.active .step-label {
+  color: var(--navy);
+  font-weight: 600;
+}
+.step-item.done .step-label {
+  color: var(--gold);
+}
+.step-line {
+  width: 48px;
+  height: 2px;
+  background: var(--border);
+  margin: 0 12px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+.step-item.done + .step-item .step-line,
+.step-item.done .step-line {
+  background: var(--gold);
+}
+.step-item.active .step-line {
+  background: linear-gradient(90deg, var(--navy), var(--border));
+}
+
+/* ── Form body ── */
+.submission-form-body {
+  padding: 28px 36px;
+}
+.form-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+.form-section-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.form-section-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+.form-security-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--success-bg);
+  border: 0.5px solid var(--success-border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+.form-security-icon {
+  font-size: 16px;
+}
+.form-security-text {
+  font-size: 11px;
+  color: var(--success-text);
+  line-height: 1.4;
+}
+
+/* ── Form grid ── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px 20px;
+}
+.form-grid-full {
+  grid-column: 1 / -1;
+}
+@media (max-width: 700px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .step-label {
+    display: none;
+  }
+  .step-line {
+    width: 24px;
+    margin: 0 4px;
+  }
+  .submission-form-body {
+    padding: 20px 16px;
+  }
+  .form-section-header {
+    flex-direction: column;
+  }
+  .form-security-badge {
+    align-self: flex-start;
+  }
+}
+.required {
+  color: var(--error-text);
+}
+
+/* ── Review grid ── */
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+}
+.review-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.review-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.review-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+.review-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+@media (max-width: 700px) {
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Form footer ── */
+.submission-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 36px 24px;
+  gap: 12px;
+}
+.submission-btn-cancel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 20px;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.submission-btn-cancel:hover {
+  background: var(--bg);
+}
+.submission-btn-next {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--navy);
+  color: var(--gold);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.submission-btn-next:hover {
+  opacity: 0.9;
+}
+.submission-btn-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.submission-btn-submit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--gold);
+  color: var(--navy);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.submission-btn-submit:hover {
+  opacity: 0.9;
+}
+.submission-btn-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Submissions admin ── */
 .submission-setting-box {
   background: var(--white);
