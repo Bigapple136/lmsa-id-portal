@@ -514,7 +514,7 @@ body {
 }
 
 .admin-tabs {
-  display: flex;
+  display: none;
   gap: 0;
   background: var(--navy);
   padding: 0 24px;
@@ -779,6 +779,7 @@ body {
 @media (max-width: 900px) {
   .admin-sidebar { display: none; }
   .admin-sidebar-layout { flex-direction: column; }
+  .admin-tabs { display: flex; }
 }
 @media (max-width: 768px) {
   .admin-tabs { padding: 0 16px; }
