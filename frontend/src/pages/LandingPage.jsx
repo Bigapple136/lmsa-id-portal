@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import { apiFetch } from '../lib/api'
 
@@ -40,7 +39,6 @@ export default function LandingPage() {
 
   return (
     <div className="page-outer">
-      <Navbar showLogin={false} />
       <div className="split-landing">
         <div className="split-brand">
           <div className="split-emblem">
