@@ -15,6 +15,7 @@ export default function Navbar({ showLogin = true }) {
       <div className="navbar-inner">
         {/* Left — LMSA identity */}
         <div className="navbar-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+          <img src="/lmsa-logo.png" alt="LMSA" className="navbar-brand-logo" />
           <div className="navbar-brand-name">LMSA</div>
           <div className="navbar-brand-sub">ID Card Portal</div>
         </div>

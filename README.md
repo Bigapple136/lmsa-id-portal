@@ -14,6 +14,8 @@ limsa-id-portal/
 └── backend/           Node.js + Express API (hosted on Render)
 ```
 
+For the UI redesign decisions, design tokens, verification history, and follow-up work, see [`docs/UI-REDESIGN.md`](docs/UI-REDESIGN.md).
+
 ---
 
 ## Local Setup (First Time)

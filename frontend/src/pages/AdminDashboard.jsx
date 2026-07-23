@@ -7,6 +7,8 @@ import LayoutMapper from '../components/LayoutMapper'
 import { useToast } from '../components/Toast'
 import NotificationCenter from '../components/NotificationCenter'
 import AnalyticsTab from '../components/AnalyticsTab'
+import StatusBadge from '../components/StatusBadge'
+import EmptyState from '../components/EmptyState'
 
 import SessionTimeout from '../components/SessionTimeout'
 
@@ -796,11 +798,7 @@ export default function AdminDashboard() {
   }
 
   function statusPill(status) {
-    if (status === 'confirmed') return <span className="pill pill-green">Confirmed</span>
-    if (status === 'issue') return <span className="pill pill-amber">Issue</span>
-    if (status === 'photo_issue') return <span className="pill pill-photo">Photo issue</span>
-    if (status === 'self_corrected') return <span className="pill pill-blue">Self-corrected</span>
-    return <span className="pill pill-gray">Pending</span>
+    return <StatusBadge status={status} />
   }
 
   const filtered = students.filter(
@@ -1272,9 +1270,7 @@ export default function AdminDashboard() {
                 <div key={i} className="skeleton skeleton-row" />
               ))
             ) : recentActivity.length === 0 ? (
-              <p style={{ fontSize: '13px', color: 'var(--muted)', padding: '8px 0' }}>
-                No students yet.
-              </p>
+              <EmptyState>No students yet.</EmptyState>
             ) : recentActivity.map((s) => (
               <div className="student-row" key={s.id}>
                 <div className="avatar">{getInitials(s.full_name)}</div>
@@ -1824,9 +1820,7 @@ export default function AdminDashboard() {
                 ))}
               </div>
             ) : submissions.length === 0 ? (
-              <p style={{ fontSize: '13px', color: 'var(--muted)', padding: '12px 0' }}>
-                No {submissionsFilter} submissions.
-              </p>
+              <EmptyState>No {submissionsFilter} submissions.</EmptyState>
             ) : (
               <div>
                 {submissions.map((s) => (
@@ -1862,11 +1856,7 @@ export default function AdminDashboard() {
                         <div className="student-issue-note">Note: {s.admin_notes}</div>
                       )}
                     </div>
-                    <span
-                      className={`pill ${s.status === 'pending' ? 'pill-gray' : s.status === 'approved' ? 'pill-green' : 'pill-amber'}`}
-                    >
-                      {s.status}
-                    </span>
+                    <StatusBadge status={s.status} />
                     <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                       {s.status === 'pending' && (
                         <>
@@ -2296,9 +2286,7 @@ export default function AdminDashboard() {
                 <div key={i} className="skeleton skeleton-row" />
               ))
             ) : filtered.length === 0 ? (
-              <p style={{ fontSize: '13px', color: 'var(--muted)', padding: '12px 0' }}>
-                {search ? 'No students match your search.' : 'No students added yet.'}
-              </p>
+              <EmptyState>{search ? 'No students match your search.' : 'No students added yet.'}</EmptyState>
             ) : (() => {
               const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
               const safePage = Math.min(currentPage, totalPages)
