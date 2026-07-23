@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@formkit/auto-animate": "^0.8.2",
+    "@hcaptcha/react-hcaptcha": "^2.0.2",
     "@sentry/react": "^10.55.0",
     "@supabase/supabase-js": "^2.39.0",
     "react": "^18.2.0",

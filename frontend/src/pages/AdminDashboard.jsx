@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { supabase } from '../lib/supabase'
 import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
@@ -107,6 +108,9 @@ export default function AdminDashboard() {
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const [captchaToken, setCaptchaToken] = useState(null)
+  const captchaRef = useRef(null)
   const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('overview')
@@ -268,10 +272,22 @@ export default function AdminDashboard() {
 
   async function login(e) {
     e.preventDefault()
+    if (failedAttempts >= 3 && !captchaToken) {
+      setLoginError('Please complete the CAPTCHA verification.')
+      return
+    }
     setLoginLoading(true)
     setLoginError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) setLoginError(error.message)
+    if (error) {
+      setLoginError(error.message)
+      setFailedAttempts((prev) => prev + 1)
+      if (captchaRef.current) captchaRef.current.resetCaptcha()
+      setCaptchaToken(null)
+    } else {
+      setFailedAttempts(0)
+      setCaptchaToken(null)
+    }
     setLoginLoading(false)
   }
 
@@ -832,6 +848,17 @@ export default function AdminDashboard() {
               />
             </div>
             {loginError && <div className="error-box">{loginError}</div>}
+            {failedAttempts >= 3 && (
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '4px 0 8px' }}>
+                <HCaptcha
+                  ref={captchaRef}
+                  sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY || ''}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  theme="light"
+                />
+              </div>
+            )}
             <button className="btn-primary" type="submit" disabled={loginLoading}>
               {loginLoading ? 'Signing in...' : 'Sign In'}
             </button>
