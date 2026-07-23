@@ -11,6 +11,7 @@ const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { enqueueImport } = require('../queue')
 const { email, maxLength } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
+const logger = require('../logger')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
 
@@ -57,7 +58,7 @@ async function uploadPhoto(buffer, mimeType, studentId, yearLevel) {
       optimized = await sharp(buffer).resize(800, 1000, { fit: 'cover' }).png({ compressionLevel: 8 }).toBuffer()
     }
   } catch (err) {
-    console.warn('[Sharp] Photo optimization failed, uploading raw:', err.message)
+    logger.warn({ err: err.message }, 'Photo optimization failed, uploading raw')
   }
 
   const { error } = await supabase.storage
@@ -79,7 +80,7 @@ async function uploadSignature(buffer, studentId, yearLevel) {
   try {
     optimized = await sharp(buffer).resize(600, 200, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer()
   } catch (err) {
-    console.warn('[Sharp] Signature optimization failed, uploading raw:', err.message)
+    logger.warn({ err: err.message }, 'Signature optimization failed, uploading raw')
   }
 
   const { error } = await supabase.storage
@@ -355,7 +356,7 @@ router.post(
     try {
       await getQRGenerator()(data)
     } catch (err) {
-      console.error('[QR] Auto-generate failed for', data.student_id, err.message)
+      logger.warn({ studentId: data.student_id, err: err.message }, 'QR auto-generate failed')
     }
 
     res.status(201).json(data)
@@ -420,12 +421,12 @@ router.post(
     for (const r of records) {
       const sid = r.student_id?.trim()
       if (!sid) {
-        console.warn('Skipping row with empty student_id')
+        logger.warn('Skipping row with empty student_id')
         continue
       }
       const yearLevel = r.year_level?.trim()
       if (!yearLevel || !validateYear(yearLevel)) {
-        console.warn(`Invalid year_level for ${sid} — skipped`)
+        logger.warn({ studentId: sid }, 'Invalid year_level — skipped')
         continue
       }
       validRecords.push({
@@ -476,14 +477,14 @@ router.post(
               r.year_level,
             )
           } catch (err) {
-            console.warn('[Bulk] Photo upload failed for', r.student_id, err.message)
+            logger.warn({ studentId: r.student_id, err: err.message }, 'Bulk photo upload failed')
           }
         }
         if (signatureMap[r.student_id]) {
           try {
             signature_url = await uploadSignature(signatureMap[r.student_id], r.student_id, r.year_level)
           } catch (err) {
-            console.warn('[Bulk] Signature upload failed for', r.student_id, err.message)
+            logger.warn({ studentId: r.student_id, err: err.message }, 'Bulk signature upload failed')
           }
         }
         rows.push({ ...r, photo_url, signature_url })
@@ -494,7 +495,7 @@ router.post(
         .upsert(rows, { onConflict: 'student_id' })
         .select()
       if (error) {
-        console.error('[Bulk] Upsert failed:', error.message)
+        logger.error({ err: error.message }, 'Bulk upsert failed')
         return
       }
 
@@ -503,10 +504,10 @@ router.post(
         try {
           await qrGen(student)
         } catch (err) {
-          console.warn('[Bulk QR] Failed for', student.student_id, err.message)
+          logger.warn({ studentId: student.student_id, err: err.message }, 'Bulk QR generation failed')
         }
       }
-      console.log(`[Bulk] Imported ${data.length} students (${duplicatesSkipped} duplicates skipped)`)
+      logger.info({ count: data.length, duplicatesSkipped }, 'Bulk import completed')
     })
   },
 )
@@ -626,13 +627,13 @@ router.patch(
       try {
         await migrateStudentFiles(req.params.studentId, oldYearLevel, newYearLevel)
       } catch (err) {
-        console.warn('[Migrate] File migration failed for', req.params.studentId, err.message)
+        logger.warn({ studentId: req.params.studentId, err: err.message }, 'File migration failed')
       }
       try {
         const { deleteQRFile } = require('./qr')
         await deleteQRFile(req.params.studentId, oldYearLevel)
       } catch (err) {
-        console.warn('[Migrate] QR deletion failed for', req.params.studentId, err.message)
+        logger.warn({ studentId: req.params.studentId, err: err.message }, 'QR deletion failed')
       }
     }
 
@@ -640,7 +641,7 @@ router.patch(
     try {
       await getQRGenerator()(data)
     } catch (err) {
-      console.warn('[QR] Regenerate failed for', data.student_id, err.message)
+      logger.warn({ studentId: data.student_id, err: err.message }, 'QR regenerate failed')
     }
 
     res.json(data)
@@ -752,7 +753,7 @@ router.patch('/:studentId/self-correct', async (req, res) => {
       try {
         await getQRGenerator()(updated)
       } catch (err) {
-        console.warn('[Self-correct QR] Failed for', updated.student_id, err.message)
+        logger.warn({ studentId: updated.student_id, err: err.message }, 'Self-correct QR generation failed')
       }
     }
   }
@@ -764,14 +765,14 @@ router.patch('/:studentId/self-correct', async (req, res) => {
       title: 'Photo issue',
       message: `${studentId} reported an incorrect photo`,
       student_id: studentId,
-    }).then(() => {}).catch((err) => console.warn('[Notification] photo_issue insert failed:', err?.message))
+    }).then(() => {}).catch((err) => logger.warn({ err: err?.message }, 'photo_issue notification insert failed'))
   } else if (notes.length) {
     supabase.from('notifications').insert({
       type: 'self_correction',
       title: 'Detail correction',
       message: `${studentId} requested corrections to their details`,
       student_id: studentId,
-    }).then(() => {}).catch((err) => console.warn('[Notification] self_correction insert failed:', err?.message))
+    }).then(() => {}).catch((err) => logger.warn({ err: err?.message }, 'self_correction notification insert failed'))
   }
 
   const { data, error } = await supabase

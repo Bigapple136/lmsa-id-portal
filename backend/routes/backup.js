@@ -3,6 +3,7 @@ const router = express.Router()
 const JSZip = require('jszip')
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
+const logger = require('../logger')
 
 const TABLES = [
   'students',
@@ -35,7 +36,7 @@ router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
       while (hasMore) {
         const { data, error } = await supabase.from(table).select('*').range(offset, offset + PAGE - 1)
         if (error) {
-          console.warn(`[Backup] Failed to fetch table ${table}:`, error.message)
+          logger.warn({ table, err: error.message }, 'Failed to fetch backup table')
           dbFolder.file(`${table}.json`, JSON.stringify({ error: error.message }, null, 2))
           break
         }
@@ -47,7 +48,7 @@ router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
         dbFolder.file(`${table}.json`, JSON.stringify(allRows, null, 2))
       }
     } catch (err) {
-      console.warn(`[Backup] Exception fetching table ${table}:`, err.message)
+      logger.warn({ table, err: err.message }, 'Exception fetching backup table')
       dbFolder.file(`${table}.json`, JSON.stringify({ error: err.message }, null, 2))
     }
   }
@@ -84,7 +85,7 @@ router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
                 const buffer = Buffer.from(await fileData.arrayBuffer())
                 dest.file(item.name, buffer)
               } catch (err) {
-                console.warn(`[Backup] Failed to download ${bucket}/${itemPath}:`, err.message)
+                logger.warn({ bucket, path: itemPath, err: err.message }, 'Failed to download backup file')
               }
             }
           }
@@ -93,7 +94,7 @@ router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
 
       await downloadFolder('', bucketFolder)
     } catch (err) {
-      console.warn(`[Backup] Exception processing bucket ${bucket}:`, err.message)
+      logger.warn({ bucket, err: err.message }, 'Exception processing backup bucket')
     }
   }
 
@@ -106,7 +107,7 @@ router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
     )
     res.send(zipBuffer)
   } catch (err) {
-    console.error('[Backup] Failed to generate ZIP:', err.message)
+    logger.error({ err: err.message }, 'Failed to generate backup ZIP')
     res.status(500).json({ error: 'Failed to generate backup file.' })
   }
 })

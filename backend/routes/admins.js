@@ -3,6 +3,7 @@ const router = express.Router()
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { uuid } = require('../middleware/validate')
+const logger = require('../logger')
 
 router.get('/', requireAdmin, async (req, res) => {
   const { data, error } = await supabase
@@ -55,7 +56,7 @@ router.post('/', requireAdmin, requireFullAdmin, async (req, res) => {
       p_new_role: newRole,
       p_performed_by: req.user.id,
     })
-    if (logErr) console.warn('[Admins] Failed to log invite:', logErr.message)
+    if (logErr) logger.warn({ err: logErr.message }, 'Failed to log invite')
 
     res.status(201).json(data)
   } catch (err) {
@@ -112,7 +113,7 @@ router.patch('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     p_new_role: newRole,
     p_performed_by: req.user.id,
   })
-  if (logErr1) console.warn('[Admins] Failed to log role change:', logErr1.message)
+  if (logErr1) logger.warn({ err: logErr1.message }, 'Failed to log role change')
 
   const { data: updated } = await supabase
     .from('admins')
@@ -156,7 +157,7 @@ router.delete('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
     p_new_role: null,
     p_performed_by: req.user.id,
   })
-  if (logErr2) console.warn('[Admins] Failed to log removal:', logErr2.message)
+  if (logErr2) logger.warn({ err: logErr2.message }, 'Failed to log removal')
 
   res.status(204).send()
 })

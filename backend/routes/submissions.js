@@ -11,6 +11,7 @@ const {
   enumValue,
   firstError,
 } = require('../middleware/validate')
+const logger = require('../logger')
 
 const ALLOWED_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 
@@ -136,7 +137,7 @@ router.post('/', async (req, res) => {
     title: 'New submission',
     message: `${full_name.trim()} (${student_id.trim()}) submitted their details`,
     student_id: student_id.trim(),
-  }).then(() => {}).catch((err) => console.warn('[Notification] submission insert failed:', err?.message))
+  }).then(() => {}).catch((err) => logger.warn({ err: err?.message }, 'Submission notification insert failed'))
 
   res.status(201).json({ id: data.id, message: 'Submission received. Awaiting admin review.' })
 })
@@ -236,7 +237,7 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
     const { generateForStudent } = require('./qr')
     await generateForStudent(student)
   } catch (err) {
-    console.warn('[Submission QR] Failed for', student.student_id, err.message)
+    logger.warn({ studentId: student.student_id, err: err.message }, 'Submission QR generation failed')
   }
 
   const { error: updateErr } = await supabase

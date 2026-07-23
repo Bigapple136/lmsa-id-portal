@@ -1,3 +1,6 @@
+const cluster = require('cluster')
+const logger = require('./logger')
+
 class MemoryCache {
   constructor(defaultTTL = 300000, maxEntries = 1000) {
     this.store = new Map()
@@ -5,6 +8,20 @@ class MemoryCache {
     this.maxEntries = maxEntries
     const interval = setInterval(() => this.cleanup(), 5 * 60 * 1000)
     interval.unref()
+
+    // In cluster mode, listen for cache invalidation messages from primary
+    if (cluster.isWorker) {
+      process.on('message', (msg) => {
+        if (msg.type === 'cache:invalidate') {
+          this.store.delete(msg.key)
+          logger.debug({ key: msg.key }, 'Cache invalidated via IPC')
+        }
+        if (msg.type === 'cache:clear') {
+          this.store.clear()
+          logger.debug('Cache cleared via IPC')
+        }
+      })
+    }
   }
 
   get(key) {
@@ -24,6 +41,13 @@ class MemoryCache {
       const oldest = this.store.keys().next().value
       this.store.delete(oldest)
     }
+
+    // Broadcast invalidation to other workers in cluster mode
+    if (cluster.isPrimary) {
+      for (const id in cluster.workers) {
+        cluster.workers[id].send({ type: 'cache:invalidate', key })
+      }
+    }
   }
 
   cleanup() {
@@ -35,6 +59,13 @@ class MemoryCache {
 
   clear() {
     this.store.clear()
+
+    // Broadcast clear to all workers
+    if (cluster.isPrimary) {
+      for (const id in cluster.workers) {
+        cluster.workers[id].send({ type: 'cache:clear' })
+      }
+    }
   }
 }
 

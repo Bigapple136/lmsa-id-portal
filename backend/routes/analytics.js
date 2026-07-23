@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
+const logger = require('../logger')
 
 router.get('/', requireAdmin, async (req, res) => {
   try {
@@ -37,7 +38,7 @@ router.get('/', requireAdmin, async (req, res) => {
       pending_submissions: submissions.filter((s) => s.status === 'pending').length,
     })
   } catch (err) {
-    console.error('[Analytics] Error:', err)
+    logger.error({ err }, 'Analytics error')
     res.status(500).json({ error: 'Failed to load analytics.' })
   }
 })

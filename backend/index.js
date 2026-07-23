@@ -2,6 +2,7 @@ require('dotenv').config()
 const { validateEnv } = require('./env')
 validateEnv()
 
+const logger = require('./logger')
 const Sentry = require('@sentry/node')
 const express = require('express')
 const cors = require('cors')
@@ -45,7 +46,7 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
         fontSrc: ["'self'"],
@@ -157,7 +158,7 @@ app.use((err, req, res, _next) => {
   const status = err.status || err.statusCode || (err instanceof SyntaxError ? 400 : 500)
   const message = status >= 500 ? 'Internal server error.' : err.message
   if (status >= 500) {
-    console.error(`[ERROR] ${req.method} ${req.originalUrl}`, err)
+    logger.error({ err, method: req.method, url: req.originalUrl }, 'Server error')
   }
   res.status(status).json({ error: message })
 })
@@ -170,22 +171,22 @@ function startServer() {
   const PORT = process.env.PORT || 4000
   const server = app.listen(PORT, () => {
     const pid = process.pid
-    console.log(`LMSA ID Portal backend running on port ${PORT} (pid ${pid})`)
-    console.log(
-      `CORS origins: ${allowedOrigins.length ? allowedOrigins.join(', ') : 'none (set ALLOWED_ORIGINS)'}`,
+    logger.info({ port: pid, env: process.env.NODE_ENV || 'development' }, 'Server started')
+    logger.info(
+      { origins: allowedOrigins.length ? allowedOrigins.join(', ') : 'none (set ALLOWED_ORIGINS)' },
+      'CORS configured',
     )
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
   })
 
   function shutdown(signal) {
-    console.log(`\n[${signal}] Shutting down gracefully...`)
+    logger.info({ signal }, 'Shutting down gracefully')
     const forceExit = setTimeout(() => {
-      console.error('Forced exit after timeout.')
+      logger.error('Forced exit after timeout')
       process.exit(1)
     }, 10000)
     forceExit.unref()
     server.close(() => {
-      console.log('HTTP server closed.')
+      logger.info('HTTP server closed')
       clearTimeout(forceExit)
       process.exit(0)
     })
@@ -199,11 +200,11 @@ function startServer() {
 
 // ---- Unhandled rejections / exceptions ----
 process.on('unhandledRejection', (reason) => {
-  console.error('[UNHANDLED REJECTION]', reason)
+  logger.fatal({ err: reason }, 'Unhandled rejection')
   process.exit(1)
 })
 process.on('uncaughtException', (err) => {
-  console.error('[UNCAUGHT EXCEPTION]', err)
+  logger.fatal({ err }, 'Uncaught exception')
   process.exit(1)
 })
 

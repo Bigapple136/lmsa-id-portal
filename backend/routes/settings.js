@@ -11,6 +11,7 @@ const {
   checkFieldsConfig,
   checkLayoutConfig,
 } = require('../middleware/validate')
+const logger = require('../logger')
 
 const DEFAULT_FIELDS = {
   full_name: { label: 'Full Name', enabled: true, locked: false },
@@ -92,7 +93,7 @@ router.get('/fields', async (req, res) => {
     cache.set('settings:card_fields', result, 300000)
     res.json(result)
   } catch (err) {
-    console.error('[Settings] GET /fields error:', err)
+    logger.error({ err }, 'Settings GET /fields error')
     res.status(500).json({ error: 'Failed to load settings.' })
   }
 })
@@ -111,7 +112,7 @@ router.get('/qr-fields', async (req, res) => {
     cache.set('settings:qr_fields', result, 300000)
     res.json(result)
   } catch (err) {
-    console.error('[Settings] GET /qr-fields error:', err)
+    logger.error({ err }, 'Settings GET /qr-fields error')
     res.status(500).json({ error: 'Failed to load settings.' })
   }
 })
@@ -130,7 +131,7 @@ router.get('/layout', async (req, res) => {
     cache.set('settings:card_layout', result, 300000)
     res.json(result)
   } catch (err) {
-    console.error('[Settings] GET /layout error:', err)
+    logger.error({ err }, 'Settings GET /layout error')
     res.status(500).json({ error: 'Failed to load settings.' })
   }
 })
@@ -150,7 +151,7 @@ router.put('/fields', requireAdmin, requireFullAdmin, async (req, res) => {
     cache.set('settings:card_fields', data.value, 300000)
     res.json(data.value)
   } catch (err) {
-    console.error('[Settings] PUT /fields error:', err)
+    logger.error({ err }, 'Settings PUT /fields error')
     res.status(500).json({ error: 'Failed to save settings.' })
   }
 })
@@ -169,7 +170,7 @@ router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
     cache.set('settings:qr_fields', data.value, 300000)
     res.json(data.value)
   } catch (err) {
-    console.error('[Settings] PUT /qr-fields error:', err)
+    logger.error({ err }, 'Settings PUT /qr-fields error')
     res.status(500).json({ error: 'Failed to save settings.' })
   }
 })
@@ -188,7 +189,7 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     cache.set('settings:card_layout', data.value, 300000)
     res.json(data.value)
   } catch (err) {
-    console.error('[Settings] PUT /layout error:', err)
+    logger.error({ err }, 'Settings PUT /layout error')
     res.status(500).json({ error: 'Failed to save settings.' })
   }
 })
@@ -210,7 +211,7 @@ router.get('/download-excel', requireAdmin, async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Student_Template.xlsx"')
     res.sendFile(templatePath)
   } catch (err) {
-    console.error('[Settings] download-excel error:', err)
+    logger.error({ err }, 'Settings download-excel error')
     res.status(500).json({ error: 'Failed to download template.' })
   }
 })
@@ -263,7 +264,7 @@ router.get('/download-image-folder', requireAdmin, async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Image_Upload_Folder.zip"')
     res.send(buffer)
   } catch (err) {
-    console.error('[Settings] download-image-folder error:', err)
+    logger.error({ err }, 'Settings download-image-folder error')
     res.status(500).json({ error: 'Failed to generate ZIP.' })
   }
 })
@@ -295,7 +296,7 @@ router.put('/submission-form', requireAdmin, requireFullAdmin, async (req, res) 
     if (error) return res.status(400).json({ error: error.message })
     res.json(data.value)
   } catch (err) {
-    console.error('[Settings] PUT /submission-form error:', err)
+    logger.error({ err }, 'Settings PUT /submission-form error')
     res.status(500).json({ error: 'Failed to save settings.' })
   }
 })

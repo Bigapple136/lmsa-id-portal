@@ -1,4 +1,5 @@
 const { supabase } = require('../db')
+const logger = require('../logger')
 
 async function requireAdmin(req, res, next) {
   try {
@@ -24,7 +25,7 @@ async function requireAdmin(req, res, next) {
     req.userRole = adminRecord.role || 'support_admin'
     next()
   } catch (err) {
-    console.error('[AUTH] Unexpected error:', err)
+    logger.error({ err }, 'Unexpected auth error')
     res.status(500).json({ error: 'Authentication failed.' })
   }
 }

@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
+const logger = require('../logger')
 
 const PAGE_SIZE = 50
 
@@ -35,7 +36,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
     res.json({ notifications: data || [], total: count || 0, unread: unread || 0 })
   } catch (err) {
-    console.error('[Notifications] GET error:', err)
+    logger.error({ err }, 'Notifications GET error')
     res.status(500).json({ error: 'Failed to load notifications.' })
   }
 })
@@ -56,7 +57,7 @@ router.patch('/read-all', requireAdmin, async (req, res) => {
     }
     res.json({ message: 'All notifications marked as read.' })
   } catch (err) {
-    console.error('[Notifications] PATCH error:', err)
+    logger.error({ err }, 'Notifications PATCH error')
     res.status(500).json({ error: 'Failed to mark notifications.' })
   }
 })
@@ -78,12 +79,12 @@ router.post('/', requireAdmin, async (req, res) => {
     })
 
     if (error) {
-      console.warn('[Notifications] INSERT error:', error.message)
+      logger.warn({ err: error.message }, 'Notifications INSERT error')
       return res.status(500).json({ error: 'Failed to create notification.' })
     }
     res.status(201).json({ message: 'Notification created.' })
   } catch (err) {
-    console.error('[Notifications] POST error:', err)
+    logger.error({ err }, 'Notifications POST error')
     res.status(500).json({ error: 'Failed to create notification.' })
   }
 })

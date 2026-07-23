@@ -6,11 +6,21 @@ const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { maxLength } = require('../middleware/validate')
 const { getQRFields } = require('./settings')
+const logger = require('../logger')
 
 const JSZip = require('jszip')
 
 const BACKEND_URL = process.env.BACKEND_URL
+const FRONTEND_URL = process.env.FRONTEND_URL
 const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET
+
+function getSupabaseHostname() {
+  try {
+    return new URL(process.env.SUPABASE_URL).hostname
+  } catch {
+    return '*.supabase.co'
+  }
+}
 
 function escapeHtml(str) {
   if (!str) return ''
@@ -103,7 +113,7 @@ async function generateForStudent(student) {
     try {
       await deleteQRFile(student.student_id, student.year_level)
     } catch (err) {
-      console.warn('[QR] Failed to clean up old QR file for', student.student_id, err.message)
+      logger.warn({ studentId: student.student_id, err: err.message }, 'Failed to clean up old QR file')
     }
   }
   return url
@@ -143,7 +153,7 @@ router.post('/generate-all', requireAdmin, requireFullAdmin, async (req, res) =>
       await generateForStudent(student)
       generated++
     } catch (err) {
-      console.warn('[QR Gen] Failed for', student.student_id, err.message)
+      logger.warn({ studentId: student.student_id, err: err.message }, 'QR generation failed')
       failed++
     }
   }
@@ -185,7 +195,7 @@ router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) 
       await generateForStudent(student)
       generated++
     } catch (err) {
-      console.warn('[QR Regenerate] Failed for', student.student_id, err.message)
+      logger.warn({ studentId: student.student_id, err: err.message }, 'QR regeneration failed')
       failed++
     }
   }
@@ -267,7 +277,7 @@ router.get('/html/:studentId', async (req, res) => {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co https://lmsa-id-portal.vercel.app"/>
+<meta http-equiv="Content-Security-Policy" content="img-src 'self' data: https://${getSupabaseHostname()} https://*.supabase.co ${FRONTEND_URL}"/>
 <title>${escapeHtml(student.full_name || 'Student')} — LMSA ID Verification</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -354,7 +364,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
   <div class="topbar-inner">
     <div class="topbar-logo">LMSA — A.M. Dogliotti College of Medicine</div>
     <div class="topbar-crest" style="background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;">
-      <img src="https://lmsa-id-portal.vercel.app/lmsa-logo.png" alt="LMSA Logo" width="36" height="36" style="border-radius:50%;object-fit:contain;" crossorigin="anonymous"/>
+      <img src="${escapeHtml(FRONTEND_URL)}/lmsa-logo.png" alt="LMSA Logo" width="36" height="36" style="border-radius:50%;object-fit:contain;" crossorigin="anonymous"/>
     </div>
   </div>
 </header>
@@ -545,7 +555,7 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
     res.setHeader('Content-Disposition', `inline; filename="QR_${student.student_id}.html"`)
     res.setHeader(
       'Content-Security-Policy',
-      "img-src 'self' data: https://wunvnsttotgwaffhiyyd.supabase.co https://*.supabase.co https://lmsa-id-portal.vercel.app; frame-ancestors 'none'",
+      `img-src 'self' data: https://${getSupabaseHostname()} https://*.supabase.co ${FRONTEND_URL}; frame-ancestors 'none'`,
     )
     res.send(html)
   } catch (err) {
@@ -580,7 +590,7 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
         const yearFolder = (s.year_level || 'unknown').toLowerCase().replace(/\s+/g, '-')
         root.folder(yearFolder).file(`${s.student_id}.png`, buffer)
       } catch (err) {
-        console.warn('[QR Export] Failed to fetch', s.student_id, err.message)
+        logger.warn({ studentId: s.student_id, err: err.message }, 'QR export fetch failed')
       }
     }
   }
@@ -592,7 +602,7 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="LMSA_QR_Codes.zip"')
     res.send(zipBuffer)
   } catch (err) {
-    console.error('[QR] Export zip generation failed:', err)
+    logger.error({ err }, 'QR export zip generation failed')
     res.status(500).json({ error: 'Failed to generate QR export ZIP.' })
   }
 })
