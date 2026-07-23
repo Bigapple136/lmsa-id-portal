@@ -21,7 +21,7 @@ This document records the visual redesign decisions for the LIMSA ID Card Portal
 ### Verification
 
 - Frontend lint completed with no errors. Existing warnings remain in unrelated components.
-- Frontend tests passed: 2 test files, 4 tests.
+- Frontend tests passed: 3 test files, 5 tests.
 - Production build passed with Vite.
 - Automated UI verification is complete. Local visual QA was attempted, but the preview could not render because `frontend/.env` is not present and the required Supabase environment variables are not configured in this workspace. No UI runtime conclusion was drawn from the blank preview.
 
@@ -85,4 +85,5 @@ When adding or changing a screen:
 - Refined the admin dashboard presentation.
 - Extracted repeated status and empty-state UI into reusable components and added coverage.
 - Refined the remaining admin subviews to share the dashboard’s spacing, surfaces, controls, and responsive behavior.
+- Added focused empty-state rendering coverage alongside the status badge tests.
 - Documented the visual system, verification results, and follow-up work.
