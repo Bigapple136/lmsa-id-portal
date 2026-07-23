@@ -16,12 +16,14 @@ This document records the visual redesign decisions for the LIMSA ID Card Portal
 - Refined the admin dashboard with stronger summary cards, sidebar active states, student rows, filters, upload surfaces, and responsive spacing.
 - Added reusable `StatusBadge` and `EmptyState` components for repeated admin states.
 - Added focused tests for known and unknown status badge rendering.
+- Refined the secondary admin views: analytics summaries, submission filters, settings toggles, upload/manual-entry panels, and loading/notice states.
 
 ### Verification
 
 - Frontend lint completed with no errors. Existing warnings remain in unrelated components.
 - Frontend tests passed: 2 test files, 4 tests.
 - Production build passed with Vite.
+- Automated UI verification is complete. Local visual QA was attempted, but the preview could not render because `frontend/.env` is not present and the required Supabase environment variables are not configured in this workspace. No UI runtime conclusion was drawn from the blank preview.
 
 ## Design direction
 
@@ -82,4 +84,5 @@ When adding or changing a screen:
 - Refined the student card preview and correction-report presentation.
 - Refined the admin dashboard presentation.
 - Extracted repeated status and empty-state UI into reusable components and added coverage.
+- Refined the remaining admin subviews to share the dashboard’s spacing, surfaces, controls, and responsive behavior.
 - Documented the visual system, verification results, and follow-up work.

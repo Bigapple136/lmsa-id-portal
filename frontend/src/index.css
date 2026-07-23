@@ -3058,6 +3058,65 @@ textarea:focus-visible {
 .admin-body .pill { font-weight: 650; }
 .empty-state { padding: 18px 4px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
+/* Admin secondary views */
+.admin-subview { max-width: 1120px; }
+.admin-subview > .section-title { margin-bottom: 14px; }
+.analytics-summary { margin-bottom: 16px; }
+.analytics-summary .stat-box { min-height: 104px; }
+.admin-note { color: #7c899d; font-size: 12px; }
+.admin-loading-state {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  color: var(--muted);
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+}
+.admin-notice { max-width: 620px; }
+
+.mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 4px 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #eef2f7;
+}
+.mode-btn { min-height: 34px; padding: 7px 14px; border-radius: 7px; color: var(--muted); font-weight: 600; }
+.mode-btn.active { background: #fff; color: var(--teal-dark); box-shadow: 0 2px 6px rgba(7, 27, 58, 0.08); }
+
+.field-toggle-panel {
+  max-width: 760px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.field-toggle-row { min-height: 48px; border-radius: 9px; }
+.field-toggle-row:hover:not(.locked) { border-color: var(--teal); background: #f3fbfc; }
+.field-toggle-row.on { border-color: rgba(8, 127, 140, 0.35); background: #eefafb; }
+.field-toggle-row.locked { background: #f4f6f9; }
+.field-toggle-check { border-radius: 6px; }
+.field-toggle-row.on .field-toggle-check { background: var(--teal); border-color: var(--teal); }
+
+.download-row { gap: 14px; }
+.download-btn { border-radius: 12px; border: 1px solid var(--border); box-shadow: var(--shadow-sm); background: #fff; }
+.download-btn:hover { border-color: var(--teal); background: #f5fbfc; transform: translateY(-1px); }
+
+.manual-form { border: 1px solid var(--border); border-radius: 14px; background: #fff; padding: 22px; box-shadow: var(--shadow-sm); }
+.layout-mapper,
+.admin-body .layout-panel { border-radius: 14px; border-color: var(--border); box-shadow: var(--shadow-sm); }
+
+@media (max-width: 600px) {
+  .mode-toggle { display: flex; width: 100%; }
+  .mode-btn { flex: 1; padding-left: 8px; padding-right: 8px; }
+  .manual-form { padding: 16px; }
+  .analytics-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .admin-tabs { background: var(--navy); border-bottom: 1px solid rgba(244, 212, 131, 0.16); }
 .admin-tab { padding-top: 13px; padding-bottom: 13px; }
 
