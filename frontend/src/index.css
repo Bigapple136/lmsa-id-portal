@@ -556,6 +556,7 @@ body {
   padding: 24px 16px;
   flex-shrink: 0;
   position: fixed;
+  left: 0;
   top: 52px;
   height: calc(100vh - 52px);
   overflow-y: auto;
@@ -2994,7 +2995,7 @@ textarea:focus-visible {
 .topbar-logo { font-size: 17px; letter-spacing: -0.02em; }
 .topbar-sub { color: #adc0d8; }
 .admin-topbar .btn-outline-light { min-height: 36px; border-radius: 8px; color: #d9e3f0; }
-.admin-sidebar { top: 70px; height: calc(100vh - 70px); position: fixed; }
+.admin-sidebar { top: 70px; left: 0; height: calc(100vh - 70px); position: fixed; }
 .admin-sidebar-nav { gap: 6px; }
 .admin-sidebar-item { position: relative; }
 .admin-sidebar-item.active::before {
