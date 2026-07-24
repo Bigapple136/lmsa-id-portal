@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 
 export default function AboutPage() {
@@ -7,7 +6,6 @@ export default function AboutPage() {
 
   return (
     <div className="about-wrapper">
-      <Navbar showLogin={true} />
 
       {/* Hero */}
       <div className="about-hero">

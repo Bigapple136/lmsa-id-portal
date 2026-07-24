@@ -1,10 +1,8 @@
-import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 
 export default function PrivacyPage() {
   return (
     <div className="legal-page">
-      <Navbar showLogin={true} />
       <div className="legal-container">
         <div className="legal-brand">
           LMSA ID Portal — Operated by GoldWay Creative Design &amp; Production Services
