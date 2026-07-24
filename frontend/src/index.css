@@ -2927,19 +2927,36 @@ textarea:focus-visible {
 
 .submission-form-body { padding: 36px 48px 30px; }
 .form-section-header { margin-bottom: 30px; }
-.form-section-title { font-size: 25px; letter-spacing: -0.03em; }
+.form-section-title { font-size: 25px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
 .form-section-sub { line-height: 1.5; }
 .form-security-badge { border: 1px solid #bfe1d1; border-radius: 10px; background: #f0faf5; }
 .form-security-text { color: #27714a; }
 .form-grid { gap: 22px 24px; }
-.submission-form-body .field-group { gap: 7px; }
-.submission-form-body .field-input { background: #fff; }
+.submission-form-body .field-group { gap: 10px; }
+.submission-form-body .field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+.submission-form-body .field-input {
+  background: #fff;
+  font-size: 16px;
+  padding: 14px 16px;
+  min-height: 50px;
+  border-radius: 10px;
+  border: 1.5px solid #d1d5db;
+  line-height: 1.4;
+}
+.submission-form-body .field-input::placeholder { color: #9ca3af; font-size: 15px; }
+.submission-form-body .field-input:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgba(8, 127, 140, 0.1); }
 
 .review-grid { gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.review-row { min-height: 68px; padding: 14px 16px; background: #fff; border-bottom: 1px solid #edf0f4; }
+.review-row { min-height: 68px; padding: 16px 18px; background: #fff; border-bottom: 1px solid #edf0f4; }
 .review-row:nth-child(even) { background: #fbfcfe; }
 .review-row:last-child { border-bottom: 0; }
-.review-value { overflow-wrap: anywhere; }
+.review-value { overflow-wrap: anywhere; font-size: 15px; line-height: 1.5; }
 .review-agree { margin-top: 22px; border: 1px solid var(--border); background: #f8fafc; }
 
 .submission-form-footer {
@@ -2948,7 +2965,7 @@ textarea:focus-visible {
 }
 .submission-btn-cancel,
 .submission-btn-next,
-.submission-btn-submit { min-height: 46px; border-radius: 9px; }
+.submission-btn-submit { min-height: 50px; border-radius: 10px; font-size: 15px; font-weight: 600; }
 .submission-btn-next { background: var(--teal); color: #fff; box-shadow: 0 7px 16px rgba(8, 127, 140, 0.16); }
 .submission-btn-submit { background: var(--teal); color: #fff; box-shadow: 0 7px 16px rgba(8, 127, 140, 0.16); }
 .submission-btn-next:hover,
