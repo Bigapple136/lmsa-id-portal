@@ -286,7 +286,11 @@ export default function AdminDashboard() {
     setLoginError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      setLoginError(error.message)
+      console.error('[Auth] Sign-in failed:', error.message, error)
+      const msg = error.message.includes('Invalid login credentials')
+        ? 'Invalid email or password. If you were just invited, click the link in your email to set a password first.'
+        : error.message
+      setLoginError(msg)
       setFailedAttempts((prev) => prev + 1)
       if (captchaRef.current) captchaRef.current.resetCaptcha()
       setCaptchaToken(null)
