@@ -6,11 +6,14 @@ import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 import { useToast } from '../components/Toast'
 import NotificationCenter from '../components/NotificationCenter'
-import AnalyticsTab from '../components/AnalyticsTab'
 import StatusBadge from '../components/StatusBadge'
 import EmptyState from '../components/EmptyState'
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
+import { Doughnut, Bar } from 'react-chartjs-2'
 
 import SessionTimeout from '../components/SessionTimeout'
+
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const LIBERIA_COUNTIES = [
@@ -121,6 +124,7 @@ export default function AdminDashboard() {
   const [students, setStudents] = useState([])
   const [activeTemplate, setActiveTemplate] = useState(null)
   const [stats, setStats] = useState({ total: 0, confirmed: 0, pending: 0, issues: 0 })
+  const [analyticsData, setAnalyticsData] = useState(null)
   const [search, setSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 20
@@ -318,6 +322,7 @@ export default function AdminDashboard() {
           loadLayout,
           loadSubmissions,
           loadSubmissionForm,
+          loadAnalytics,
         ],
         3,
       )
@@ -422,6 +427,13 @@ export default function AdminDashboard() {
       const data = await res.json()
       setSubmissionFormEnabled(data.enabled)
     }
+  }
+
+  async function loadAnalytics() {
+    try {
+      const res = await adminFetch('/api/analytics')
+      if (res.ok) setAnalyticsData(await res.json())
+    } catch {}
   }
 
   async function saveLayout(layout) {
@@ -1141,7 +1153,7 @@ export default function AdminDashboard() {
       <div className="admin-sidebar-layout">
         <aside className="admin-sidebar">
           <nav className="admin-sidebar-nav">
-            {['overview', 'upload', 'layout', 'students', 'submissions', 'analytics', 'settings'].map((tab) => (
+            {['overview', 'upload', 'layout', 'students', 'submissions', 'settings'].map((tab) => (
               <button
                 key={tab}
                 className={`admin-sidebar-item ${activeTab === tab ? 'active' : ''}`}
@@ -1171,7 +1183,7 @@ export default function AdminDashboard() {
         </aside>
 
         <div className="admin-tabs">
-          {['overview', 'upload', 'layout', 'students', 'submissions', 'analytics', 'settings'].map((tab) => (
+          {['overview', 'upload', 'layout', 'students', 'submissions', 'settings'].map((tab) => (
             <button
               key={tab}
               className={`admin-tab ${activeTab === tab ? 'active' : ''}`}
@@ -1201,9 +1213,10 @@ export default function AdminDashboard() {
         {/* ── OVERVIEW ── */}
         {activeTab === 'overview' && (
           <div>
-            <div className="stats-grid">
+            {/* ── Stats Row ── */}
+            <div className="dashboard-stats">
               {dataLoading
-                ? [1, 2, 3, 4].map((i) => (
+                ? [1, 2, 3, 4, 5, 6].map((i) => (
                     <div key={i} className="stat-box">
                       <div className="skeleton skeleton-title" style={{ marginBottom: 8 }} />
                       <div className="skeleton skeleton-text" style={{ width: '60%' }} />
@@ -1213,7 +1226,7 @@ export default function AdminDashboard() {
                   <>
                     <div className="stat-box">
                       <div className="stat-num">{stats.total}</div>
-                      <div className="stat-lbl">Total</div>
+                      <div className="stat-lbl">Total Students</div>
                     </div>
                     <div className="stat-box">
                       <div className="stat-num confirmed">{stats.confirmed}</div>
@@ -1227,63 +1240,239 @@ export default function AdminDashboard() {
                       <div className="stat-num issue">{stats.issues}</div>
                       <div className="stat-lbl">Issues</div>
                     </div>
+                    <div className="stat-box">
+                      <div className="stat-num issue">{analyticsData?.corrections_by_field?.name || 0}</div>
+                      <div className="stat-lbl">Name Corrections</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-num issue">{analyticsData?.photo_issues || 0}</div>
+                      <div className="stat-lbl">Photo Issues</div>
+                    </div>
                   </>
                 )
               }
             </div>
-            <div className="section-title">Active template</div>
-            {dataLoading ? (
-              <div className="skeleton skeleton-row" style={{ marginBottom: 14 }} />
-            ) : activeTemplate ? (
-              <div className="template-row">
-                <div className="template-icon">🎨</div>
-                <div className="template-info">
-                  <div className="template-name">{activeTemplate.file_name}</div>
-                  <div className="template-meta">
-                    Uploaded{' '}
-                    {new Date(activeTemplate.uploaded_at).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}{' '}
-                    · {stats.total} cards
-                  </div>
+
+            {/* ── Charts Row ── */}
+            <div className="dashboard-charts">
+              {/* Status Distribution Doughnut */}
+              <div className="chart-card">
+                <div className="chart-card-title">Status Distribution</div>
+                <div className="chart-card-sub">Overview of all student card statuses</div>
+                <div className="chart-wrap">
+                  {dataLoading ? (
+                    <div className="skeleton skeleton-card" style={{ width: '180px', height: '180px', borderRadius: '50%' }} />
+                  ) : (
+                    <Doughnut
+                      data={{
+                        labels: ['Confirmed', 'Pending', 'Issues'],
+                        datasets: [{
+                          data: [stats.confirmed, stats.pending, stats.issues],
+                          backgroundColor: ['#16805d', '#aa7610', '#c24747'],
+                          borderWidth: 0,
+                          hoverOffset: 6,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '68%',
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: '#0D1B2A',
+                            titleFont: { size: 12, weight: '600' },
+                            bodyFont: { size: 11 },
+                            padding: 10,
+                            cornerRadius: 8,
+                            displayColors: true,
+                            boxPadding: 4,
+                          },
+                        },
+                      }}
+                    />
+                  )}
                 </div>
-                <span className="pill pill-green">Active</span>
+                {!dataLoading && stats.total > 0 && (
+                  <div className="chart-legend">
+                    <div className="chart-legend-item">
+                      <span className="chart-legend-dot" style={{ background: '#16805d' }} />
+                      Confirmed ({stats.confirmed})
+                    </div>
+                    <div className="chart-legend-item">
+                      <span className="chart-legend-dot" style={{ background: '#aa7610' }} />
+                      Pending ({stats.pending})
+                    </div>
+                    <div className="chart-legend-item">
+                      <span className="chart-legend-dot" style={{ background: '#c24747' }} />
+                      Issues ({stats.issues})
+                    </div>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="error-box" style={{ marginBottom: '14px' }}>
-                No template uploaded.{' '}
-                <span
-                  style={{ textDecoration: 'underline', cursor: 'pointer' }}
-                  onClick={() => setActiveTab('upload')}
-                >
-                  Upload now →
-                </span>
+
+              {/* Corrections Bar Chart */}
+              <div className="chart-card">
+                <div className="chart-card-title">Corrections & Issues</div>
+                <div className="chart-card-sub">Breakdown of correction types and photo problems</div>
+                <div className="chart-wrap" style={{ minHeight: '220px' }}>
+                  {dataLoading ? (
+                    <div className="skeleton skeleton-card" style={{ width: '100%', height: '160px' }} />
+                  ) : (
+                    <Bar
+                      data={{
+                        labels: ['Name Corrections', 'Year Corrections', 'Photo Issues'],
+                        datasets: [{
+                          data: [
+                            analyticsData?.corrections_by_field?.name || 0,
+                            analyticsData?.corrections_by_field?.year || 0,
+                            analyticsData?.photo_issues || 0,
+                          ],
+                          backgroundColor: ['#c24747', '#aa7610', '#5b8def'],
+                          borderRadius: 6,
+                          barThickness: 36,
+                        }],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        indexAxis: 'y',
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            backgroundColor: '#0D1B2A',
+                            titleFont: { size: 12, weight: '600' },
+                            bodyFont: { size: 11 },
+                            padding: 10,
+                            cornerRadius: 8,
+                          },
+                        },
+                        scales: {
+                          x: {
+                            beginAtZero: true,
+                            ticks: {
+                              stepSize: 1,
+                              font: { size: 11 },
+                              color: '#6B7280',
+                            },
+                            grid: { color: '#f0f0f0', drawBorder: false },
+                          },
+                          y: {
+                            ticks: {
+                              font: { size: 12, weight: '500' },
+                              color: '#0D1B2A',
+                            },
+                            grid: { display: false },
+                          },
+                        },
+                      }}
+                    />
+                  )}
+                </div>
               </div>
-            )}
-            <div className="section-title" style={{ marginTop: '16px' }}>
-              Recent activity
             </div>
-            {dataLoading ? (
-              [1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="skeleton skeleton-row" />
-              ))
-            ) : recentActivity.length === 0 ? (
-              <EmptyState>No students yet.</EmptyState>
-            ) : recentActivity.map((s) => (
-              <div className="student-row" key={s.id}>
-                <div className="avatar">{getInitials(s.full_name)}</div>
-                <div className="student-info">
-                  <div className="student-name">{s.full_name}</div>
-                  <div className="student-meta">
-                    {s.student_id} · {s.year_level}
-                    {s.position ? ` · ${s.position}` : ''}
+
+            {/* ── Bottom Row: Template + Quick Actions ── */}
+            <div className="dashboard-bottom">
+              <div className="template-card">
+                <div className="chart-card-title">Active Template</div>
+                <div className="chart-card-sub">Current card design being used</div>
+                {dataLoading ? (
+                  <div className="skeleton skeleton-row" style={{ marginTop: 14 }} />
+                ) : activeTemplate ? (
+                  <div className="template-card-inner">
+                    <div className="template-icon">🎨</div>
+                    <div className="template-info">
+                      <div className="template-name">{activeTemplate.file_name}</div>
+                      <div className="template-meta">
+                        Uploaded{' '}
+                        {new Date(activeTemplate.uploaded_at).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}{' '}
+                        · {stats.total} cards
+                      </div>
+                    </div>
+                    <span className="pill pill-green">Active</span>
                   </div>
-                </div>
-                {statusPill(s.status)}
+                ) : (
+                  <div className="error-box" style={{ marginTop: 14 }}>
+                    No template uploaded.{' '}
+                    <span
+                      style={{ textDecoration: 'underline', cursor: 'pointer' }}
+                      onClick={() => setActiveTab('upload')}
+                    >
+                      Upload now →
+                    </span>
+                  </div>
+                )}
               </div>
-            ))}
+
+              <div className="quick-actions-card">
+                <div className="chart-card-title">Quick Actions</div>
+                <div className="chart-card-sub">Jump to common tasks</div>
+                <div className="quick-actions-grid">
+                  <button className="quick-action-btn" onClick={() => setActiveTab('upload')}>
+                    <div className="quick-action-icon" style={{ background: '#eefafb', color: 'var(--teal)' }}>⬆</div>
+                    Upload Data
+                  </button>
+                  <button className="quick-action-btn" onClick={() => { setActiveTab('students'); }}>
+                    <div className="quick-action-icon" style={{ background: '#e6f4ec', color: 'var(--success-text)' }}>👤</div>
+                    View Students
+                  </button>
+                  <button className="quick-action-btn" onClick={() => { setActiveTab('submissions'); loadSubmissions(); }}>
+                    <div className="quick-action-icon" style={{ background: '#fef6e4', color: 'var(--warn-text)' }}>📋</div>
+                    Submissions
+                  </button>
+                  <button className="quick-action-btn" onClick={() => setActiveTab('layout')}>
+                    <div className="quick-action-icon" style={{ background: '#eef2f7', color: 'var(--navy-mid)' }}>🎨</div>
+                    Card Layout
+                  </button>
+                  <button className="quick-action-btn" onClick={() => setActiveTab('settings')}>
+                    <div className="quick-action-icon" style={{ background: '#f3f4f6', color: 'var(--muted)' }}>⚙</div>
+                    Settings
+                  </button>
+                  {userRole === 'admin' && (
+                    <button className="quick-action-btn" onClick={() => navigate('/admin/admins')}>
+                      <div className="quick-action-icon" style={{ background: '#fef6e4', color: 'var(--gold)' }}>👥</div>
+                      Manage Admins
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Recent Activity ── */}
+            <div className="recent-activity-card">
+              <div className="chart-card-title">Recent Activity</div>
+              <div className="chart-card-sub">Latest student additions and updates</div>
+              {dataLoading ? (
+                <div style={{ marginTop: 14 }}>
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="skeleton skeleton-row" />
+                  ))}
+                </div>
+              ) : recentActivity.length === 0 ? (
+                <EmptyState>No students yet.</EmptyState>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  {recentActivity.map((s) => (
+                    <div className="student-row" key={s.id}>
+                      <div className="avatar">{getInitials(s.full_name)}</div>
+                      <div className="student-info">
+                        <div className="student-name">{s.full_name}</div>
+                        <div className="student-meta">
+                          {s.student_id} · {s.year_level}
+                          {s.position ? ` · ${s.position}` : ''}
+                        </div>
+                      </div>
+                      {statusPill(s.status)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -2577,8 +2766,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* ── ANALYTICS ── */}
-        {activeTab === 'analytics' && <AnalyticsTab />}
       </div>
       </div>
 
