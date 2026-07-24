@@ -2634,11 +2634,11 @@ a:focus:not(:focus-visible) {
 }
 
 /* Split landing redesign */
-.split-landing { display: flex; min-height: calc(100vh - 52px); width: 100%; }
+.split-landing { display: flex; min-height: calc(100vh - 52px); width: 100%; font-family: 'Plus Jakarta Sans', sans-serif; }
 .split-brand { flex: 1; background: linear-gradient(160deg, #0D1B2A 0%, #152238 60%, #0D1B2A 100%); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 32px; text-align: center; min-height: calc(100vh - 52px); position: relative; overflow: hidden; }
 .split-brand::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 30% 40%, rgba(201,168,76,0.08) 0%, transparent 50%), radial-gradient(circle at 70% 60%, rgba(201,168,76,0.06) 0%, transparent 50%); pointer-events: none; }
 .split-emblem { margin-bottom: 24px; position: relative; z-index: 1; }
-.split-title { font-family: Georgia, 'Times New Roman', serif; font-size: 1.8rem; font-weight: 700; color: #fff; margin-bottom: 8px; letter-spacing: 0.02em; line-height: 1.2; position: relative; z-index: 1; }
+.split-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.8rem; font-weight: 800; color: #fff; margin-bottom: 8px; letter-spacing: -0.01em; line-height: 1.15; position: relative; z-index: 1; }
 .split-sub { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #C9A84C; margin-bottom: 16px; position: relative; z-index: 1; }
 .split-desc { font-size: 14px; color: #8899AA; max-width: 320px; line-height: 1.6; position: relative; z-index: 1; }
 .split-form-panel { flex: 1; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 48px 32px; min-height: calc(100vh - 52px); }
