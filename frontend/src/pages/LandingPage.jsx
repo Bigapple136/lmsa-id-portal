@@ -44,8 +44,8 @@ export default function LandingPage() {
           <div className="split-emblem">
             <img src="/lmsa-logo.png" alt="LMSA Logo" width="72" height="72" style={{ objectFit: 'contain' }} />
           </div>
-          <h1 className="split-title">A.M. Dogliotti College of Medicine</h1>
-          <p className="split-sub">Liberia Medical Students Association</p>
+          <h1 className="split-title">Liberia Medical Students' Association</h1>
+          <p className="split-sub">A.M. Dogliotti College of Medicine</p>
           <p className="split-desc">Student ID verification and card management portal.</p>
         </div>
         <div className="split-form-panel">
