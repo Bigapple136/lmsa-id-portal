@@ -34,6 +34,18 @@ class MemoryCache {
     return entry.value
   }
 
+  // Delete a single key and broadcast invalidation to other workers (mirrors
+  // the IPC behavior of set/clear). Used by rotatable QR keys so verify picks
+  // up an active->retired/revoked transition without waiting the cache TTL.
+  delete(key) {
+    this.store.delete(key)
+    if (cluster.isPrimary) {
+      for (const id in cluster.workers) {
+        cluster.workers[id].send({ type: 'cache:invalidate', key })
+      }
+    }
+  }
+
   set(key, value, ttlMs) {
     this.store.delete(key)
     this.store.set(key, { value, expiry: Date.now() + (ttlMs || this.defaultTTL) })

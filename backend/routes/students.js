@@ -174,7 +174,7 @@ router.get('/lookup', async (req, res) => {
 })
 
 router.get('/preview/:token', async (req, res) => {
-  const studentId = verifyStudentToken(req.params.token)
+  const studentId = await verifyStudentToken(req.params.token)
   if (!studentId) return res.status(403).json({ error: 'Invalid or tampered link.' })
   const { data, error } = await supabase
     .from('students')
@@ -655,7 +655,7 @@ router.patch('/:studentId/self-correct', async (req, res) => {
 
   const token = req.query.token || req.body?.token
   if (!token) return res.status(401).json({ error: 'Token required.' })
-  const tokenStudentId = verifyStudentToken(token)
+  const tokenStudentId = await verifyStudentToken(token)
   if (!tokenStudentId || tokenStudentId !== req.params.studentId) {
     return res.status(403).json({ error: 'Invalid or expired token.' })
   }

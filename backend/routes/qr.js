@@ -1,18 +1,23 @@
 const express = require('express')
 const router = express.Router()
 const QRCode = require('qrcode')
-const crypto = require('crypto')
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { maxLength } = require('../middleware/validate')
 const { getQRFields } = require('./settings')
+// Token sign/verify + rotatable key store live in qr-keys.js (single source).
+// Re-exported below so existing `require('./qr')` consumers keep working.
+const {
+  signStudentToken,
+  verifyStudentToken,
+  signV2,
+} = require('../qr-keys')
 const logger = require('../logger')
 
 const JSZip = require('jszip')
 
 const BACKEND_URL = process.env.BACKEND_URL
 const FRONTEND_URL = process.env.FRONTEND_URL
-const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET
 
 function getSupabaseHostname() {
   try {
@@ -32,29 +37,9 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;')
 }
 
-function signStudentToken(studentId) {
-  const payload = Buffer.from(studentId).toString('base64url')
-  const sig = crypto.createHmac('sha256', QR_SIGNING_SECRET).update(payload).digest('base64url')
-  return `${payload}.${sig}`
-}
-
-function verifyStudentToken(token) {
-  const [payload, sig] = (token || '').split('.')
-  if (!payload || !sig || !QR_SIGNING_SECRET) return null
-  const expected = crypto
-    .createHmac('sha256', QR_SIGNING_SECRET)
-    .update(payload)
-    .digest('base64url')
-  try {
-    const sigBuf = Buffer.from(sig, 'base64url')
-    const expectedBuf = Buffer.from(expected, 'base64url')
-    if (sigBuf.length !== expectedBuf.length) return null
-    if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) return null
-    return Buffer.from(payload, 'base64url').toString()
-  } catch {
-    return null
-  }
-}
+// signStudentToken and verifyStudentToken are imported from ../qr-keys.
+// Phase 1: signing still emits v1 (see qr-keys.js); verify accepts v1 (shim)
+// and v2. Issuer flip to v2 is the deliberate separate Phase 2 change.
 
 async function buildPayload(student) {
   const token = signStudentToken(student.student_id)
@@ -223,7 +208,7 @@ router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
 
 router.get('/html/:studentId', async (req, res) => {
   const rawToken = req.params.studentId
-  const studentId = verifyStudentToken(rawToken)
+  const studentId = await verifyStudentToken(rawToken)
   if (!studentId)
     return res.status(403).send('Invalid or tampered QR code. Please request a new ID card.')
 
@@ -612,3 +597,6 @@ module.exports.generateForStudent = generateForStudent
 module.exports.deleteQRFile = deleteQRFile
 module.exports.signStudentToken = signStudentToken
 module.exports.verifyStudentToken = verifyStudentToken
+// v2 surface re-exported for tests and the future Phase 2 issuer / Phase 3
+// rotation endpoints. Issuance still emits v1 in this PR — see qr-keys.js.
+module.exports.signV2 = signV2

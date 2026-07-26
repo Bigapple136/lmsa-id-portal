@@ -12,7 +12,7 @@ router.post('/student', async (req, res) => {
   const { token, action, note } = req.body
 
   if (!token) return res.status(400).json({ error: 'Token is required.' })
-  const studentId = verifyStudentToken(token)
+  const studentId = await verifyStudentToken(token)
   if (!studentId) return res.status(403).json({ error: 'Invalid or tampered token.' })
 
   const resolvedAction = action || 'confirmed'
