@@ -600,6 +600,7 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
 // POST /api/qr/keys/revoke/:kid — mark a key as revoked (rejects all its tokens)
 
 router.post('/keys/rotate', requireAdmin, requireFullAdmin, async (req, res) => {
+  const actor = req.user?.email || req.user?.id || 'unknown'
   try {
     const { data: currentActive, error: activeErr } = await supabase
       .from('qr_keys')
@@ -630,6 +631,7 @@ router.post('/keys/rotate', requireAdmin, requireFullAdmin, async (req, res) => 
     if (updErr) return res.status(500).json({ error: updErr.message })
 
     invalidateQrKeysCache()
+    await logQrAudit('rotate', actor, { old_kid: currentActive.kid, new_kid: newKid })
     logger.info({ oldKid: currentActive.kid, newKid }, 'QR key rotated')
     res.json({ rotated: true, old_kid: currentActive.kid, new_kid: newKid })
   } catch (err) {
