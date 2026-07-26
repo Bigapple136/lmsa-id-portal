@@ -169,12 +169,12 @@ router.get('/lookup', async (req, res) => {
     .maybeSingle()
   if (error) return res.status(500).json({ found: false, error: 'Lookup failed.' })
   if (!data) return res.status(200).json({ found: false })
-  const token = signStudentToken(data.student_id)
+  const token = await signStudentToken(data.student_id, { ttlSec: 604800 }) // 7 days
   res.json({ found: true, preview_url: `${FRONTEND_URL}/preview/${token}` })
 })
 
 router.get('/preview/:token', async (req, res) => {
-  const studentId = verifyStudentToken(req.params.token)
+  const studentId = await verifyStudentToken(req.params.token)
   if (!studentId) return res.status(403).json({ error: 'Invalid or tampered link.' })
   const { data, error } = await supabase
     .from('students')
@@ -186,6 +186,42 @@ router.get('/preview/:token', async (req, res) => {
   res.json(data)
 })
 
+// PUBLIC: Student-facing card status check by student ID
+router.get('/status', async (req, res) => {
+  const { student_id } = req.query
+  if (!student_id) return res.status(400).json({ found: false, error: 'Missing student_id.' })
+  if (!validateTextLength(student_id, 50))
+    return res.status(400).json({ found: false, error: 'Input too long.' })
+
+  const { data, error } = await supabase
+    .from('students')
+    .select('student_id, full_name, year_level, status, qr_url, photo_url, confirmed_at, updated_at')
+    .eq('student_id', student_id.trim())
+    .maybeSingle()
+
+  if (error) return res.status(500).json({ found: false, error: 'Lookup failed.' })
+  if (!data) return res.status(200).json({ found: false })
+
+  // Generate a preview token for the student
+  const token = await signStudentToken(data.student_id, { ttlSec: 604800 }) // 7 days
+  const previewUrl = `${FRONTEND_URL}/preview/${token}`
+
+  res.json({
+    found: true,
+    student: {
+      student_id: data.student_id,
+      full_name: data.full_name,
+      year_level: data.year_level,
+      status: data.status,
+      has_qr: !!data.qr_url,
+      has_photo: !!data.photo_url,
+      confirmed_at: data.confirmed_at,
+      updated_at: data.updated_at,
+      preview_url: previewUrl,
+    },
+  })
+})
+
 router.get('/preview-url/:studentId', requireAdmin, async (req, res) => {
   const sidErr = maxLength(req.params.studentId, 50, 'studentId')
   if (sidErr) return res.status(400).json({ error: sidErr })
@@ -195,7 +231,7 @@ router.get('/preview-url/:studentId', requireAdmin, async (req, res) => {
     .eq('student_id', req.params.studentId)
     .maybeSingle()
   if (!exists) return res.status(404).json({ error: 'Student not found.' })
-  const token = signStudentToken(req.params.studentId)
+  const token = await signStudentToken(req.params.studentId, { ttlSec: 604800 }) // 7 days
   res.json({ url: `${FRONTEND_URL}/preview/${token}` })
 })
 
@@ -655,7 +691,7 @@ router.patch('/:studentId/self-correct', async (req, res) => {
 
   const token = req.query.token || req.body?.token
   if (!token) return res.status(401).json({ error: 'Token required.' })
-  const tokenStudentId = verifyStudentToken(token)
+  const tokenStudentId = await verifyStudentToken(token)
   if (!tokenStudentId || tokenStudentId !== req.params.studentId) {
     return res.status(403).json({ error: 'Invalid or expired token.' })
   }

@@ -1,18 +1,25 @@
 const express = require('express')
 const router = express.Router()
 const QRCode = require('qrcode')
-const crypto = require('crypto')
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { maxLength } = require('../middleware/validate')
 const { getQRFields } = require('./settings')
+// Token sign/verify + rotatable key store live in qr-keys.js (single source).
+// Re-exported below so existing `require('./qr')` consumers keep working.
+const {
+  signStudentToken,
+  verifyStudentToken,
+  signV2,
+  invalidateQrKeysCache,
+  logQrAudit,
+} = require('../qr-keys')
 const logger = require('../logger')
 
 const JSZip = require('jszip')
 
 const BACKEND_URL = process.env.BACKEND_URL
 const FRONTEND_URL = process.env.FRONTEND_URL
-const QR_SIGNING_SECRET = process.env.QR_SIGNING_SECRET
 
 function getSupabaseHostname() {
   try {
@@ -32,32 +39,12 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;')
 }
 
-function signStudentToken(studentId) {
-  const payload = Buffer.from(studentId).toString('base64url')
-  const sig = crypto.createHmac('sha256', QR_SIGNING_SECRET).update(payload).digest('base64url')
-  return `${payload}.${sig}`
-}
-
-function verifyStudentToken(token) {
-  const [payload, sig] = (token || '').split('.')
-  if (!payload || !sig || !QR_SIGNING_SECRET) return null
-  const expected = crypto
-    .createHmac('sha256', QR_SIGNING_SECRET)
-    .update(payload)
-    .digest('base64url')
-  try {
-    const sigBuf = Buffer.from(sig, 'base64url')
-    const expectedBuf = Buffer.from(expected, 'base64url')
-    if (sigBuf.length !== expectedBuf.length) return null
-    if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) return null
-    return Buffer.from(payload, 'base64url').toString()
-  } catch {
-    return null
-  }
-}
+// signStudentToken and verifyStudentToken are imported from ../qr-keys.
+// Phase 1: signing still emits v1 (see qr-keys.js); verify accepts v1 (shim)
+// and v2. Issuer flip to v2 is the deliberate separate Phase 2 change.
 
 async function buildPayload(student) {
-  const token = signStudentToken(student.student_id)
+  const token = await signStudentToken(student.student_id)
   return `${BACKEND_URL}/api/qr/html/${token}`
 }
 
@@ -214,7 +201,8 @@ router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
       .eq('student_id', req.params.studentId)
       .maybeSingle()
     if (error || !student) return res.status(404).json({ error: 'Student not found.' })
-    const url = `${BACKEND_URL}/api/qr/html/${signStudentToken(student.student_id)}`
+    const token = await signStudentToken(student.student_id)
+    const url = `${BACKEND_URL}/api/qr/html/${token}`
     res.json({ url })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -223,7 +211,7 @@ router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
 
 router.get('/html/:studentId', async (req, res) => {
   const rawToken = req.params.studentId
-  const studentId = verifyStudentToken(rawToken)
+  const studentId = await verifyStudentToken(rawToken)
   if (!studentId)
     return res.status(403).send('Invalid or tampered QR code. Please request a new ID card.')
 
@@ -607,8 +595,238 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
   }
 })
 
+// ---- Phase 3: Key rotation / revocation endpoints ---------------------------
+// POST /api/qr/keys/rotate — create new active key, retire previous active
+// POST /api/qr/keys/revoke/:kid — mark a key as revoked (rejects all its tokens)
+
+router.post('/keys/rotate', requireAdmin, requireFullAdmin, async (req, res) => {
+  const actor = req.user?.email || req.user?.id || 'unknown'
+  try {
+    const { data: currentActive, error: activeErr } = await supabase
+      .from('qr_keys')
+      .select('kid')
+      .eq('status', 'active')
+      .maybeSingle()
+    if (activeErr) return res.status(500).json({ error: activeErr.message })
+    if (!currentActive) return res.status(409).json({ error: 'No active key to rotate.' })
+
+    const newKid = `k_${new Date().toISOString().slice(0, 10).replace(/-/g, '_')}`
+    // Generate a cryptographically strong 32-byte secret
+    const crypto = require('crypto')
+    const newSecret = crypto.randomBytes(32).toString('base64url')
+
+    // Atomic rotation: insert new active + retire old in a single transaction
+    // Postgres doesn't support multi-statement transactions in a single query
+    // via supabase-js, so we do two calls but the partial unique index on
+    // active status guarantees only one active row exists.
+    const { error: insErr } = await supabase
+      .from('qr_keys')
+      .insert({ kid: newKid, secret: newSecret, status: 'active', rotated_from: currentActive.kid })
+    if (insErr) return res.status(500).json({ error: insErr.message })
+
+    const { error: updErr } = await supabase
+      .from('qr_keys')
+      .update({ status: 'retired', rotated_at: new Date().toISOString() })
+      .eq('kid', currentActive.kid)
+    if (updErr) return res.status(500).json({ error: updErr.message })
+
+    invalidateQrKeysCache()
+    await logQrAudit('rotate', actor, { old_kid: currentActive.kid, new_kid: newKid })
+    logger.info({ oldKid: currentActive.kid, newKid }, 'QR key rotated')
+    res.json({ rotated: true, old_kid: currentActive.kid, new_kid: newKid })
+  } catch (err) {
+    logger.error({ err }, 'QR key rotation failed')
+    res.status(500).json({ error: 'Key rotation failed: ' + err.message })
+  }
+})
+
+router.post('/keys/revoke/:kid', requireAdmin, requireFullAdmin, async (req, res) => {
+  const actor = req.user?.email || req.user?.id || 'unknown'
+  const kid = req.params.kid
+  const { reason } = req.body
+
+  if (!kid || !kid.startsWith('k_')) {
+    return res.status(400).json({ error: 'Invalid kid format.' })
+  }
+
+  const { data: keyRow, error: findErr } = await supabase
+    .from('qr_keys')
+    .select('kid, status')
+    .eq('kid', kid)
+    .maybeSingle()
+  if (findErr) return res.status(500).json({ error: findErr.message })
+  if (!keyRow) return res.status(404).json({ error: 'Key not found.' })
+  if (keyRow.status === 'revoked') {
+    return res.json({ revoked: true, kid, message: 'Already revoked.' })
+  }
+
+  const { error: updErr } = await supabase
+    .from('qr_keys')
+    .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+    .eq('kid', kid)
+  if (updErr) return res.status(500).json({ error: updErr.message })
+
+  invalidateQrKeysCache()
+  logger.warn({ kid, actor, reason }, 'QR key revoked')
+
+  // Audit log
+  await logQrAudit('revoke', actor, { kid, reason: reason || null })
+
+  res.json({ revoked: true, kid })
+})
+
+// ---- GET /api/qr/keys — List all QR signing keys with status ---------------
+router.get('/keys', requireAdmin, async (req, res) => {
+  try {
+    const { data: keys, error } = await supabase
+      .from('qr_keys')
+      .select('kid, secret, status, created_at, rotated_at, revoked_at, rotated_from')
+      .order('created_at', { ascending: false })
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ keys: keys || [] })
+  } catch (err) {
+    logger.error({ err }, 'Failed to list QR keys')
+    res.status(500).json({ error: 'Failed to list QR keys: ' + err.message })
+  }
+})
+
+// ---- GET /api/qr/audit — List QR key audit log -----------------------------
+router.get('/audit', requireAdmin, async (req, res) => {
+  try {
+    const { data: audit, error } = await supabase
+      .from('qr_audit')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ audit: audit || [] })
+  } catch (err) {
+    logger.error({ err }, 'Failed to list QR audit log')
+    res.status(500).json({ error: 'Failed to list QR audit log: ' + err.message })
+  }
+})
+
+// ---- QR Inspector: decode + verify any token (admin tool) -------------------
+// GET /api/qr/inspect/:token
+// Returns: decoded payload, key status, verification result, student info
+router.get('/inspect/:token', requireAdmin, async (req, res) => {
+  const token = req.params.token
+  if (!token || token.length < 10) {
+    return res.status(400).json({ error: 'Invalid token format.' })
+  }
+
+  try {
+    // 1. Decode the token structure
+    let version = 'v1'
+    const parts = token.split('.')
+    let decoded = { raw: token }
+
+    if (token.startsWith('v2.')) {
+      version = 'v2'
+      if (parts.length !== 4) {
+        return res.status(400).json({ error: 'Invalid v2 token: expected 4 parts.' })
+      }
+      const [, claimsB64, kid, sig] = parts
+      let claims
+      try {
+        claims = JSON.parse(Buffer.from(claimsB64, 'base64url').toString())
+      } catch {
+        return res.status(400).json({ error: 'Invalid v2 claims: not valid JSON.' })
+      }
+      decoded = {
+        version: 'v2',
+        kid,
+        claims,
+        signature: sig.slice(0, 8) + '…', // truncate for display
+        claims_raw: claimsB64,
+      }
+    } else {
+      // v1: payload.signature
+      if (parts.length !== 2) {
+        return res.status(400).json({ error: 'Invalid v1 token: expected 2 parts.' })
+      }
+      const [payload, sig] = parts
+      let studentId
+      try {
+        studentId = Buffer.from(payload, 'base64url').toString()
+      } catch {
+        return res.status(400).json({ error: 'Invalid v1 payload: not valid base64url.' })
+      }
+      decoded = {
+        version: 'v1',
+        student_id: studentId,
+        signature: sig.slice(0, 8) + '…',
+        payload_raw: payload,
+      }
+    }
+
+    // 2. Verify the token (uses the same logic as the verification endpoints)
+    const { verifyStudentToken, getAllKeyRecords, LEGACY_KID } = require('../qr-keys')
+    const verifiedSid = await verifyStudentToken(token)
+    const isValid = !!verifiedSid
+
+    // 3. Get key status (for v2) or legacy key status (for v1)
+    let keyStatus = null
+    let keyInfo = null
+    const records = await getAllKeyRecords()
+
+    if (version === 'v2' && decoded.kid) {
+      const key = records.find(r => r.kid === decoded.kid)
+      if (key) {
+        keyStatus = key.status
+        keyInfo = { kid: key.kid, status: key.status }
+      } else {
+        keyInfo = { kid: decoded.kid, status: 'not_found' }
+      }
+    } else if (version === 'v1') {
+      const legacyKey = records.find(r => r.kid === LEGACY_KID)
+      if (legacyKey) {
+        keyStatus = legacyKey.status
+        keyInfo = { kid: LEGACY_KID, status: legacyKey.status }
+      } else {
+        keyInfo = { kid: LEGACY_KID, status: 'not_found' }
+      }
+    }
+
+    // 4. Look up student info (if verified)
+    let student = null
+    const sid = verifiedSid || (version === 'v1' ? decoded.student_id : decoded.claims?.sid)
+    if (sid && typeof sid === 'string') {
+      const { data, error } = await supabase
+        .from('students')
+        .select('student_id, full_name, year_level, program, qr_url')
+        .eq('student_id', sid)
+        .maybeSingle()
+      if (!error && data) {
+        student = data
+      }
+    }
+
+    // 5. Build response
+    const response = {
+      valid: isValid,
+      verified_student_id: verifiedSid || null,
+      token_info: decoded,
+      key_info: keyInfo,
+      student: student || null,
+      // helpful summary for ops
+      summary: isValid
+        ? `✅ Valid ${version.toUpperCase()} token for ${student?.full_name || sid || 'unknown student'}`
+        : `❌ Invalid ${version.toUpperCase()} token — ${keyStatus === 'revoked' ? 'key revoked' : 'signature mismatch or tampered'}`,
+    }
+
+    res.json(response)
+  } catch (err) {
+    logger.error({ err, token: token.slice(0, 20) + '…' }, 'QR inspection failed')
+    res.status(500).json({ error: 'Inspection failed: ' + err.message })
+  }
+})
+
 module.exports = router
 module.exports.generateForStudent = generateForStudent
 module.exports.deleteQRFile = deleteQRFile
 module.exports.signStudentToken = signStudentToken
 module.exports.verifyStudentToken = verifyStudentToken
+// v2 surface re-exported for tests and the future Phase 2 issuer / Phase 3
+// rotation endpoints. Issuance still emits v1 in this PR — see qr-keys.js.
+module.exports.signV2 = signV2

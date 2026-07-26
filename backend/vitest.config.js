@@ -7,7 +7,7 @@ module.exports = defineConfig({
     include: ['tests/**/*.test.js'],
     coverage: {
       reporter: ['text', 'lcov'],
-      include: ['routes/**/*.js', 'middleware/**/*.js', 'env.js'],
+      include: ['routes/**/*.js', 'middleware/**/*.js', 'qr-keys.js', 'env.js'],
     },
   },
 })
