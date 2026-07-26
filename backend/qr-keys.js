@@ -104,6 +104,30 @@ function invalidateQrKeysCache() {
   cache.delete(KEY_CACHE_KEY)
 }
 
+// ---- audit logging --------------------------------------------------------
+
+async function logQrAudit(action, actor, meta = {}) {
+  try {
+    const { error } = await supabase
+      .from('qr_audit')
+      .insert({
+        action,
+        actor,
+        kid: meta.kid || null,
+        old_kid: meta.old_kid || null,
+        new_kid: meta.new_kid || null,
+        reason: meta.reason || null,
+        meta,
+      })
+    if (error) {
+      logger.error({ err: error, action, actor }, 'Failed to write QR audit log')
+    }
+  } catch (err) {
+    // Non-blocking: audit failure should not break the operation
+    logger.error({ err, action, actor }, 'QR audit log write exception')
+  }
+}
+
 // ---- token format ----------------------------------------------------------
 //
 // v2:    v2.<claims-b64>.<kid>.<sig-b64>

@@ -673,6 +673,122 @@ router.post('/keys/revoke/:kid', requireAdmin, requireFullAdmin, async (req, res
   res.json({ revoked: true, kid })
 })
 
+// ---- QR Inspector: decode + verify any token (admin tool) -------------------
+// GET /api/qr/inspect/:token
+// Returns: decoded payload, key status, verification result, student info
+router.get('/inspect/:token', requireAdmin, async (req, res) => {
+  const token = req.params.token
+  if (!token || token.length < 10) {
+    return res.status(400).json({ error: 'Invalid token format.' })
+  }
+
+  try {
+    // 1. Decode the token structure
+    let version = 'v1'
+    const parts = token.split('.')
+    let decoded = { raw: token }
+
+    if (token.startsWith('v2.')) {
+      version = 'v2'
+      if (parts.length !== 4) {
+        return res.status(400).json({ error: 'Invalid v2 token: expected 4 parts.' })
+      }
+      const [, claimsB64, kid, sig] = parts
+      let claims
+      try {
+        claims = JSON.parse(Buffer.from(claimsB64, 'base64url').toString())
+      } catch {
+        return res.status(400).json({ error: 'Invalid v2 claims: not valid JSON.' })
+      }
+      decoded = {
+        version: 'v2',
+        kid,
+        claims,
+        signature: sig.slice(0, 8) + '…', // truncate for display
+        claims_raw: claimsB64,
+      }
+    } else {
+      // v1: payload.signature
+      if (parts.length !== 2) {
+        return res.status(400).json({ error: 'Invalid v1 token: expected 2 parts.' })
+      }
+      const [payload, sig] = parts
+      let studentId
+      try {
+        studentId = Buffer.from(payload, 'base64url').toString()
+      } catch {
+        return res.status(400).json({ error: 'Invalid v1 payload: not valid base64url.' })
+      }
+      decoded = {
+        version: 'v1',
+        student_id: studentId,
+        signature: sig.slice(0, 8) + '…',
+        payload_raw: payload,
+      }
+    }
+
+    // 2. Verify the token (uses the same logic as the verification endpoints)
+    const { verifyStudentToken, getAllKeyRecords, LEGACY_KID } = require('../qr-keys')
+    const verifiedSid = await verifyStudentToken(token)
+    const isValid = !!verifiedSid
+
+    // 3. Get key status (for v2) or legacy key status (for v1)
+    let keyStatus = null
+    let keyInfo = null
+    const records = await getAllKeyRecords()
+
+    if (version === 'v2' && decoded.kid) {
+      const key = records.find(r => r.kid === decoded.kid)
+      if (key) {
+        keyStatus = key.status
+        keyInfo = { kid: key.kid, status: key.status }
+      } else {
+        keyInfo = { kid: decoded.kid, status: 'not_found' }
+      }
+    } else if (version === 'v1') {
+      const legacyKey = records.find(r => r.kid === LEGACY_KID)
+      if (legacyKey) {
+        keyStatus = legacyKey.status
+        keyInfo = { kid: LEGACY_KID, status: legacyKey.status }
+      } else {
+        keyInfo = { kid: LEGACY_KID, status: 'not_found' }
+      }
+    }
+
+    // 4. Look up student info (if verified)
+    let student = null
+    const sid = verifiedSid || (version === 'v1' ? decoded.student_id : decoded.claims?.sid)
+    if (sid && typeof sid === 'string') {
+      const { data, error } = await supabase
+        .from('students')
+        .select('student_id, full_name, year_level, program, qr_url')
+        .eq('student_id', sid)
+        .maybeSingle()
+      if (!error && data) {
+        student = data
+      }
+    }
+
+    // 5. Build response
+    const response = {
+      valid: isValid,
+      verified_student_id: verifiedSid || null,
+      token_info: decoded,
+      key_info: keyInfo,
+      student: student || null,
+      // helpful summary for ops
+      summary: isValid
+        ? `✅ Valid ${version.toUpperCase()} token for ${student?.full_name || sid || 'unknown student'}`
+        : `❌ Invalid ${version.toUpperCase()} token — ${keyStatus === 'revoked' ? 'key revoked' : 'signature mismatch or tampered'}`,
+    }
+
+    res.json(response)
+  } catch (err) {
+    logger.error({ err, token: token.slice(0, 20) + '…' }, 'QR inspection failed')
+    res.status(500).json({ error: 'Inspection failed: ' + err.message })
+  }
+})
+
 module.exports = router
 module.exports.generateForStudent = generateForStudent
 module.exports.deleteQRFile = deleteQRFile
