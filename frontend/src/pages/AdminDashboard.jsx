@@ -1183,6 +1183,12 @@ export default function AdminDashboard() {
                 <span className="admin-sidebar-label">Admins</span>
               </button>
             )}
+            <button
+              className="admin-sidebar-item"
+              onClick={() => navigate('/admin/qr-keys')}
+            >
+              <span className="admin-sidebar-label">QR Keys</span>
+            </button>
           </nav>
         </aside>
 

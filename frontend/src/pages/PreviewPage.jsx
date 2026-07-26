@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import IDCardDisplay from '../components/IDCardDisplay'
 import CardCanvas from '../components/CardCanvas'
@@ -29,6 +29,29 @@ const ISSUE_TYPES = [
   { id: 'photo_issue', label: 'Wrong image' },
 ]
 
+function base64UrlDecode(str) {
+  try {
+    const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+    return JSON.parse(atob(padded))
+  } catch {
+    return null
+  }
+}
+
+function formatExpiry(exp) {
+  if (!exp) return null
+  const now = Math.floor(Date.now() / 1000)
+  const diff = exp - now
+  if (diff <= 0) return { expired: true, text: 'Expired' }
+  const days = Math.floor(diff / 86400)
+  const hours = Math.floor((diff % 86400) / 3600)
+  if (days > 0) return { expired: false, text: `${days}d ${hours}h remaining`, days, hours }
+  if (hours > 0) return { expired: false, text: `${hours}h remaining`, days: 0, hours }
+  const mins = Math.floor((diff % 3600) / 60)
+  return { expired: false, text: `${mins}m remaining`, days: 0, hours: 0, mins }
+}
+
 export default function PreviewPage() {
   const { token } = useParams()
   const navigate = useNavigate()
@@ -53,6 +76,17 @@ export default function PreviewPage() {
   const [reportTab, setReportTab] = useState('qr')
 
   const [templateStatus, setTemplateStatus] = useState('loading')
+
+  // Decode token to get expiry info (v2 tokens)
+  const tokenInfo = useMemo(() => {
+    if (!token || !token.startsWith('v2.')) return { version: 'v1', exp: null, expInfo: null }
+    const parts = token.split('.')
+    if (parts.length !== 4) return { version: 'v2', exp: null, expInfo: null }
+    const claims = base64UrlDecode(parts[1])
+    if (!claims) return { version: 'v2', exp: null, expInfo: null }
+    const expInfo = formatExpiry(claims.exp)
+    return { version: 'v2', exp: claims.exp, expInfo, claims }
+  }, [token])
 
   useEffect(() => {
     fetchStudent()
@@ -284,6 +318,48 @@ export default function PreviewPage() {
       <Navbar showLogin={false} />
       <div className="page-center">
         <div className="preview-card">
+          {/* Expiry warning banner for preview links (v2 tokens only) */}
+          {tokenInfo.version === 'v2' && tokenInfo.expInfo && (
+            <div
+              className={`expiry-banner ${tokenInfo.expInfo.expired ? 'expired' : tokenInfo.expInfo.days <= 1 ? 'expiring-soon' : ''}`}
+              style={{
+                padding: '12px 16px',
+                margin: '0',
+                borderRadius: 0,
+                borderBottom: '1px solid var(--border)',
+                background: tokenInfo.expInfo.expired
+                  ? 'var(--error-bg, #fee2e2)'
+                  : tokenInfo.expInfo.days <= 1
+                  ? 'var(--warning-bg, #fef3c7)'
+                  : 'var(--info-bg, #dbeafe)',
+                color: tokenInfo.expInfo.expired
+                  ? 'var(--error-text, #991b1b)'
+                  : tokenInfo.expInfo.days <= 1
+                  ? 'var(--warning-text, #92400e)'
+                  : 'var(--info-text, #1e40af)',
+                fontSize: '13px',
+                fontWeight: 500,
+              }}
+            >
+              {tokenInfo.expInfo.expired ? (
+                <>
+                  <span style={{ fontWeight: 700, marginRight: 8 }}>✗</span>
+                  This preview link has expired. Please request a new link from your administrator.
+                </>
+              ) : tokenInfo.expInfo.days <= 1 ? (
+                <>
+                  <span style={{ fontWeight: 700, marginRight: 8 }}>⚠</span>
+                  This preview link expires in {tokenInfo.expInfo.text}. Please confirm or report issues soon.
+                </>
+              ) : (
+                <>
+                  <span style={{ fontWeight: 700, marginRight: 8 }}>ℹ</span>
+                  This preview link expires in {tokenInfo.expInfo.text}.
+                </>
+              )}
+            </div>
+          )}
+
           <div className="preview-topbar">
             <button className="btn-back" onClick={() => navigate('/')}>
               ← Back

@@ -6,12 +6,14 @@ import LandingPage from './pages/LandingPage'
 import PreviewPage from './pages/PreviewPage'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminManagementPage from './pages/AdminManagementPage'
+import QrKeyManagement from './pages/QrKeyManagement'
 import AboutPage from './pages/AboutPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
 import QrViewPage from './pages/QrViewPage'
 import StudentSubmissionForm from './pages/StudentSubmissionForm'
 import StudentStatusPage from './pages/StudentStatusPage'
+import StudentStatusCheck from './pages/StudentStatusCheck'
 
 const SentryErrorBoundary = Sentry.ErrorBoundary || ErrorBoundary
 
@@ -80,11 +82,28 @@ export default function App() {
               </SentryErrorBoundary>
             }
           />
+          <Route
+            path="/admin/qr-keys"
+            element={
+              <SentryErrorBoundary>
+                <QrKeyManagement />
+              </SentryErrorBoundary>
+            }
+          />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/submit" element={<StudentSubmissionForm />} />
           <Route path="/status" element={<StudentStatusPage />} />
+          <Route path="/check-status" element={<StudentStatusCheck />} />
+          <Route
+            path="/admin/qr-keys"
+            element={
+              <SentryErrorBoundary>
+                <QrKeyManagement />
+              </SentryErrorBoundary>
+            }
+          />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

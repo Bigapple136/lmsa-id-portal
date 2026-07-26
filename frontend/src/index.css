@@ -18,6 +18,8 @@
   --error-border: #E24B4A;
   --warn-bg: #FEF6E4;
   --warn-text: #8A5C0A;
+  --info-bg: #DBEAFE;
+  --info-text: #1E40AF;
   --radius: 8px;
   --radius-lg: 12px;
 }
@@ -3381,4 +3383,567 @@ textarea:focus-visible {
   .chart-card { padding: 16px; }
   .template-card { padding: 16px; }
   .recent-activity-card { padding: 16px; }
+}
+
+/* ============================================================================
+   P3: Mobile Responsiveness Improvements
+   ============================================================================ */
+
+/* Touch target minimum sizes (44x44px per WCAG) */
+@media (max-width: 768px) {
+  /* Buttons */
+  .btn-primary,
+  .btn-gold,
+  .btn-gold-full,
+  .btn-outline,
+  .btn-outline-light,
+  .btn-print,
+  .btn-edit,
+  .btn-back {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Form inputs */
+  .field-input,
+  .input-field {
+    min-height: 44px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Select elements */
+  select.field-input,
+  select.input-field {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  /* Checkbox/radio */
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 20px;
+    min-height: 20px;
+  }
+
+  /* Links in lists */
+  .student-row a,
+  .template-row a,
+  .submission-link-row a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* Improve page-center padding on very small screens */
+@media (max-width: 480px) {
+  .page-center {
+    padding: 16px 8px;
+    align-items: stretch;
+  }
+
+  .landing-card,
+  .preview-card {
+    max-width: 100%;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    min-height: 100vh;
+  }
+
+  .landing-header {
+    border-radius: 0;
+    padding: 24px 16px 20px;
+  }
+
+  .landing-form {
+    padding: 20px 16px;
+    gap: 12px;
+  }
+
+  .field-input {
+    padding: 12px 14px;
+    font-size: 16px;
+  }
+
+  .btn-primary,
+  .btn-gold-full {
+    padding: 14px 16px;
+    font-size: 16px;
+  }
+}
+
+/* Preview page mobile improvements */
+@media (max-width: 600px) {
+  .preview-card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .preview-topbar {
+    padding: 10px 12px;
+  }
+
+  .preview-topbar-title {
+    font-size: 12px;
+  }
+
+  .preview-body {
+    padding: 12px;
+  }
+
+  /* ID Card on mobile */
+  .id-card {
+    margin: 8px;
+    padding: 12px;
+  }
+
+  .id-card-body {
+    gap: 8px;
+  }
+
+  .id-card-photo {
+    width: 50px;
+    height: 60px;
+  }
+
+  .id-card-name {
+    font-size: 13px;
+  }
+
+  .id-card-year {
+    font-size: 10px;
+  }
+
+  .id-card-id {
+    font-size: 10px;
+  }
+
+  /* Meta table on mobile */
+  .meta-table {
+    font-size: 12px;
+  }
+
+  .meta-row {
+    padding: 6px 0;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .meta-key {
+    min-width: 100px;
+  }
+
+  .meta-val {
+    text-align: right;
+    flex: 1;
+  }
+
+  /* Section titles */
+  .section-title {
+    font-size: 12px;
+  }
+
+  /* Buttons on preview */
+  .btn-print {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+
+  /* Expiry banner */
+  .expiry-banner {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+}
+
+/* Student Status Check page mobile improvements */
+@media (max-width: 600px) {
+  .page-outer .page-center {
+    padding-top: 16px;
+  }
+
+  .landing-header {
+    padding: 24px 16px 20px;
+  }
+
+  .landing-form {
+    padding: 20px 16px;
+  }
+
+  .landing-emblem {
+    width: 40px;
+    height: 40px;
+  }
+
+  .landing-emblem svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .status-box {
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+
+  .status-box strong {
+    font-size: 15px;
+  }
+
+  .status-box p {
+    font-size: 12px;
+  }
+}
+
+/* Print Preview Modal mobile */
+@media (max-width: 480px) {
+  .modal-overlay {
+    padding: 8px;
+    align-items: flex-start;
+    padding-top: 20px;
+  }
+
+  .modal {
+    max-height: calc(100vh - 40px);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .modal-header {
+    font-size: 14px;
+    padding-bottom: 12px;
+  }
+
+  .print-card-wrapper {
+    padding: 8px;
+  }
+
+  .print-card-wrapper .id-card {
+    margin: 0;
+    padding: 10px;
+  }
+
+  .btn-print {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Admin dashboard mobile */
+@media (max-width: 768px) {
+  .admin-topbar {
+    padding: 10px 16px;
+    min-height: 56px;
+  }
+
+  .topbar-logo {
+    font-size: 14px;
+  }
+
+  .navbar-brand-logo {
+    width: 28px;
+    height: 28px;
+  }
+
+  .admin-sidebar-layout {
+    padding-top: 56px;
+  }
+
+  .admin-body {
+    padding: 16px;
+  }
+
+  .admin-card {
+    padding: 16px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .stat-box {
+    padding: 12px;
+  }
+
+  .stat-num {
+    font-size: 20px;
+  }
+
+  .stat-lbl {
+    font-size: 10px;
+  }
+}
+
+/* Navbar mobile hamburger menu */
+@media (max-width: 600px) {
+  .navbar-hamburger {
+    display: flex;
+  }
+
+  .navbar-links {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    right: 0;
+    background: var(--navy);
+    border-bottom: 0.5px solid var(--navy-mid);
+    flex-direction: column;
+    padding: 12px 16px;
+    gap: 8px;
+    display: none;
+    z-index: 49;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .navbar-links.is-open {
+    display: flex;
+  }
+
+  .navbar-link {
+    width: 100%;
+    text-align: left;
+    padding: 14px 16px;
+    font-size: 15px;
+    border-radius: var(--radius);
+  }
+
+  .navbar-login {
+    width: 100%;
+    text-align: left;
+    padding: 14px 16px;
+    font-size: 15px;
+  }
+}
+
+/* QR View page mobile */
+@media (max-width: 480px) {
+  .qr-page {
+    padding: 0;
+  }
+
+  .qr-container {
+    padding: 12px;
+  }
+
+  .qr-card {
+    border-radius: 12px;
+  }
+
+  .qr-card-header {
+    padding: 16px;
+  }
+
+  .qr-header-content {
+    gap: 12px;
+  }
+
+  .qr-logo-emblem {
+    width: 50px;
+    height: 50px;
+  }
+
+  .qr-logo-emblem svg {
+    width: 32px;
+    height: 32px;
+  }
+
+  .qr-header-school {
+    font-size: 14px;
+  }
+
+  .qr-header-subtitle {
+    font-size: 11px;
+  }
+
+  .qr-section {
+    padding: 16px;
+  }
+
+  .qr-image {
+    width: 160px;
+    height: 160px;
+  }
+
+  .qr-detail-row {
+    padding: 10px 0;
+    gap: 10px;
+  }
+
+  .qr-detail-icon {
+    font-size: 18px;
+  }
+
+  .qr-detail-label {
+    font-size: 10px;
+  }
+
+  .qr-detail-value {
+    font-size: 13px;
+  }
+
+  .qr-verify-btn {
+    padding: 14px 16px;
+    font-size: 14px;
+  }
+}
+
+/* Landing page split view mobile */
+@media (max-width: 600px) {
+  .split-landing {
+    min-height: auto;
+  }
+
+  .split-brand,
+  .split-form-panel {
+    min-height: auto;
+    padding: 40px 20px;
+  }
+
+  .split-emblem {
+    width: 100px;
+    height: 100px;
+    padding: 10px;
+  }
+
+  .split-emblem img {
+    width: 80px;
+    height: 80px;
+  }
+
+  .split-title {
+    font-size: 1.75rem;
+  }
+
+  .split-card {
+    padding: 24px 20px;
+  }
+
+  .split-card-title {
+    font-size: 22px;
+  }
+}
+
+/* Ensure text doesn't overflow on mobile */
+@media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Prevent horizontal scroll from long words */
+  .student-name,
+  .student-meta,
+  .template-name,
+  .template-meta,
+  .submission-link-code,
+  .qr-detail-value,
+  .meta-val,
+  .corrections,
+  .qr-corrections {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* iOS safe area support */
+@supports (padding: max(0px)) {
+  .page-outer {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .modal-overlay {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .navbar {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+}
+
+/* Improve focus visibility for keyboard navigation */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: #000;
+    --muted: #333;
+    --hint: #333;
+  }
+
+  .field-input:focus {
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
+  }
+
+  .btn-primary:focus,
+  .btn-gold:focus,
+  .btn-outline:focus {
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
+  }
+}
+
+/* Print styles - hide non-printable elements */
+@media print {
+  .navbar,
+  .admin-topbar,
+  .admin-sidebar,
+  .admin-tabs,
+  .btn-print,
+  .btn-back,
+  .btn-outline,
+  .modal-overlay,
+  .qr-ref.no-print,
+  .footer.no-print,
+  .topbar.no-print,
+  .no-print {
+    display: none !important;
+  }
+
+  .page-outer,
+  .page-center,
+  .landing-card,
+  .preview-card,
+  .qr-card,
+  .split-landing,
+  .split-form-panel {
+    background: white !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .id-card {
+    background: var(--navy) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .hero,
+  .profile-photo,
+  .photo-badge,
+  .bento-card {
+    background: var(--navy) !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }

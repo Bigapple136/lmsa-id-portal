@@ -673,6 +673,37 @@ router.post('/keys/revoke/:kid', requireAdmin, requireFullAdmin, async (req, res
   res.json({ revoked: true, kid })
 })
 
+// ---- GET /api/qr/keys — List all QR signing keys with status ---------------
+router.get('/keys', requireAdmin, async (req, res) => {
+  try {
+    const { data: keys, error } = await supabase
+      .from('qr_keys')
+      .select('kid, secret, status, created_at, rotated_at, revoked_at, rotated_from')
+      .order('created_at', { ascending: false })
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ keys: keys || [] })
+  } catch (err) {
+    logger.error({ err }, 'Failed to list QR keys')
+    res.status(500).json({ error: 'Failed to list QR keys: ' + err.message })
+  }
+})
+
+// ---- GET /api/qr/audit — List QR key audit log -----------------------------
+router.get('/audit', requireAdmin, async (req, res) => {
+  try {
+    const { data: audit, error } = await supabase
+      .from('qr_audit')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    if (error) return res.status(500).json({ error: error.message })
+    res.json({ audit: audit || [] })
+  } catch (err) {
+    logger.error({ err }, 'Failed to list QR audit log')
+    res.status(500).json({ error: 'Failed to list QR audit log: ' + err.message })
+  }
+})
+
 // ---- QR Inspector: decode + verify any token (admin tool) -------------------
 // GET /api/qr/inspect/:token
 // Returns: decoded payload, key status, verification result, student info
