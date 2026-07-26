@@ -42,7 +42,7 @@ function escapeHtml(str) {
 // and v2. Issuer flip to v2 is the deliberate separate Phase 2 change.
 
 async function buildPayload(student) {
-  const token = signStudentToken(student.student_id)
+  const token = await signStudentToken(student.student_id)
   return `${BACKEND_URL}/api/qr/html/${token}`
 }
 
@@ -199,7 +199,8 @@ router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
       .eq('student_id', req.params.studentId)
       .maybeSingle()
     if (error || !student) return res.status(404).json({ error: 'Student not found.' })
-    const url = `${BACKEND_URL}/api/qr/html/${signStudentToken(student.student_id)}`
+    const token = await signStudentToken(student.student_id)
+    const url = `${BACKEND_URL}/api/qr/html/${token}`
     res.json({ url })
   } catch (err) {
     res.status(500).json({ error: err.message })

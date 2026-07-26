@@ -217,19 +217,14 @@ function verifyV2(token, records) {
 
 // ---- public API (signature-compatible with the old qr.js exports) ---------
 //
-// IMPORTANT (Phase 1): verifyStudentToken now dispatches v1 vs v2 internally,
-// so already-printed v1 cards keep verifying through the v1 shim. signStudentToken
-// still emits v1 in this PR — Phase 2 flips it to v2 as its own deliberate change.
+// Phase 2: signStudentToken now emits v2 (rotatable) tokens. verifyStudentToken
+// already accepts both v1 (shim) and v2, so this is a one-way forward flip.
+// Existing v1 cards keep verifying via the v1 shim.
 
-function signStudentToken(studentId) {
-  // Phase 1: keep emitting v1 so no behavior change for the issuer.
-  // Phase 2 will replace this body with: return signV2(studentId)
-  if (!QR_SIGNING_SECRET || QR_SIGNING_SECRET.length < SECRET_MIN_LEN) {
-    // getActiveKey() would throw too, but signStudentToken is sync today; keep
-    // the same shape and leave the loud failure for the async path in Phase 2.
-    throw new Error('QR_SIGNING_SECRET missing or too short for v1 signing')
-  }
-  return signV1(studentId)
+async function signStudentToken(studentId, opts = {}) {
+  // Phase 2: emit v2. opts.ttlSec is passed through for short-lived links
+  // (preview/self-correct); printed cards omit it (exp = null).
+  return signV2(studentId, opts)
 }
 
 async function verifyStudentToken(token) {
@@ -258,6 +253,7 @@ module.exports = {
   signV2,
   verifyV2,
   verifyV1,
+  signV1,
   getActiveKey,
   getAllKeyRecords,
   invalidateQrKeysCache,

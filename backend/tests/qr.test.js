@@ -25,13 +25,16 @@ beforeEach(() => {
   vi.resetModules()
   // Each test begins with a cold in-process cache so key-state changes
   // between tests (e.g. active -> revoked) are visible to the verifier.
+  // The cache is a singleton; clear it to prevent cross-test pollution.
+  const cache = require('../cache')
+  cache.clear()
 })
 
-describe('QR module — v1 (legacy, current issuance)', () => {
-  it('should sign and verify a v1 student token', async () => {
-    const { signStudentToken, verifyStudentToken } = require('../routes/qr')
+describe('QR module — v1 shim (verify-only; legacy printed cards)', () => {
+  it('should verify a v1 token (legacy printed card)', async () => {
+    const { signV1, verifyStudentToken } = require('../qr-keys')
     const studentId = 'STU-2024-001'
-    const token = signStudentToken(studentId)
+    const token = signV1(studentId)
     expect(token).toBeTruthy()
     expect(token).toContain('.')
     // v1 tokens have no version prefix
@@ -42,8 +45,8 @@ describe('QR module — v1 (legacy, current issuance)', () => {
   })
 
   it('should reject a tampered v1 token', async () => {
-    const { signStudentToken, verifyStudentToken } = require('../routes/qr')
-    const token = signStudentToken('STU-2024-001')
+    const { signV1, verifyStudentToken } = require('../qr-keys')
+    const token = signV1('STU-2024-001')
     const [payload] = token.split('.')
     const tampered = `${payload}.invalidsignature`
     expect(await verifyStudentToken(tampered)).toBeNull()
@@ -55,11 +58,24 @@ describe('QR module — v1 (legacy, current issuance)', () => {
     expect(await verifyStudentToken(null)).toBeNull()
     expect(await verifyStudentToken(undefined)).toBeNull()
   })
+
+  it('should reject v1 token when k_legacy is revoked', async () => {
+    const { signV1, verifyV1, getAllKeyRecords, LEGACY_KID, verifyStudentToken } = require('../qr-keys')
+    const token = signV1('STU-2024-002')
+    // Simulate k_legacy revoked by mutating the cached record
+    const records = await getAllKeyRecords()
+    const legacyKey = records.find((r) => r.kid === LEGACY_KID)
+    if (legacyKey) legacyKey.status = 'revoked'
+    // verifyV1 checks status === 'revoked'
+    expect(verifyV1(token, legacyKey)).toBeNull()
+    // Public verifyStudentToken also rejects revoked k_legacy
+    expect(await verifyStudentToken(token)).toBeNull()
+  })
 })
 
-describe('QR module — v2 (rotatable, verifier ready, issuer not yet flipped)', () => {
+describe('QR module — v2 (current issuance, rotatable)', () => {
   it('should sign and verify a v2 token', async () => {
-    const { signV2, verifyStudentToken } = require('../routes/qr')
+    const { signV2, verifyStudentToken } = require('../qr-keys')
     const studentId = 'AMD-2024-0001'
     const token = await signV2(studentId)
     expect(token.startsWith('v2.')).toBe(true)
@@ -71,7 +87,7 @@ describe('QR module — v2 (rotatable, verifier ready, issuer not yet flipped)',
   })
 
   it('the v2 token claims a kid matching the outer (signed) kid', async () => {
-    const { signV2 } = require('../routes/qr')
+    const { signV2 } = require('../qr-keys')
     const token = await signV2('AMD-2024-0002')
     const [, claimsB64, outerKid] = token.split('.')
     const claims = JSON.parse(Buffer.from(claimsB64, 'base64url').toString())
@@ -84,7 +100,7 @@ describe('QR module — v2 (rotatable, verifier ready, issuer not yet flipped)',
   })
 
   it('honours a short ttlSec as exp on a v2 token', async () => {
-    const { signV2, verifyStudentToken } = require('../routes/qr')
+    const { signV2, verifyStudentToken } = require('../qr-keys')
     const token = await signV2('AMD-2024-0003', { ttlSec: 60 })
     const claimsB64 = token.split('.')[1]
     const claims = JSON.parse(Buffer.from(claimsB64, 'base64url').toString())
@@ -101,7 +117,7 @@ describe('QR module — v2 (rotatable, verifier ready, issuer not yet flipped)',
   })
 
   it('rejects a tampered v2 signature', async () => {
-    const { signV2, verifyStudentToken } = require('../routes/qr')
+    const { signV2, verifyStudentToken } = require('../qr-keys')
     const token = await signV2('AMD-2024-0005')
     const parts = token.split('.')
     parts[3] = 'A' + 'a'.repeat(40) // bogus sig (base64url-ish length)
@@ -112,7 +128,7 @@ describe('QR module — v2 (rotatable, verifier ready, issuer not yet flipped)',
   it('rejects a v2 token whose outer kid is swapped (tampered-kid downgrade)', async () => {
     // Swap the outer kid to a non-existent key; the signature will no longer
     // match (outer kid is part of the MACed input), so verify must reject.
-    const { signV2, verifyStudentToken } = require('../routes/qr')
+    const { signV2, verifyStudentToken } = require('../qr-keys')
     const token = await signV2('AMD-2024-0006')
     const parts = token.split('.')
     parts[2] = 'k_does_not_exist'
@@ -131,6 +147,23 @@ describe('QR module — v2 (rotatable, verifier ready, issuer not yet flipped)',
     const sig = crypto.createHmac('sha256', secret).update(signedInput).digest('base64url')
     const token = `${signedInput}.${sig}`
     expect(await verifyStudentToken(token)).toBeNull()
+  })
+})
+
+describe('QR module — signStudentToken now emits v2', () => {
+  it('signStudentToken returns a v2 token', async () => {
+    const { signStudentToken } = require('../routes/qr')
+    const token = await signStudentToken('AMD-2024-0007')
+    expect(token.startsWith('v2.')).toBe(true)
+    expect(token.split('.')).toHaveLength(4)
+  })
+
+  it('signStudentToken respects ttlSec for short-lived links', async () => {
+    const { signStudentToken } = require('../routes/qr')
+    const token = await signStudentToken('AMD-2024-0008', { ttlSec: 300 })
+    const claimsB64 = token.split('.')[1]
+    const claims = JSON.parse(Buffer.from(claimsB64, 'base64url').toString())
+    expect(claims.exp).toBeGreaterThan(claims.iat)
   })
 })
 

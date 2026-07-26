@@ -169,7 +169,7 @@ router.get('/lookup', async (req, res) => {
     .maybeSingle()
   if (error) return res.status(500).json({ found: false, error: 'Lookup failed.' })
   if (!data) return res.status(200).json({ found: false })
-  const token = signStudentToken(data.student_id)
+  const token = await signStudentToken(data.student_id)
   res.json({ found: true, preview_url: `${FRONTEND_URL}/preview/${token}` })
 })
 
@@ -195,7 +195,7 @@ router.get('/preview-url/:studentId', requireAdmin, async (req, res) => {
     .eq('student_id', req.params.studentId)
     .maybeSingle()
   if (!exists) return res.status(404).json({ error: 'Student not found.' })
-  const token = signStudentToken(req.params.studentId)
+  const token = await signStudentToken(req.params.studentId)
   res.json({ url: `${FRONTEND_URL}/preview/${token}` })
 })
 
