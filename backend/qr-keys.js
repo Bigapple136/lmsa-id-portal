@@ -257,5 +257,6 @@ module.exports = {
   getActiveKey,
   getAllKeyRecords,
   invalidateQrKeysCache,
+  logQrAudit,
   LEGACY_KID,
 }

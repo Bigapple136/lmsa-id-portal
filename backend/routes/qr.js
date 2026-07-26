@@ -12,6 +12,7 @@ const {
   verifyStudentToken,
   signV2,
   invalidateQrKeysCache,
+  logQrAudit,
 } = require('../qr-keys')
 const logger = require('../logger')
 
@@ -638,7 +639,10 @@ router.post('/keys/rotate', requireAdmin, requireFullAdmin, async (req, res) => 
 })
 
 router.post('/keys/revoke/:kid', requireAdmin, requireFullAdmin, async (req, res) => {
+  const actor = req.user?.email || req.user?.id || 'unknown'
   const kid = req.params.kid
+  const { reason } = req.body
+
   if (!kid || !kid.startsWith('k_')) {
     return res.status(400).json({ error: 'Invalid kid format.' })
   }
@@ -661,7 +665,11 @@ router.post('/keys/revoke/:kid', requireAdmin, requireFullAdmin, async (req, res
   if (updErr) return res.status(500).json({ error: updErr.message })
 
   invalidateQrKeysCache()
-  logger.warn({ kid }, 'QR key revoked')
+  logger.warn({ kid, actor, reason }, 'QR key revoked')
+
+  // Audit log
+  await logQrAudit('revoke', actor, { kid, reason: reason || null })
+
   res.json({ revoked: true, kid })
 })
 
