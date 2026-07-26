@@ -11,6 +11,7 @@ const {
   signStudentToken,
   verifyStudentToken,
   signV2,
+  invalidateQrKeysCache,
 } = require('../qr-keys')
 const logger = require('../logger')
 
@@ -591,6 +592,77 @@ router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
     logger.error({ err }, 'QR export zip generation failed')
     res.status(500).json({ error: 'Failed to generate QR export ZIP.' })
   }
+})
+
+// ---- Phase 3: Key rotation / revocation endpoints ---------------------------
+// POST /api/qr/keys/rotate — create new active key, retire previous active
+// POST /api/qr/keys/revoke/:kid — mark a key as revoked (rejects all its tokens)
+
+router.post('/keys/rotate', requireAdmin, requireFullAdmin, async (req, res) => {
+  try {
+    const { data: currentActive, error: activeErr } = await supabase
+      .from('qr_keys')
+      .select('kid')
+      .eq('status', 'active')
+      .maybeSingle()
+    if (activeErr) return res.status(500).json({ error: activeErr.message })
+    if (!currentActive) return res.status(409).json({ error: 'No active key to rotate.' })
+
+    const newKid = `k_${new Date().toISOString().slice(0, 10).replace(/-/g, '_')}`
+    // Generate a cryptographically strong 32-byte secret
+    const crypto = require('crypto')
+    const newSecret = crypto.randomBytes(32).toString('base64url')
+
+    // Atomic rotation: insert new active + retire old in a single transaction
+    // Postgres doesn't support multi-statement transactions in a single query
+    // via supabase-js, so we do two calls but the partial unique index on
+    // active status guarantees only one active row exists.
+    const { error: insErr } = await supabase
+      .from('qr_keys')
+      .insert({ kid: newKid, secret: newSecret, status: 'active', rotated_from: currentActive.kid })
+    if (insErr) return res.status(500).json({ error: insErr.message })
+
+    const { error: updErr } = await supabase
+      .from('qr_keys')
+      .update({ status: 'retired', rotated_at: new Date().toISOString() })
+      .eq('kid', currentActive.kid)
+    if (updErr) return res.status(500).json({ error: updErr.message })
+
+    invalidateQrKeysCache()
+    logger.info({ oldKid: currentActive.kid, newKid }, 'QR key rotated')
+    res.json({ rotated: true, old_kid: currentActive.kid, new_kid: newKid })
+  } catch (err) {
+    logger.error({ err }, 'QR key rotation failed')
+    res.status(500).json({ error: 'Key rotation failed: ' + err.message })
+  }
+})
+
+router.post('/keys/revoke/:kid', requireAdmin, requireFullAdmin, async (req, res) => {
+  const kid = req.params.kid
+  if (!kid || !kid.startsWith('k_')) {
+    return res.status(400).json({ error: 'Invalid kid format.' })
+  }
+
+  const { data: keyRow, error: findErr } = await supabase
+    .from('qr_keys')
+    .select('kid, status')
+    .eq('kid', kid)
+    .maybeSingle()
+  if (findErr) return res.status(500).json({ error: findErr.message })
+  if (!keyRow) return res.status(404).json({ error: 'Key not found.' })
+  if (keyRow.status === 'revoked') {
+    return res.json({ revoked: true, kid, message: 'Already revoked.' })
+  }
+
+  const { error: updErr } = await supabase
+    .from('qr_keys')
+    .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+    .eq('kid', kid)
+  if (updErr) return res.status(500).json({ error: updErr.message })
+
+  invalidateQrKeysCache()
+  logger.warn({ kid }, 'QR key revoked')
+  res.json({ revoked: true, kid })
 })
 
 module.exports = router
