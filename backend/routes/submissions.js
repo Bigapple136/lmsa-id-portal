@@ -185,13 +185,25 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       .neq('student_id', submission.student_id)
       .limit(1),
     (() => {
-      const words = submission.full_name.trim().split(/\s+/).filter(Boolean)
-      if (words.length < 2) return Promise.resolve({ data: [] })
-      const lastName = words[words.length - 1]
+      const name = submission.full_name.trim()
+      let surname = null
+      const SUFFIXES = /\b(Jr\.?|Sr\.?|II|III|IV|V|PhD|Ph\.D\.|Esq\.?)\s*$/i
+      const COMMA = /^(.*?),\s+(.*)$/
+
+      if (COMMA.test(name)) {
+        const [, last] = name.match(COMMA)
+        surname = last?.trim() || null
+      } else {
+        const cleaned = name.replace(SUFFIXES, '').trim()
+        const words = cleaned.split(/\s+/).filter(Boolean)
+        if (words.length >= 1) surname = words[words.length - 1]
+      }
+
+      if (!surname || surname.length < 3) return Promise.resolve({ data: [] })
       return supabase
         .from('students')
         .select('student_id, full_name')
-        .ilike('full_name', `%${lastName}%`)
+        .ilike('full_name', `%${surname}%`)
         .neq('student_id', submission.student_id)
         .limit(3)
     })(),
