@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import Navbar from '../components/Navbar'
-import { apiFetch } from '../lib/api'
+import { adminFetch } from '../lib/api'
 
 export default function QrViewPage() {
   const { studentId } = useParams()
@@ -13,9 +13,10 @@ export default function QrViewPage() {
   const [animateRef] = useAutoAnimate()
 
   useEffect(() => {
-    apiFetch(`/api/students/${encodeURIComponent(studentId)}`)
-      .then((r) => r.json())
-      .then((data) => {
+    (async () => {
+      try {
+        const r = await adminFetch(`/api/students/${encodeURIComponent(studentId)}`)
+        const data = await r.json()
         if (data.error) {
           setError(data.error)
           setLoading(false)
@@ -24,11 +25,11 @@ export default function QrViewPage() {
         setStudent(data)
         setLoading(false)
         setTimeout(() => setIsVerified(true), 600)
-      })
-      .catch(() => {
+      } catch {
         setError('Failed to load student data.')
         setLoading(false)
-      })
+      }
+    })()
   }, [studentId])
 
   if (loading)
@@ -57,9 +58,6 @@ export default function QrViewPage() {
         <p className="qr-error-subtext">Invalid or expired credential</p>
       </div>
     )
-
-  const apiBase = import.meta.env.VITE_API_URL || ''
-  const VERIFY_URL = `${apiBase}/api/qr/html/${encodeURIComponent(studentId)}`
 
   const detailRows = [
     { icon: '\u{1F464}', label: 'Full Name', value: student.full_name, highlight: true },
@@ -177,10 +175,14 @@ export default function QrViewPage() {
           </div>
 
           {student.qr_url && (
-            <a
-              href={VERIFY_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={async () => {
+                try {
+                  const r = await adminFetch(`/api/qr/verification-url/${encodeURIComponent(studentId)}`)
+                  const data = await r.json()
+                  if (data.url) window.open(data.url, '_blank', 'noopener')
+                } catch {}
+              }}
               className="qr-verify-btn"
             >
               <span>Open Print-Ready Page</span>
@@ -188,7 +190,7 @@ export default function QrViewPage() {
                 <path d="M6 12h8M6 8h8M6 4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 <path d="M2 4v.01M2 8v.01M2 12v.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
               </svg>
-            </a>
+            </button>
           )}
 
           <div className="qr-card-footer">

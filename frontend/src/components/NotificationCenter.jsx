@@ -101,7 +101,7 @@ export default function NotificationCenter() {
   // Close on outside click
   useEffect(() => {
     if (!open) return
-    function handleClick(e) {
+    function handleOutside(e) {
       if (
         panelRef.current && !panelRef.current.contains(e.target) &&
         bellRef.current && !bellRef.current.contains(e.target)
@@ -109,8 +109,12 @@ export default function NotificationCenter() {
         setOpen(false)
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('mousedown', handleOutside)
+    document.addEventListener('touchstart', handleOutside, { passive: true })
+    return () => {
+      document.removeEventListener('mousedown', handleOutside)
+      document.removeEventListener('touchstart', handleOutside)
+    }
   }, [open])
 
   async function markAllRead() {
