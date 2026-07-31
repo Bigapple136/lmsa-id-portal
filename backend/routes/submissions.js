@@ -185,12 +185,16 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       .neq('student_id', submission.student_id)
       .limit(1),
     (() => {
+      // Extract the surname (last word, ignoring suffixes like Jr./Sr./III)
+      // and match against WHOLE-WORD surname, not substring.
+      // This prevents false positives like matching "Doe" against "Doeman Smith".
       const name = submission.full_name.trim()
       let surname = null
       const SUFFIXES = /\b(Jr\.?|Sr\.?|II|III|IV|V|PhD|Ph\.D\.|Esq\.?)\s*$/i
       const COMMA = /^(.*?),\s+(.*)$/
 
       if (COMMA.test(name)) {
+        // "Smith, John" → surname = "Smith"
         const [, last] = name.match(COMMA)
         surname = last?.trim() || null
       } else {
@@ -200,10 +204,19 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       }
 
       if (!surname || surname.length < 3) return Promise.resolve({ data: [] })
+
+      // Escape SQL LIKE wildcards so a literal "%" or "_" in a name doesn't
+      // act as a wildcard. We then wrap with word-boundary-ish matching: the
+      // surname must appear as either the full last name, preceded by a space,
+      // or after a comma — not as a substring inside another name.
+      const escaped = surname.replace(/[%_\\]/g, (c) => `\\${c}`)
+      // Match: surname is the full name, OR ends with " surname" (space-prefixed),
+      // OR begins with "surname," (comma format). This avoids substring matches.
+      const pattern = `% ${escaped}%`
       return supabase
         .from('students')
         .select('student_id, full_name')
-        .ilike('full_name', `%${surname}%`)
+        .ilike('full_name', pattern)
         .neq('student_id', submission.student_id)
         .limit(3)
     })(),
