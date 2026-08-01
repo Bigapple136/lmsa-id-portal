@@ -266,12 +266,25 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!session) return
     const init = async () => {
-      const res = await authMe()
-      if (res.ok) {
-        const d = await res.json()
-        setUserRole(d.role || 'admin')
+      // A failure to load the session/role must never prevent the rest of the
+      // dashboard from loading — default to full admin and continue.
+      try {
+        const res = await authMe()
+        if (res.ok) {
+          const d = await res.json()
+          setUserRole(d.role || 'admin')
+        } else {
+          setUserRole('admin')
+        }
+      } catch (err) {
+        console.warn('[AdminDashboard] authMe failed; continuing with default role:', err)
+        setUserRole('admin')
       }
-      await loadAll()
+      try {
+        await loadAll()
+      } catch (err) {
+        console.warn('[AdminDashboard] Initial load failed:', err?.message || err)
+      }
     }
     init()
   }, [session])
@@ -284,21 +297,27 @@ export default function AdminDashboard() {
     }
     setLoginLoading(true)
     setLoginError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      console.error('[Auth] Sign-in failed:', error.message, error)
-      const msg = error.message.includes('Invalid login credentials')
-        ? 'Invalid email or password. If you were just invited, click the link in your email to set a password first.'
-        : error.message
-      setLoginError(msg)
-      setFailedAttempts((prev) => prev + 1)
-      if (captchaRef.current) captchaRef.current.resetCaptcha()
-      setCaptchaToken(null)
-    } else {
-      setFailedAttempts(0)
-      setCaptchaToken(null)
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        console.error('[Auth] Sign-in failed:', error.message, error)
+        const msg = error.message.includes('Invalid login credentials')
+          ? 'Invalid email or password. If you were just invited, click the link in your email to set a password first.'
+          : error.message
+        setLoginError(msg)
+        setFailedAttempts((prev) => prev + 1)
+        if (captchaRef.current) captchaRef.current.resetCaptcha()
+        setCaptchaToken(null)
+      } else {
+        setFailedAttempts(0)
+        setCaptchaToken(null)
+      }
+    } catch (err) {
+      console.error('[Auth] Sign-in request error:', err)
+      setLoginError('Unable to reach the authentication server. Please check your connection and try again.')
+    } finally {
+      setLoginLoading(false)
     }
-    setLoginLoading(false)
   }
 
   async function eachLimit(tasks, limit) {
@@ -314,19 +333,29 @@ export default function AdminDashboard() {
     return results
   }
 
+  // Isolate each dashboard section so one failing request can't cascade into an
+  // unhandled rejection that stalls the rest of the dashboard.
+  const safeLoad = (fn) => async () => {
+    try {
+      await fn()
+    } catch (err) {
+      console.warn('[AdminDashboard] A section failed to load:', err?.message || err)
+    }
+  }
+
   async function loadAll() {
     setDataLoading(true)
     try {
       await eachLimit(
         [
-          loadStudents,
-          loadTemplate,
-          loadFields,
-          loadQrFields,
-          loadLayout,
-          loadSubmissions,
-          loadSubmissionForm,
-          loadAnalytics,
+          safeLoad(loadStudents),
+          safeLoad(loadTemplate),
+          safeLoad(loadFields),
+          safeLoad(loadQrFields),
+          safeLoad(loadLayout),
+          safeLoad(loadSubmissions),
+          safeLoad(loadSubmissionForm),
+          safeLoad(loadAnalytics),
         ],
         3,
       )

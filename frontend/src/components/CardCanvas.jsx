@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
+import IDCardDisplay from './IDCardDisplay'
 
 function loadImg(src) {
   return new Promise((resolve, reject) => {
@@ -204,7 +205,7 @@ export default function CardCanvas({ student, templateUrl, layout, maxWidth = 30
     }
   }, [student, templateUrl, resolvedLayout])
 
-  if (failed) return null // Parent will show IDCardDisplay fallback
+  if (failed) return <IDCardDisplay student={student} />
 
   return (
     <canvas

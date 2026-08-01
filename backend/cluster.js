@@ -7,35 +7,63 @@ const numCPUs = Math.min(os.availableParallelism?.() || os.cpus().length, 4)
 if (cluster.isPrimary) {
   logger.info({ pid: process.pid, workers: numCPUs }, 'Primary process running')
 
-  const restarts = new Map()
   const MAX_RESTARTS = 10
   const RESTART_WINDOW = 60 * 1000
+  const RESTART_DELAY = 1500
 
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork()
+  // Track restart counts per pool slot. We must NOT key off worker.id — Node
+  // assigns each newly forked worker a fresh, monotonically increasing id, so a
+  // keyed-by-id map would never accumulate and the "give up" branch below would
+  // be unreachable. Keying by slot keeps a crash-looping worker from being
+  // re-forked endlessly at full speed.
+  const slots = Array.from({ length: numCPUs }, (_, index) => ({
+    index,
+    worker: null,
+    restarts: [],
+  }))
+
+  function forkSlot(index) {
+    const slot = slots[index]
+    const worker = cluster.fork()
+    slot.worker = worker
+    slot.restarts = slot.restarts.filter((t) => Date.now() - t < RESTART_WINDOW)
+    return worker
   }
+
+  function reforkLater(slot, delayMs) {
+    setTimeout(() => {
+      if (!slot.worker) forkSlot(slot.index)
+    }, delayMs)
+  }
+
+  for (let i = 0; i < numCPUs; i++) forkSlot(i)
 
   cluster.on('exit', (worker, code, signal) => {
     const now = Date.now()
-    const wid = worker.id
-    logger.warn({ workerId: wid, pid: worker.process.pid, code, signal }, 'Worker died')
+    const slot = slots.find((s) => s.worker && s.worker.id === worker.id)
+    logger.warn({ pid: worker.process.pid, code, signal }, 'Worker died')
 
-    if (!restarts.has(wid)) restarts.set(wid, [])
-    const times = restarts.get(wid).filter((t) => now - t < RESTART_WINDOW)
-    times.push(now)
-    restarts.set(wid, times)
-
-    if (times.length >= MAX_RESTARTS) {
-      logger.error(
-        { workerId: wid, restarts: times.length, windowSec: RESTART_WINDOW / 1000 },
-        'Worker exceeded max restarts — giving up',
-      )
-      restarts.delete(wid)
+    if (!slot) {
+      logger.info('Forking replacement worker')
+      cluster.fork()
       return
     }
 
-    logger.info('Forking replacement worker')
-    cluster.fork()
+    slot.worker = null
+    slot.restarts.push(now)
+    slot.restarts = slot.restarts.filter((t) => now - t < RESTART_WINDOW)
+
+    if (slot.restarts.length >= MAX_RESTARTS) {
+      logger.error(
+        { restarts: slot.restarts.length, windowSec: RESTART_WINDOW / 1000 },
+        'Worker exceeded max restarts in window — pausing restarts',
+      )
+      slot.restarts = []
+      reforkLater(slot, RESTART_WINDOW)
+      return
+    }
+
+    reforkLater(slot, RESTART_DELAY)
   })
 
   cluster.on('listening', (worker, address) => {

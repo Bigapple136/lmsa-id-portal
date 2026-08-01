@@ -44,7 +44,7 @@ async function getAllKeyRecords() {
   if (cached) return cached
 
   let records = null
-  let usedFallback = false
+  let queryError = null
 
   try {
     const { data, error } = await supabase
@@ -54,24 +54,35 @@ async function getAllKeyRecords() {
     if (error) throw error
     records = data
   } catch (err) {
-    logger.warn({ err: err.message }, 'qr_keys lookup failed; falling back to env seed (dev only)')
+    queryError = err
+  }
+
+  const isProd = process.env.NODE_ENV === 'production'
+
+  // Fail closed in production: a transient DB failure must NOT silently mint
+  // tokens signed with the env secret — those would fail verification once the
+  // DB recovers (if the env secret differs from the stored k_legacy). Better to
+  // reject the one in-flight request loudly than to generate unverifiable cards.
+  if (queryError) {
+    if (isProd) {
+      throw new Error(`qr_keys lookup failed in production: ${queryError.message}`)
+    }
+    logger.warn({ err: queryError.message }, 'qr_keys lookup failed (dev fallback)')
   }
 
   // Dev-only fallback: if no DB key is available, synthesize k_legacy from the
   // env secret so the server keeps running in local dev without a seeded table.
   // In production we do NOT use the env secret for signing — see getActiveKey().
   if (!records?.length) {
-    usedFallback = true
+    if (isProd) {
+      throw new Error('No QR signing keys found in qr_keys (production refuses env fallback)')
+    }
     records = QR_SIGNING_SECRET
       ? [{ kid: LEGACY_KID, secret: QR_SIGNING_SECRET, status: 'active' }]
       : []
   }
 
   cache.set(KEY_CACHE_KEY, records, KEY_CACHE_TTL)
-  if (usedFallback) {
-    // Tag cache entry so callers can distinguish, but don't change the shape.
-    logger.debug({ usedFallback }, 'qr_keys cache populated from env fallback')
-  }
   return records
 }
 

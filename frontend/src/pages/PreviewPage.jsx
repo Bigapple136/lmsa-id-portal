@@ -94,23 +94,33 @@ export default function PreviewPage() {
   }, [token])
 
   async function fetchTemplateAndLayout() {
-    try {
-      const [tRes, lRes, qrRes] = await Promise.all([
-        apiFetch('/api/templates/active'),
-        apiFetch('/api/settings/layout'),
-        apiFetch('/api/settings/qr-fields'),
-      ])
-      if (tRes.ok) {
-        const t = await tRes.json()
+    // Fetch each resource independently so one failing endpoint never discards
+    // the already-succeeded template/layout/qr-field responses.
+    const [tRes, lRes, qrRes] = await Promise.allSettled([
+      apiFetch('/api/templates/active'),
+      apiFetch('/api/settings/layout'),
+      apiFetch('/api/settings/qr-fields'),
+    ])
+    if (tRes.status === 'fulfilled' && tRes.value.ok) {
+      try {
+        const t = await tRes.value.json()
         setTemplateUrl(t.file_url)
         setTemplateStatus('ready')
-      } else {
+      } catch {
         setTemplateStatus('missing')
       }
-      if (lRes.ok) setCardLayout(await lRes.json())
-      if (qrRes.ok) setQrFields(await qrRes.json())
-    } catch {
+    } else {
       setTemplateStatus('missing')
+    }
+    if (lRes.status === 'fulfilled' && lRes.value.ok) {
+      try {
+        setCardLayout(await lRes.value.json())
+      } catch {}
+    }
+    if (qrRes.status === 'fulfilled' && qrRes.value.ok) {
+      try {
+        setQrFields(await qrRes.value.json())
+      } catch {}
     }
   }
 

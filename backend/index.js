@@ -5,6 +5,10 @@ validateEnv()
 const logger = require('./logger')
 const Sentry = require('@sentry/node')
 const express = require('express')
+// Patch Express 4 so a rejected promise from any async route handler or async
+// middleware is forwarded to the error middleware instead of escaping as an
+// unhandledRejection that would otherwise take down the whole process.
+require('express-async-errors')
 const cors = require('cors')
 const helmet = require('helmet')
 const morgan = require('morgan')
@@ -199,12 +203,19 @@ function startServer() {
 }
 
 // ---- Unhandled rejections / exceptions ----
+// One failed promise (a DB call, a network request, a background task) must
+// never be able to take down the entire backend. Rejected promises inside
+// request handlers are routed to the Express error middleware by
+// express-async-errors above, so anything reaching here is a non-request
+// background task — log it and keep serving.
 process.on('unhandledRejection', (reason) => {
-  logger.fatal({ err: reason }, 'Unhandled rejection')
-  process.exit(1)
+  logger.error({ err: reason }, 'Unhandled promise rejection — continuing')
 })
+// An uncaught synchronous exception usually means corrupted state; let the
+// process exit so the hosting platform (or cluster primary) restarts a fresh
+// worker rather than continuing in an undefined state.
 process.on('uncaughtException', (err) => {
-  logger.fatal({ err }, 'Uncaught exception')
+  logger.fatal({ err }, 'Uncaught exception — exiting for restart')
   process.exit(1)
 })
 
