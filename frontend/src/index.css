@@ -2636,6 +2636,87 @@ a:focus:not(:focus-visible) {
 .nc-load-more:hover { background: var(--bg); }
 .nc-load-more:disabled { opacity: 0.5; cursor: default; }
 
+/* Filter tabs */
+.nc-filter-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 0.5px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.nc-filter-tabs::-webkit-scrollbar { display: none; }
+
+.nc-filter-tab {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+.nc-filter-tab:hover { color: var(--text); background: var(--bg); }
+.nc-filter-tab.active {
+  color: var(--gold);
+  background: rgba(201,168,76,0.12);
+}
+
+/* Per-notification mark-as-read button */
+.nc-read-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  margin-top: 2px;
+}
+.nc-read-btn:hover {
+  color: var(--success-text);
+  background: var(--success-bg);
+}
+.nc-read-btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Hide old nc-dot when per-item read button is present (we'll keep it for backwards compat but it's now unused) */
+.nc-dot { display: none; }
+
+.nc-loading {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.nc-load-more {
+  border: none;
+  border-top: 0.5px solid var(--border);
+  background: none;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--navy-mid);
+  cursor: pointer;
+  min-height: 44px;
+}
+.nc-load-more:hover { background: var(--bg); }
+.nc-load-more:disabled { opacity: 0.5; cursor: default; }
+
 /* Notification Center — tablet & mobile responsiveness */
 /* Tablet (≤1024px): cap width but keep anchored right */
 @media (max-width: 1024px) {

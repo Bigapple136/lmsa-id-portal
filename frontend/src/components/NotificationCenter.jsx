@@ -8,6 +8,12 @@ const TYPE_ICONS = {
   photo_issue: '📷',
 }
 
+const TYPE_LABELS = {
+  submission: 'Submissions',
+  self_correction: 'Self-Corrections',
+  photo_issue: 'Photo Issues',
+}
+
 function timeAgo(dateStr) {
   const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000)
   if (seconds < 60) return 'just now'
@@ -27,14 +33,23 @@ export default function NotificationCenter() {
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
   const [apiError, setApiError] = useState(false)
+  const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'submission' | 'self_correction' | 'photo_issue'
+  const [realtimeStatus, setRealtimeStatus] = useState('connecting') // 'connected' | 'disconnected' | 'connecting'
   const panelRef = useRef(null)
   const bellRef = useRef(null)
+  const intervalRef = useRef(null)
 
   const fetchNotifications = useCallback(async (off = 0, append = false) => {
     setLoading(true)
     setApiError(false)
     try {
-      const res = await adminFetch(`/api/notifications?limit=50&offset=${off}`)
+      const params = new URLSearchParams({
+        limit: '50',
+        offset: String(off),
+      })
+      if (activeFilter !== 'all') params.set('type', activeFilter)
+
+      const res = await adminFetch(`/api/notifications?${params}`)
       if (res.ok) {
         const data = await res.json()
         setNotifications((prev) => (append ? [...prev, ...data.notifications] : data.notifications))
@@ -48,24 +63,44 @@ export default function NotificationCenter() {
       setApiError(true)
     }
     setLoading(false)
-  }, [])
+  }, [activeFilter])
 
+  // Initial load + filter changes
   useEffect(() => {
+    setOffset(0)
     fetchNotifications()
   }, [fetchNotifications])
 
-  // Polling fallback — refresh every 30s to catch events even without Realtime
+  // Polling fallback — ONLY when Realtime is NOT connected
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetchNotifications()
-    }, 30000)
-    return () => clearInterval(interval)
-  }, [fetchNotifications])
+    if (realtimeStatus === 'connected') {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+      return
+    }
 
-  // Realtime subscription — wrapped in try/catch so CSP blocks don't crash the app
+    // Start polling when disconnected
+    if (!intervalRef.current) {
+      intervalRef.current = setInterval(() => {
+        fetchNotifications()
+      }, 30000)
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [realtimeStatus, fetchNotifications])
+
+  // Realtime subscription
   useEffect(() => {
     let channel
     const seenIds = new Set()
+    setRealtimeStatus('connecting')
+
     try {
       channel = supabase
         .channel('notifications-realtime')
@@ -76,18 +111,41 @@ export default function NotificationCenter() {
             const id = payload.new?.id
             if (id && seenIds.has(id)) return
             if (id) seenIds.add(id)
+
+            // Apply client-side filter
+            if (activeFilter !== 'all' && payload.new.type !== activeFilter) return
+
             setNotifications((prev) => [payload.new, ...prev])
             setUnread((prev) => prev + 1)
             setTotal((prev) => prev + 1)
           },
         )
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notification_reads' },
+          (payload) => {
+            // Another admin marked a notification as read — update our local state
+            // only if it's for the current admin (we can't easily know from payload,
+            // so we just refetch counts)
+            setNotifications((prev) =>
+              prev.map((n) =>
+                n.id === payload.new.notification_id ? { ...n, is_read_by_me: true } : n,
+              ),
+            )
+            setUnread((prev) => Math.max(0, prev - 1))
+          },
+        )
         .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (status === 'SUBSCRIBED') {
+            setRealtimeStatus('connected')
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             console.warn('[NotificationCenter] Realtime unavailable, using polling')
+            setRealtimeStatus('disconnected')
           }
         })
     } catch {
       console.warn('[NotificationCenter] Realtime subscription failed, using polling')
+      setRealtimeStatus('disconnected')
     }
 
     return () => {
@@ -96,7 +154,7 @@ export default function NotificationCenter() {
         try { supabase.removeChannel(channel) } catch {}
       }
     }
-  }, [])
+  }, [activeFilter])
 
   // Close on outside click
   useEffect(() => {
@@ -119,9 +177,23 @@ export default function NotificationCenter() {
 
   async function markAllRead() {
     try {
-      await adminFetch('/api/notifications/read-all', { method: 'PATCH' })
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-      setUnread(0)
+      const res = await adminFetch('/api/notifications/read-all', { method: 'PATCH' })
+      if (res.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, is_read_by_me: true })))
+        setUnread(0)
+      }
+    } catch {
+      // silent
+    }
+  }
+
+  async function markRead(id) {
+    try {
+      const res = await adminFetch(`/api/notifications/${id}/read`, { method: 'PATCH' })
+      if (res.ok) {
+        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read_by_me: true } : n)))
+        setUnread((prev) => Math.max(0, prev - 1))
+      }
     } catch {
       // silent
     }
@@ -132,13 +204,20 @@ export default function NotificationCenter() {
     fetchNotifications(offset, true)
   }
 
+  const FILTERS = [
+    { value: 'all', label: 'All' },
+    { value: 'submission', label: TYPE_LABELS.submission },
+    { value: 'self_correction', label: TYPE_LABELS.self_correction },
+    { value: 'photo_issue', label: TYPE_LABELS.photo_issue },
+  ]
+
   return (
     <div className="nc-wrapper">
       <button
         ref={bellRef}
         className="nc-bell"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label="Notifications"
+        aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ''}`}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -158,6 +237,21 @@ export default function NotificationCenter() {
             )}
           </div>
 
+          {/* Type filter tabs */}
+          <div className="nc-filter-tabs" role="tablist" aria-label="Filter notifications by type">
+            {FILTERS.map((f) => (
+              <button
+                key={f.value}
+                role="tab"
+                aria-selected={activeFilter === f.value}
+                className={`nc-filter-tab ${activeFilter === f.value ? 'active' : ''}`}
+                onClick={() => setActiveFilter(f.value)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
           <div className="nc-list">
             {apiError && (
               <div className="nc-empty" style={{ color: 'var(--error-text)' }}>
@@ -165,17 +259,30 @@ export default function NotificationCenter() {
               </div>
             )}
             {!apiError && notifications.length === 0 && !loading && (
-              <div className="nc-empty">No notifications yet</div>
+              <div className="nc-empty">
+                {activeFilter === 'all' ? 'No notifications yet' : `No ${TYPE_LABELS[activeFilter]?.toLowerCase() || 'notifications'} yet`}
+              </div>
             )}
             {notifications.map((n) => (
-              <div key={n.id} className={`nc-item ${n.is_read ? '' : 'nc-unread'}`}>
+              <div key={n.id} className={`nc-item ${n.is_read_by_me ? '' : 'nc-unread'}`}>
                 <span className="nc-item-icon">{TYPE_ICONS[n.type] || '🔔'}</span>
                 <div className="nc-item-body">
                   <div className="nc-item-title">{n.title}</div>
                   <div className="nc-item-msg">{n.message}</div>
                   <div className="nc-item-time">{timeAgo(n.created_at)}</div>
                 </div>
-                {!n.is_read && <span className="nc-dot" />}
+                {!n.is_read_by_me && (
+                  <button
+                    className="nc-read-btn"
+                    onClick={() => markRead(n.id)}
+                    aria-label="Mark as read"
+                    title="Mark as read"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 4L4 12M4 4l8 8" />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
             {loading && <div className="nc-loading">Loading...</div>}
