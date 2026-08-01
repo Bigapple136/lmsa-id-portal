@@ -36,12 +36,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS qr_keys_one_active
   ON qr_keys ((1)) WHERE status = 'active';
 
 -- 2. Seed k_legacy from the current env secret --------------------------------
--- Replace :LEGACY_SECRET with your current QR_SIGNING_SECRET value (>= 32 chars)
--- before running. After this migration, the env var becomes a dev-only fallback
--- (see qr-keys.js). Re-running with a different secret has no effect because of
--- ON CONFLICT DO NOTHING — to actually change it, perform a rotation instead.
+-- Replace 'YOUR_QR_SIGNING_SECRET_HERE' with your current QR_SIGNING_SECRET value
+-- (>= 32 chars, base64url or random) before running. After this migration, the env
+-- var becomes a dev-only fallback (see qr-keys.js). Re-running with a different
+-- secret has no effect because of ON CONFLICT DO NOTHING — to actually change it,
+-- perform a rotation instead.
 INSERT INTO qr_keys (kid, secret, status)
-VALUES ('k_legacy', :LEGACY_SECRET, 'active')
+VALUES ('k_legacy', 'YOUR_QR_SIGNING_SECRET_HERE', 'active')
 ON CONFLICT (kid) DO NOTHING;
 
 -- 3. Audit -------------------------------------------------------------------
