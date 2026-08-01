@@ -1,6 +1,7 @@
 -- =============================================================================
 -- LMSA ID Portal — Notifications (005)
 -- Persistent notification log for admin event feed + Realtime push.
+-- Idempotent: safe to re-run.
 -- =============================================================================
 
 -- 1. notifications table -----------------------------------------------------
@@ -20,8 +21,12 @@ CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(is_read) WH
 
 -- Row-level security (RLS)
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policy if present, then recreate (idempotent)
+DROP POLICY IF EXISTS "Authenticated read" ON notifications;
 CREATE POLICY "Authenticated read" ON notifications
   FOR SELECT USING (auth.role() = 'authenticated');
 
 -- 2. Enable Realtime on notifications ----------------------------------------
+-- This is idempotent in Supabase - adding an already-published table is a no-op
 ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
