@@ -19,6 +19,8 @@ const STEPS = [
 
 export default function StudentSubmissionForm() {
   const [enabled, setEnabled] = useState(null)
+  const [statusError, setStatusError] = useState(false)
+  const [retry, setRetry] = useState(0)
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(0)
   const [agreed, setAgreed] = useState(false)
@@ -37,6 +39,8 @@ export default function StudentSubmissionForm() {
   useEffect(() => {
     async function init() {
       try {
+        setLoading(true)
+        setStatusError(false)
         const [statusRes, fieldsRes, qrFieldsRes] = await Promise.all([
           apiFetch('/api/submissions/status'),
           apiFetch('/api/settings/fields'),
@@ -45,16 +49,18 @@ export default function StudentSubmissionForm() {
         const [statusData, fieldsData, qrFieldsData] = await Promise.all([
           statusRes.json(), fieldsRes.json(), qrFieldsRes.json(),
         ])
+        if (!statusRes.ok || typeof statusData.enabled !== 'boolean') throw new Error('invalid status')
         setEnabled(statusData.enabled)
         setFieldsConfig(fieldsData)
         setQrFieldsConfig(qrFieldsData)
       } catch {
-        setEnabled(false)
+        setStatusError(true)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     init()
-  }, [])
+  }, [retry])
 
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value })
 
@@ -103,6 +109,25 @@ export default function StudentSubmissionForm() {
       <div className="page-center">
         <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
           <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (statusError) {
+    return (
+      <div className="page-center">
+        <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#9888;&#65039;</div>
+          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
+            Unable to load the form
+          </h2>
+          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>
+            We could not reach the server. Please check your connection and try again.
+          </p>
+          <button className="btn-gold" style={{ padding: '10px 24px' }} onClick={() => setRetry((n) => n + 1)}>
+            Retry
+          </button>
         </div>
       </div>
     )
