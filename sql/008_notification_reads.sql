@@ -20,6 +20,10 @@ CREATE INDEX IF NOT EXISTS idx_notification_reads_admin ON notification_reads(ad
 -- 2. RLS: only the owning admin can read/write their own rows ----------------
 ALTER TABLE notification_reads ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if present (idempotent)
+DROP POLICY IF EXISTS "Admin can read own reads" ON notification_reads;
+DROP POLICY IF EXISTS "Admin can insert own reads" ON notification_reads;
+
 -- Admins can read their own reads
 CREATE POLICY "Admin can read own reads" ON notification_reads
   FOR SELECT USING (auth.uid() = admin_id);
@@ -48,4 +52,15 @@ ORDER BY n.created_at DESC;
 GRANT SELECT ON admin_notifications TO authenticated;
 
 -- 4. Enable Realtime on notification_reads -----------------------------------
-ALTER PUBLICATION supabase_realtime ADD TABLE notification_reads;
+-- Idempotent: check if table is already in publication before adding
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'notification_reads'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE notification_reads;
+  END IF;
+END $$;
