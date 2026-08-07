@@ -1432,23 +1432,45 @@ export default function AdminDashboard() {
                 <div className="chart-card-sub">Current card design being used</div>
                 {dataLoading ? (
                   <div className="skeleton skeleton-row" style={{ marginTop: 14 }} />
-                ) : activeTemplate ? (
-                  <div className="template-card-inner">
-                    <div className="template-icon">🎨</div>
-                    <div className="template-info">
-                      <div className="template-name">{activeTemplate.file_name}</div>
-                      <div className="template-meta">
-                        Uploaded{' '}
-                        {new Date(activeTemplate.uploaded_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}{' '}
-                        · {stats.total} cards
+                ) : activeTemplateFront || activeTemplateBack ? (
+                  <>
+                    {activeTemplateFront && (
+                      <div className="template-card-inner">
+                        <div className="template-icon">🎨</div>
+                        <div className="template-info">
+                          <div className="template-name">{activeTemplateFront.file_name}</div>
+                          <div className="template-meta">
+                            Front · Uploaded{' '}
+                            {new Date(activeTemplateFront.uploaded_at).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })}{' '}
+                            · {stats.total} cards
+                          </div>
+                        </div>
+                        <span className="pill pill-green">Active</span>
                       </div>
-                    </div>
-                    <span className="pill pill-green">Active</span>
-                  </div>
+                    )}
+                    {activeTemplateBack && (
+                      <div className="template-card-inner">
+                        <div className="template-icon">🔙</div>
+                        <div className="template-info">
+                          <div className="template-name">{activeTemplateBack.file_name}</div>
+                          <div className="template-meta">
+                            Back · Uploaded{' '}
+                            {new Date(activeTemplateBack.uploaded_at).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric',
+                            })}{' '}
+                            · {stats.total} cards
+                          </div>
+                        </div>
+                        <span className="pill pill-green">Active</span>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="error-box" style={{ marginTop: 14 }}>
                     No template uploaded.{' '}
