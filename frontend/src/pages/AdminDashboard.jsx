@@ -810,6 +810,7 @@ export default function AdminDashboard() {
 
   async function handleRejectSubmission(id) {
     const notes = prompt('Reason for rejection (optional):')
+    if (notes === null) return // user cancelled — do not reject
     try {
       const res = await adminJson(`/api/submissions/${id}/reject`, 'PATCH', {
         admin_notes: notes || '',

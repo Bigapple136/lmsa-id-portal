@@ -12,6 +12,10 @@ DROP FUNCTION IF EXISTS log_admin_action;
 DROP FUNCTION IF EXISTS set_updated_at;
 
 -- 3. Drop tables (order matters due to foreign keys)
+DROP TABLE IF EXISTS qr_keys CASCADE;
+DROP TABLE IF EXISTS qr_audit CASCADE;
+DROP TABLE IF EXISTS notification_reads CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS confirmations CASCADE;
 DROP TABLE IF EXISTS student_submissions CASCADE;
 DROP TABLE IF EXISTS templates CASCADE;
@@ -47,6 +51,7 @@ CREATE TABLE IF NOT EXISTS students (
   current_address   TEXT,
   issue_date        DATE,
   valid_until       DATE,
+  confirmed_at      TIMESTAMPTZ,
   qr_url            TEXT,
   status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
                       'pending','confirmed','issue','photo_issue'
@@ -102,6 +107,7 @@ CREATE TABLE IF NOT EXISTS templates (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   file_name         TEXT NOT NULL,
   file_url          TEXT NOT NULL,
+  side              TEXT NOT NULL DEFAULT 'front' CHECK (side IN ('front', 'back')),
   is_active         BOOLEAN NOT NULL DEFAULT false,
   uploaded_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -144,6 +150,112 @@ CREATE TABLE IF NOT EXISTS student_submissions (
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- sql/005_notifications.sql + sql/008_notification_reads.sql
+CREATE TABLE IF NOT EXISTS notifications (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type        TEXT NOT NULL CHECK (type IN ('submission','self_correction','photo_issue')),
+  title       TEXT NOT NULL,
+  message     TEXT NOT NULL,
+  student_id  TEXT,
+  is_read     BOOLEAN NOT NULL DEFAULT false,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(is_read) WHERE is_read = false;
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Authenticated read" ON notifications;
+CREATE POLICY "Authenticated read" ON notifications
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE TABLE IF NOT EXISTS notification_reads (
+  notification_id UUID NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+  admin_id        UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  read_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (notification_id, admin_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_reads_admin ON notification_reads(admin_id);
+
+ALTER TABLE notification_reads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Admin can read own reads" ON notification_reads;
+DROP POLICY IF EXISTS "Admin can insert own reads" ON notification_reads;
+CREATE POLICY "Admin can read own reads" ON notification_reads
+  FOR SELECT USING (auth.uid() = admin_id);
+CREATE POLICY "Admin can insert own reads" ON notification_reads
+  FOR INSERT WITH CHECK (auth.uid() = admin_id);
+
+CREATE OR REPLACE VIEW admin_notifications AS
+SELECT
+  n.*,
+  nr.admin_id IS NOT NULL AS is_read_by_me,
+  nr.read_at
+FROM notifications n
+LEFT JOIN notification_reads nr
+  ON n.id = nr.notification_id
+  AND nr.admin_id = auth.uid()
+ORDER BY n.created_at DESC;
+
+GRANT SELECT ON admin_notifications TO authenticated;
+
+-- sql/006_qr_keys.sql
+CREATE TABLE IF NOT EXISTS qr_keys (
+  kid          TEXT PRIMARY KEY,
+  secret       TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'active'
+                 CHECK (status IN ('active', 'retired', 'revoked')),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  rotated_at   TIMESTAMPTZ,
+  revoked_at   TIMESTAMPTZ,
+  rotated_from TEXT REFERENCES qr_keys(kid)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS qr_keys_one_active
+  ON qr_keys ((1)) WHERE status = 'active';
+
+ALTER TABLE qr_keys ENABLE ROW LEVEL SECURITY;
+
+-- sql/007_qr_audit.sql
+CREATE TABLE IF NOT EXISTS qr_audit (
+  id BIGSERIAL PRIMARY KEY,
+  action TEXT NOT NULL CHECK (action IN ('rotate', 'revoke', 'rotate_started', 'revoke_started')),
+  actor TEXT NOT NULL,
+  kid TEXT,
+  old_kid TEXT,
+  new_kid TEXT,
+  reason TEXT,
+  meta JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_qr_audit_kid ON qr_audit(kid);
+CREATE INDEX IF NOT EXISTS idx_qr_audit_created_at ON qr_audit(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_qr_audit_action ON qr_audit(action);
+
+ALTER TABLE qr_audit ENABLE ROW LEVEL SECURITY;
+
+-- Enable Realtime on notifications + notification_reads
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'notifications'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'notification_reads'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE notification_reads;
+  END IF;
+END $$;
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_students_student_id ON students(student_id);
 CREATE INDEX IF NOT EXISTS idx_students_created_at ON students(created_at DESC);
@@ -155,7 +267,7 @@ CREATE INDEX IF NOT EXISTS idx_admins_created_at ON admins(created_at);
 CREATE INDEX IF NOT EXISTS idx_admin_role_logs_admin_id ON admin_role_logs(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_role_logs_created_at ON admin_role_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_portal_settings_key ON portal_settings(key);
-CREATE INDEX IF NOT EXISTS idx_templates_is_active ON templates(is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_templates_is_active_side ON templates(is_active, side) WHERE is_active = true;
 CREATE INDEX IF NOT EXISTS idx_templates_uploaded_at ON templates(uploaded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_confirmations_student_id ON confirmations(student_id);
 CREATE INDEX IF NOT EXISTS idx_confirmations_confirmed_at ON confirmations(confirmed_at DESC);

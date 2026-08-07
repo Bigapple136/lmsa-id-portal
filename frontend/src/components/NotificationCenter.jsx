@@ -112,27 +112,34 @@ export default function NotificationCenter() {
             if (id && seenIds.has(id)) return
             if (id) seenIds.add(id)
 
-            // Apply client-side filter
+            // Unread/total are global (server counts ignore the list filter),
+            // so bump them BEFORE the client-side filter check — otherwise the
+            // bell badge goes stale for types filtered out of this list.
+            setUnread((prev) => prev + 1)
+            setTotal((prev) => prev + 1)
+
+            // Apply client-side filter (list membership only)
             if (activeFilter !== 'all' && payload.new.type !== activeFilter) return
 
             setNotifications((prev) => [payload.new, ...prev])
-            setUnread((prev) => prev + 1)
-            setTotal((prev) => prev + 1)
           },
         )
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'notification_reads' },
           (payload) => {
-            // Another admin marked a notification as read — update our local state
-            // only if it's for the current admin (we can't easily know from payload,
-            // so we just refetch counts)
+            // A read-record was inserted. We can't tell from the payload which
+            // admin it belongs to, and is_read_by_me is per-admin via auth.uid(),
+            // so blindly decrementing is wrong in both directions: other admins'
+            // reads don't affect us, and our own markRead/markAllRead already
+            // decremented locally (double-decrement). Refetch the authoritative
+            // list + counts instead.
             setNotifications((prev) =>
               prev.map((n) =>
                 n.id === payload.new.notification_id ? { ...n, is_read_by_me: true } : n,
               ),
             )
-            setUnread((prev) => Math.max(0, prev - 1))
+            fetchNotifications()
           },
         )
         .subscribe((status) => {
@@ -154,7 +161,7 @@ export default function NotificationCenter() {
         try { supabase.removeChannel(channel) } catch {}
       }
     }
-  }, [activeFilter])
+  }, [activeFilter, fetchNotifications])
 
   // Close on outside click
   useEffect(() => {

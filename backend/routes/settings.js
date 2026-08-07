@@ -172,13 +172,15 @@ router.get('/layout', async (req, res) => {
       supabase.from('portal_settings').select('value').eq('key', 'card_layout_back').maybeSingle(),
     ])
     // Backward compatibility: if only card_layout exists, use it as front
-    const legacyData = !frontData?.value && !backData?.value
+    // NOTE: maybeSingle() returns { data: { value } }, so the value is at
+    // .data.value, NOT .value.
+    const legacyData = !frontData?.data?.value && !backData?.data?.value
       ? await supabase.from('portal_settings').select('value').eq('key', 'card_layout').maybeSingle()
       : { data: null }
 
     const result = {
-      front: frontData?.value || legacyData?.data?.value || DEFAULT_LAYOUT_FRONT,
-      back: backData?.value || DEFAULT_LAYOUT_BACK,
+      front: frontData?.data?.value || legacyData?.data?.value || DEFAULT_LAYOUT_FRONT,
+      back: backData?.data?.value || DEFAULT_LAYOUT_BACK,
     }
     cache.set('settings:card_layout', result, 300000)
     res.json(result)

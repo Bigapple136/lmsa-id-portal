@@ -12,8 +12,9 @@
 --   revoked — NOT used to sign; REJECTED for verification (403)
 --
 -- The single-active-key invariant is enforced by a partial unique index, so the
--- rotation transaction (insert new active + update previous active -> retired)
--- must wrap both statements or the second will fail on the index.
+-- rotation (retire previous active + insert new active) MUST retire first —
+-- inserting a second active row while one exists fails the index. See
+-- backend/routes/qr.js POST /api/qr/keys/rotate for the implementation.
 --
 -- Safe to run on existing data. Re-runnable: ON CONFLICT / IF NOT EXISTS.
 -- =============================================================================

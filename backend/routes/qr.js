@@ -607,20 +607,22 @@ router.post('/keys/rotate', requireAdmin, requireFullAdmin, async (req, res) => 
     const crypto = require('crypto')
     const newSecret = crypto.randomBytes(32).toString('base64url')
 
-    // Atomic rotation: insert new active + retire old in a single transaction
-    // Postgres doesn't support multi-statement transactions in a single query
-    // via supabase-js, so we do two calls but the partial unique index on
-    // active status guarantees only one active row exists.
-    const { error: insErr } = await supabase
-      .from('qr_keys')
-      .insert({ kid: newKid, secret: newSecret, status: 'active', rotated_from: currentActive.kid })
-    if (insErr) return res.status(500).json({ error: insErr.message })
-
+    // Rotation must retire the old key BEFORE inserting the new active one:
+    // the partial unique index `qr_keys_one_active` allows only a single row
+    // with status='active', so inserting first would always violate it.
+    // supabase-js can't wrap these in one transaction, so we retire first; the
+    // window with zero active keys is milliseconds and signing falls back to
+    // the legacy env secret if present.
     const { error: updErr } = await supabase
       .from('qr_keys')
       .update({ status: 'retired', rotated_at: new Date().toISOString() })
       .eq('kid', currentActive.kid)
     if (updErr) return res.status(500).json({ error: updErr.message })
+
+    const { error: insErr } = await supabase
+      .from('qr_keys')
+      .insert({ kid: newKid, secret: newSecret, status: 'active', rotated_from: currentActive.kid })
+    if (insErr) return res.status(500).json({ error: insErr.message })
 
     invalidateQrKeysCache()
     await logQrAudit('rotate', actor, { old_kid: currentActive.kid, new_kid: newKid })
@@ -672,7 +674,10 @@ router.get('/keys', requireAdmin, async (req, res) => {
   try {
     const { data: keys, error } = await supabase
       .from('qr_keys')
-      .select('kid, secret, status, created_at, rotated_at, revoked_at, rotated_from')
+      // secret is deliberately excluded: signing secrets must never leave the
+      // service role, not even to full admins (QR_SIGNING_SECRET env is the
+      // only place an operator should ever touch a key material).
+      .select('kid, status, created_at, rotated_at, revoked_at, rotated_from')
       .order('created_at', { ascending: false })
     if (error) return res.status(500).json({ error: error.message })
     res.json({ keys: keys || [] })
@@ -786,7 +791,7 @@ router.get('/inspect/:token', requireAdmin, async (req, res) => {
     if (sid && typeof sid === 'string') {
       const { data, error } = await supabase
         .from('students')
-        .select('student_id, full_name, year_level, program, qr_url')
+        .select('student_id, full_name, year_level, programme, qr_url')
         .eq('student_id', sid)
         .maybeSingle()
       if (!error && data) {
