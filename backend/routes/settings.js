@@ -4,7 +4,6 @@ const path = require('path')
 const fs = require('fs')
 const JSZip = require('jszip')
 const { supabase } = require('../db')
-const cache = require('../cache')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const {
   isBoolean,
@@ -123,19 +122,20 @@ const DEFAULT_LAYOUT_BACK = {
   },
 }
 
-// ── PUBLIC reads (cached, 5-minute TTL) ──
+// ── PUBLIC reads ──
+// Note: these settings are NOT cached in-process. With multiple cluster
+// workers each holding their own MemoryCache, a write handled by one worker
+// never invalidates the others, so a refresh could read a stale value for up
+// to the TTL. These are single-row PK lookups on a low-traffic table — read
+// them fresh so admin saves persist immediately.
 router.get('/fields', async (req, res) => {
   try {
-    const cached = cache.get('settings:card_fields')
-    if (cached) return res.json(cached)
-
     const { data } = await supabase
       .from('portal_settings')
       .select('value')
       .eq('key', 'card_fields')
       .maybeSingle()
     const result = data?.value || DEFAULT_FIELDS
-    cache.set('settings:card_fields', result, 300000)
     res.json(result)
   } catch (err) {
     logger.error({ err }, 'Settings GET /fields error')
@@ -145,16 +145,12 @@ router.get('/fields', async (req, res) => {
 
 router.get('/qr-fields', async (req, res) => {
   try {
-    const cached = cache.get('settings:qr_fields')
-    if (cached) return res.json(cached)
-
     const { data } = await supabase
       .from('portal_settings')
       .select('value')
       .eq('key', 'qr_fields')
       .maybeSingle()
     const result = data?.value || DEFAULT_QR_FIELDS
-    cache.set('settings:qr_fields', result, 300000)
     res.json(result)
   } catch (err) {
     logger.error({ err }, 'Settings GET /qr-fields error')
@@ -164,9 +160,6 @@ router.get('/qr-fields', async (req, res) => {
 
 router.get('/layout', async (req, res) => {
   try {
-    const cached = cache.get('settings:card_layout')
-    if (cached) return res.json(cached)
-
     const [{ data: frontData }, { data: backData }] = await Promise.all([
       supabase.from('portal_settings').select('value').eq('key', 'card_layout_front').maybeSingle(),
       supabase.from('portal_settings').select('value').eq('key', 'card_layout_back').maybeSingle(),
@@ -182,7 +175,6 @@ router.get('/layout', async (req, res) => {
       front: frontData?.data?.value || legacyData?.data?.value || DEFAULT_LAYOUT_FRONT,
       back: backData?.data?.value || DEFAULT_LAYOUT_BACK,
     }
-    cache.set('settings:card_layout', result, 300000)
     res.json(result)
   } catch (err) {
     logger.error({ err }, 'Settings GET /layout error')
@@ -202,7 +194,6 @@ router.put('/fields', requireAdmin, requireFullAdmin, async (req, res) => {
       .select()
       .single()
     if (error) return res.status(500).json({ error: error.message })
-    cache.set('settings:card_fields', data.value, 300000)
     res.json(data.value)
   } catch (err) {
     logger.error({ err }, 'Settings PUT /fields error')
@@ -221,7 +212,6 @@ router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
       .select()
       .single()
     if (error) return res.status(400).json({ error: error.message })
-    cache.set('settings:qr_fields', data.value, 300000)
     res.json(data.value)
   } catch (err) {
     logger.error({ err }, 'Settings PUT /qr-fields error')
@@ -279,7 +269,6 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     const savedBack = results[1]?.data?.value
 
     const result = { front: savedFront, back: savedBack }
-    cache.set('settings:card_layout', result, 300000)
     res.json(result)
   } catch (err) {
     logger.error({ err }, 'Settings PUT /layout error')
@@ -395,17 +384,12 @@ router.put('/submission-form', requireAdmin, requireFullAdmin, async (req, res) 
 })
 
 async function getQRFields() {
-  const cached = cache.get('settings:qr_fields')
-  if (cached) return cached
-
   const { data } = await supabase
     .from('portal_settings')
     .select('value')
     .eq('key', 'qr_fields')
     .maybeSingle()
-  const result = data?.value || DEFAULT_QR_FIELDS
-  cache.set('settings:qr_fields', result, 300000)
-  return result
+  return data?.value || DEFAULT_QR_FIELDS
 }
 
 module.exports = router

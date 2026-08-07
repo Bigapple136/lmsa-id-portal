@@ -171,16 +171,19 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
   const defaultLayout = side === 'front' ? DEFAULT_LAYOUT_FRONT : DEFAULT_LAYOUT_BACK
 
   // Merge new initialLayout without discarding unsaved edits
+  // initialLayout is the authoritative persisted layout, so spread it LAST —
+  // on first mount it arrives after render (cardLayout starts null), and
+  // spreading the mount-time defaults over it would clobber the saved layout.
   useEffect(() => {
     if (initialLayout) {
       if (initialLayout.front) {
-        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout.front, ...prev }))
+        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...prev, ...initialLayout.front }))
       } else if (!initialLayout.back) {
         // Old flat format - apply to front only
-        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout, ...prev }))
+        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...prev, ...initialLayout }))
       }
       if (initialLayout.back) {
-        setBackLayout((prev) => ({ ...DEFAULT_LAYOUT_BACK, ...initialLayout.back, ...prev }))
+        setBackLayout((prev) => ({ ...DEFAULT_LAYOUT_BACK, ...prev, ...initialLayout.back }))
       }
     }
   }, [initialLayout])
