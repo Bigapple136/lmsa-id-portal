@@ -135,6 +135,13 @@ const EST_CHARS = {
   valid_until: 10,
 }
 
+const FONT_OPTIONS = [
+  { label: 'Arial', value: 'Arial, sans-serif' },
+  { label: 'Roboto', value: 'Roboto, Arial, sans-serif' },
+  { label: 'Times New Roman', value: "'Times New Roman', serif" },
+  { label: 'Sans', value: 'sans-serif' },
+]
+
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
   const [side, setSide] = useState('front') // 'front' | 'back'
   
@@ -686,6 +693,21 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
                       value={Math.round(sel.fontSize * 1000) / 10}
                       onChange={(e) => set(selected, 'fontSize', parseFloat(e.target.value) / 100)}
                     />
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Font</label>
+                    <select
+                      className="field-input"
+                      style={{ fontSize: '12px', padding: '5px 8px' }}
+                      value={sel.fontFamily || 'Arial, sans-serif'}
+                      onChange={(e) => set(selected, 'fontFamily', e.target.value)}
+                    >
+                      {FONT_OPTIONS.map((f) => (
+                        <option key={f.value} value={f.value}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="field-group">
                     <label className="field-label">Color</label>

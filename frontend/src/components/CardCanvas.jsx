@@ -221,6 +221,10 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
         const template = await loadImg(currentTemplateUrl)
         if (cancelled) return
 
+        // Make sure webfonts (e.g. Roboto) are ready before measuring/drawing text
+        if (document.fonts?.ready) await document.fonts.ready
+        if (cancelled) return
+
         const W = template.naturalWidth
         const H = template.naturalHeight
         canvas.width = W
@@ -290,7 +294,8 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
 
             let fontSize = Math.round((pos.fontSize || 0.04) * W)
             const weight = pos.bold ? 'bold ' : ''
-            ctx.font = `${weight}${fontSize}px Arial, sans-serif`
+            const family = pos.fontFamily || 'Arial, sans-serif'
+            ctx.font = `${weight}${fontSize}px ${family}`
             ctx.fillStyle = pos.color || '#000000'
             // Center-aligned text treats (x, y) as its true center so the text
             // stays centered on the drop point even when maxWidth shrinks it
@@ -300,7 +305,7 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
               const maxPx = pos.maxWidth * W
               while (ctx.measureText(text).width > maxPx && fontSize > 6) {
                 fontSize--
-                ctx.font = `${weight}${fontSize}px Arial, sans-serif`
+                ctx.font = `${weight}${fontSize}px ${family}`
               }
             }
 
