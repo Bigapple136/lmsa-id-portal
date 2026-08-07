@@ -71,6 +71,15 @@ export function findBoxes(lum, width, height, opts = {}) {
   const minW = opts.minW ?? Math.round(width * 0.04)
   const minH = opts.minH ?? Math.round(height * 0.02)
   const maxAreaFrac = opts.maxAreaFrac ?? 0.85
+  // Box pairing is O(hLines² × vLines²). Templates with lots of strokes
+  // (text, QR modules, textures) can push this into the billions of iterations
+  // and freeze the main thread. Real box borders are the LONGEST strokes on a
+  // card, so keep only the longest lines per orientation to bound the work.
+  const maxLines = opts.maxLines ?? 60
+  // Cap how many boxes are returned. A busy template (grids, many rules) could
+  // yield tens of thousands of valid rectangles — pointless to snap into and
+  // heavy to render. Stop collecting once the cap is hit.
+  const maxRects = opts.maxRects ?? 200
 
   const hMask = horizontalStrokes(lum, width, height, threshold)
   const vMask = verticalStrokes(lum, width, height, threshold)
@@ -105,20 +114,20 @@ export function findBoxes(lum, width, height, opts = {}) {
   }
 
   // Re-join corners (2px) that stroke filtering clipped off
-  const hLines = mergeLineRuns(hRuns, 'y', 'x0', 'x1').map((l) => ({
-    y: l.y,
-    x0: l.x0 - 2,
-    x1: l.x1 + 2,
-  }))
-  const vLines = mergeLineRuns(vRuns, 'x', 'y0', 'y1').map((l) => ({
-    x: l.x,
-    y0: l.y0 - 2,
-    y1: l.y1 + 2,
-  }))
+  const hLines = mergeLineRuns(hRuns, 'y', 'x0', 'x1')
+    .map((l) => ({ y: l.y, x0: l.x0 - 2, x1: l.x1 + 2 }))
+    .sort((a, b) => b.x1 - b.x0 - (a.x1 - a.x0))
+    .slice(0, maxLines)
+    .sort((a, b) => a.y - b.y)
+  const vLines = mergeLineRuns(vRuns, 'x', 'y0', 'y1')
+    .map((l) => ({ x: l.x, y0: l.y0 - 2, y1: l.y1 + 2 }))
+    .sort((a, b) => b.y1 - b.y0 - (a.y1 - a.y0))
+    .slice(0, maxLines)
+    .sort((a, b) => a.x - b.x)
 
   const rects = []
   const seen = new Set()
-  for (const t of hLines) {
+  outer: for (const t of hLines) {
     for (const b of hLines) {
       if (b.y - t.y < minH) continue
       for (const l of vLines) {
@@ -138,6 +147,7 @@ export function findBoxes(lum, width, height, opts = {}) {
           const area = (r.x - l.x) * (b.y - t.y)
           if (area > width * height * maxAreaFrac) continue
           rects.push({ x0: l.x, y0: t.y, x1: r.x, y1: b.y })
+          if (rects.length >= maxRects) break outer
         }
       }
     }
@@ -159,18 +169,25 @@ function luminanceData(canvas, width, height) {
 }
 
 export async function detectZonesFromImage(img) {
-  const width = img.naturalWidth
-  const height = img.naturalHeight
+  const naturalW = img.naturalWidth
+  const naturalH = img.naturalHeight
+  // Analyze a downscaled copy: high-res templates (2000+ px) multiply the run
+  // counts and pixel work for no extra accuracy, since zones are returned as
+  // fractions and are scale-invariant.
+  const MAX_DIM = 700
+  const scale = Math.min(1, MAX_DIM / Math.max(naturalW, naturalH))
+  const width = Math.max(1, Math.round(naturalW * scale))
+  const height = Math.max(1, Math.round(naturalH * scale))
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
-  const ctx = canvas.getContext('2d')
-  ctx.drawImage(img, 0, 0)
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  ctx.drawImage(img, 0, 0, width, height)
   const lum = luminanceData(canvas, width, height)
   const boxes = findBoxes(lum, width, height)
   return {
-    width,
-    height,
+    width: naturalW,
+    height: naturalH,
     zones: boxes.map((b) => ({
       left: b.x0 / width,
       top: b.y0 / height,
