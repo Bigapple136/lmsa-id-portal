@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { detectZonesFromImage } from '../lib/detectZones'
 
 const DISPLAY_W = 260
 
@@ -114,6 +115,24 @@ const DEFAULT_LAYOUT_BACK = {
 const FRONT_FIELDS = ['photo', 'full_name', 'student_id', 'year_level', 'position', 'signature']
 const BACK_FIELDS = ['qr', 'blood_type', 'emergency_contact_phone', 'issue_date', 'valid_until']
 
+// Estimated characters per field, used to auto-fit font size to a detected box
+const EST_CHARS = {
+  full_name: 18,
+  student_id: 16,
+  year_level: 14,
+  position: 20,
+  programme: 18,
+  date_of_birth: 10,
+  nationality: 14,
+  county_of_origin: 14,
+  current_address: 20,
+  student_email: 22,
+  blood_type: 6,
+  emergency_contact_phone: 12,
+  issue_date: 10,
+  valid_until: 10,
+}
+
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
   const [side, setSide] = useState('front') // 'front' | 'back'
   
@@ -132,6 +151,10 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
   const [displayH, setDisplayH] = useState(413)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [zones, setZones] = useState([])
+  const [imgSize, setImgSize] = useState({ width: 590, height: 1004 })
+  const [zonesLoading, setZonesLoading] = useState(false)
+  const [activeZone, setActiveZone] = useState(null)
   const containerRef = useRef(null)
 
   const layout = side === 'front' ? frontLayout : backLayout
@@ -159,6 +182,38 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
     const img = new Image()
     img.onload = () => setDisplayH(Math.round((DISPLAY_W * img.naturalHeight) / img.naturalWidth))
     img.src = templateUrl
+  }, [templateUrl])
+
+  // Detect printed boxes on the current template side
+  useEffect(() => {
+    let cancelled = false
+    setZones([])
+    setActiveZone(null)
+    if (!templateUrl) return undefined
+    setZonesLoading(true)
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      detectZonesFromImage(img)
+        .then((res) => {
+          if (cancelled) return
+          setZones(res.zones)
+          setImgSize({ width: res.width, height: res.height })
+        })
+        .catch(() => {
+          /* detection failed — fields can still be dragged manually */
+        })
+        .finally(() => {
+          if (!cancelled) setZonesLoading(false)
+        })
+    }
+    img.onerror = () => {
+      if (!cancelled) setZonesLoading(false)
+    }
+    img.src = templateUrl
+    return () => {
+      cancelled = true
+    }
   }, [templateUrl])
 
   // Which fields are active for current side
@@ -232,6 +287,46 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
     }
   }
 
+  // ── Snap a field into a detected template box ──
+  function snapFieldToZone(field, zone) {
+    const isImage = ['photo', 'qr', 'signature'].includes(field)
+    if (isImage) {
+      setLayout((prev) => ({
+        ...prev,
+        [field]: {
+          ...prev[field],
+          type: 'image',
+          x: zone.left,
+          y: zone.top,
+          width: zone.width,
+          height: zone.height,
+        },
+      }))
+      return
+    }
+    const aspect = imgSize.height / imgSize.width
+    const chars = EST_CHARS[field] || 12
+    // fontSize is a fraction of card WIDTH in CardCanvas; clamp to box width and height
+    const fontSize = Math.min(zone.width / (chars * 0.62), zone.height * aspect * 0.8, 0.12)
+    // text is drawn with textBaseline 'top', so center it in the box midline
+    const textH = fontSize / aspect
+    const y = zone.top + (zone.height - textH) / 2
+    setLayout((prev) => ({
+      ...prev,
+      [field]: {
+        ...prev[field],
+        type: 'text',
+        x: zone.left + zone.width / 2,
+        y,
+        fontSize,
+        textAlign: 'center',
+        maxWidth: zone.width,
+        color: prev[field]?.color || '#1A1A1A',
+        bold: prev[field]?.bold ?? false,
+      },
+    }))
+  }
+
   const sel = selected ? layout[selected] : null
   const selMeta = selected ? FIELD_META[selected] : null
 
@@ -266,6 +361,25 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
           }}
         >
           Drag the colored boxes to position each field on your card. Click Front/Back tabs to switch sides.
+        </p>
+
+        <p
+          style={{
+            fontSize: '11px',
+            lineHeight: '1.5',
+            marginBottom: '8px',
+            color: zonesLoading
+              ? 'var(--muted)'
+              : zones.length > 0
+                ? 'var(--gold)'
+                : '#B45309',
+          }}
+        >
+          {zonesLoading
+            ? 'Detecting template boxes…'
+            : zones.length > 0
+              ? `Detected ${zones.length} template box${zones.length === 1 ? '' : 'es'}. Click a blue box, then choose a field to snap it in place.`
+              : 'No field boxes detected on this template. Drag fields manually.'}
         </p>
 
         <div
@@ -309,6 +423,33 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
               No template uploaded
             </div>
           )}
+
+          {zones.map((z, i) => (
+            <div
+              key={i}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                setActiveZone(i)
+              }}
+              style={{
+                position: 'absolute',
+                left: `${z.left * 100}%`,
+                top: `${z.top * 100}%`,
+                width: `${z.width * 100}%`,
+                height: `${z.height * 100}%`,
+                border: activeZone === i ? '2px solid #0EA5E9' : '1.5px dashed #0EA5E9',
+                background: activeZone === i ? 'rgba(14, 165, 233, 0.15)' : 'rgba(14, 165, 233, 0.04)',
+                borderRadius: '2px',
+                boxSizing: 'border-box',
+                zIndex: 4,
+                cursor: 'pointer',
+                touchAction: 'none',
+                pointerEvents: 'auto',
+              }}
+              title={`Template box ${i + 1} — click to assign a field`}
+            />
+          ))}
 
           {activeFields.map((field) => {
             const pos = layout[field] || defaultLayout[field]
@@ -384,6 +525,52 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
 
       {/* ── Right panel ── */}
       <div style={{ flex: 1, minWidth: '180px' }}>
+        {activeZone !== null && zones[activeZone] && (
+          <div
+            style={{
+              background: 'var(--bg)',
+              border: '0.5px solid var(--border)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '12px',
+            }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                color: '#0EA5E9',
+                marginBottom: '8px',
+              }}
+            >
+              Snap to template box #{activeZone + 1}
+            </div>
+            <select
+              className="field-input"
+              value=""
+              onChange={(e) => {
+                const f = e.target.value
+                if (f) snapFieldToZone(f, zones[activeZone])
+                setActiveZone(null)
+              }}
+            >
+              <option value="">Choose a field…</option>
+              {activeFields.map((f) => (
+                <option key={f} value={f}>
+                  {FIELD_META[f].label}
+                </option>
+              ))}
+            </select>
+            <button
+              className="btn-outline"
+              onClick={() => setActiveZone(null)}
+              style={{ width: '100%', marginTop: '8px', fontSize: '12px' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
         {sel && selMeta ? (
           <div
             style={{
