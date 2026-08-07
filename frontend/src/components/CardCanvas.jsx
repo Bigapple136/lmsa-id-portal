@@ -115,16 +115,6 @@ export const CALIBRATED_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  emergency_contact_name: {
-    x: 0.5,
-    y: 0.27,
-    fontSize: 0.04,
-    color: '#1A1A1A',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
   emergency_contact_phone: {
     x: 0.5,
     y: 0.34,
@@ -155,7 +145,6 @@ export const CALIBRATED_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
 }
 
 const FRONT_FIELD_ORDER = [
@@ -170,11 +159,9 @@ const FRONT_FIELD_ORDER = [
 const BACK_FIELD_ORDER = [
   'qr',
   'blood_type',
-  'emergency_contact_name',
   'emergency_contact_phone',
   'issue_date',
   'valid_until',
-  'signature',
 ]
 
 export default function CardCanvas({ student, templateUrl, templateUrlFront, templateUrlBack, layout, maxWidth = 300 }) {

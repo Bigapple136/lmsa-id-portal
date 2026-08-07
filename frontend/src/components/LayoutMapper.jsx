@@ -79,16 +79,6 @@ const DEFAULT_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  emergency_contact_name: {
-    x: 0.5,
-    y: 0.27,
-    fontSize: 0.04,
-    color: '#1A1A1A',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
   emergency_contact_phone: {
     x: 0.5,
     y: 0.34,
@@ -119,11 +109,10 @@ const DEFAULT_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
 }
 
 const FRONT_FIELDS = ['photo', 'full_name', 'student_id', 'year_level', 'position', 'signature']
-const BACK_FIELDS = ['qr', 'blood_type', 'emergency_contact_name', 'emergency_contact_phone', 'issue_date', 'valid_until', 'signature']
+const BACK_FIELDS = ['qr', 'blood_type', 'emergency_contact_phone', 'issue_date', 'valid_until']
 
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
   const [side, setSide] = useState('front') // 'front' | 'back'

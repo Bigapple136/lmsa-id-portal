@@ -91,16 +91,6 @@ const DEFAULT_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  emergency_contact_name: {
-    x: 0.5,
-    y: 0.27,
-    fontSize: 0.04,
-    color: '#1A1A1A',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
   emergency_contact_phone: {
     x: 0.5,
     y: 0.34,
@@ -131,7 +121,6 @@ const DEFAULT_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
 }
 
 // ── PUBLIC reads (cached, 5-minute TTL) ──
