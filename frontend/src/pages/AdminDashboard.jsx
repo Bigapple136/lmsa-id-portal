@@ -2095,7 +2095,7 @@ export default function AdminDashboard() {
                 enabledFields={fields}
                 templateUrl={layoutSide === 'front' ? activeTemplateFront?.file_url : activeTemplateBack?.file_url}
                 initialLayout={cardLayout?.[layoutSide] || null}
-                onSave={(layout) => saveLayout({ ...cardLayout, [layoutSide]: layout })}
+                onSave={saveLayout}
               />
             )}
           </div>

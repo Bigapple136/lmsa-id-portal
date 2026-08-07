@@ -17,7 +17,7 @@ export default function PrintPreviewModal({ student, onClose }) {
         ])
         if (tRes.ok) {
           const t = await tRes.json()
-          setTemplateUrl(t.file_url)
+          setTemplateUrl(t.front?.file_url || t.back?.file_url || null)
         }
         if (lRes.ok) {
           setCardLayout(await lRes.json())

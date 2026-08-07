@@ -229,6 +229,7 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
   const fieldOrder = side === 'front' ? FRONT_FIELD_ORDER : BACK_FIELD_ORDER
 
   const flipCard = useCallback(() => {
+    if (isFlipping) return
     setIsFlipping(true)
     // At halfway point (300ms), switch the side content
     setTimeout(() => {
@@ -236,7 +237,7 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
     }, 300)
     // Animation completes at 600ms
     setTimeout(() => setIsFlipping(false), 600)
-  }, [])
+  }, [isFlipping])
 
   useEffect(() => {
     if (!currentTemplateUrl || !student) return
@@ -388,14 +389,12 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
           height: 0,
           paddingTop: '158.5%', // CR-80 aspect ratio (approx 1004/634 ≈ 1.585)
           transformStyle: 'preserve-3d',
-          transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-          transform: isFlipping
-            ? side === 'front'
-              ? 'rotateY(90deg)'
-              : 'rotateY(-90deg)'
-            : side === 'front'
-            ? 'rotateY(0deg)'
-            : 'rotateY(180deg)',
+          // Single-face flip: card swings out to edge-on (90deg) and back to
+          // 0deg, while the canvas content swaps sides at the 300ms midpoint.
+          // Resting at 0deg for both sides avoids the backface-visibility trap
+          // of resting at 180deg (where a single face would be hidden/mirrored).
+          animation: isFlipping ? 'cardFlip 600ms cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+          transform: 'rotateY(0deg)',
         }}
       >
         {/* Single canvas - content changes based on side state */}
