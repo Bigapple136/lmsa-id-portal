@@ -10,9 +10,18 @@ const FIELD_META = {
   position: { label: 'Position', color: '#F43F5E', bg: '#FFE4E6' },
   signature: { label: 'Signature', color: '#14B8A6', bg: '#CCFBF1' },
   qr: { label: 'QR Code', color: '#6B7280', bg: '#F3F4F6' },
+  emergency_contact_name: { label: 'Emerg. Name', color: '#EC4899', bg: '#FCE7F3' },
+  emergency_contact_phone: { label: 'Emerg. Phone', color: '#EC4899', bg: '#FCE7F3' },
+  blood_type: { label: 'Blood Type', color: '#EF4444', bg: '#FEE2E2' },
+  programme: { label: 'Programme', color: '#6366F1', bg: '#E0E7FF' },
+  date_of_birth: { label: 'DOB', color: '#6366F1', bg: '#E0E7FF' },
+  nationality: { label: 'Nationality', color: '#6366F1', bg: '#E0E7FF' },
+  county_of_origin: { label: 'County', color: '#6366F1', bg: '#E0E7FF' },
+  current_address: { label: 'Address', color: '#6366F1', bg: '#E0E7FF' },
+  student_email: { label: 'Email', color: '#6B7280', bg: '#F3F4F6' },
 }
 
-const DEFAULT_LAYOUT = {
+const DEFAULT_LAYOUT_FRONT = {
   photo: { x: 0.06, y: 0.08, width: 0.4, height: 0.3, type: 'image' },
   full_name: {
     x: 0.5,
@@ -56,8 +65,117 @@ const DEFAULT_LAYOUT = {
   qr: { x: 0.68, y: 0.78, width: 0.26, height: 0.16, type: 'image' },
 }
 
+const DEFAULT_LAYOUT_BACK = {
+  qr: { x: 0.1, y: 0.15, width: 0.35, height: 0.35, type: 'image' },
+  emergency_contact_name: {
+    x: 0.5,
+    y: 0.15,
+    fontSize: 0.045,
+    color: '#1A1A1A',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  emergency_contact_phone: {
+    x: 0.5,
+    y: 0.22,
+    fontSize: 0.04,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  blood_type: {
+    x: 0.5,
+    y: 0.3,
+    fontSize: 0.05,
+    color: '#CC0000',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  programme: {
+    x: 0.5,
+    y: 0.38,
+    fontSize: 0.04,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  date_of_birth: {
+    x: 0.5,
+    y: 0.46,
+    fontSize: 0.038,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  nationality: {
+    x: 0.5,
+    y: 0.53,
+    fontSize: 0.038,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  county_of_origin: {
+    x: 0.5,
+    y: 0.6,
+    fontSize: 0.038,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  current_address: {
+    x: 0.5,
+    y: 0.67,
+    fontSize: 0.035,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.85,
+  },
+  student_email: {
+    x: 0.5,
+    y: 0.75,
+    fontSize: 0.032,
+    color: '#666666',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.85,
+  },
+  signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
+}
+
+const FRONT_FIELDS = ['photo', 'full_name', 'student_id', 'year_level', 'position', 'signature', 'qr']
+const BACK_FIELDS = ['qr', 'emergency_contact_name', 'emergency_contact_phone', 'blood_type', 'programme', 'date_of_birth', 'nationality', 'county_of_origin', 'current_address', 'student_email', 'signature']
+
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
-  const [layout, setLayout] = useState(() => ({ ...DEFAULT_LAYOUT, ...(initialLayout || {}) }))
+  const [side, setSide] = useState('front') // 'front' | 'back'
+  
+  // Separate layout state for each side
+  const [frontLayout, setFrontLayout] = useState(() => ({
+    ...DEFAULT_LAYOUT_FRONT,
+    ...(initialLayout?.front || initialLayout || {}),
+  }))
+  const [backLayout, setBackLayout] = useState(() => ({
+    ...DEFAULT_LAYOUT_BACK,
+    ...(initialLayout?.back || {}),
+  }))
+  
   const [selected, setSelected] = useState(null)
   const [dragging, setDragging] = useState(null)
   const [displayH, setDisplayH] = useState(413)
@@ -65,10 +183,22 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
   const [msg, setMsg] = useState(null)
   const containerRef = useRef(null)
 
+  const layout = side === 'front' ? frontLayout : backLayout
+  const setLayout = side === 'front' ? setFrontLayout : setBackLayout
+  const defaultLayout = side === 'front' ? DEFAULT_LAYOUT_FRONT : DEFAULT_LAYOUT_BACK
+
   // Merge new initialLayout without discarding unsaved edits
   useEffect(() => {
     if (initialLayout) {
-      setLayout((prev) => ({ ...DEFAULT_LAYOUT, ...initialLayout, ...prev }))
+      if (initialLayout.front) {
+        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout.front, ...prev }))
+      } else if (initialLayout && !initialLayout.front && !initialLayout.back) {
+        // Old flat format - apply to front only
+        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout, ...prev }))
+      }
+      if (initialLayout.back) {
+        setBackLayout((prev) => ({ ...DEFAULT_LAYOUT_BACK, ...initialLayout.back, ...prev }))
+      }
     }
   }, [initialLayout])
 
@@ -80,8 +210,9 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
     img.src = templateUrl
   }, [templateUrl])
 
-  // Which fields are active
-  const activeFields = Object.keys(FIELD_META).filter(
+  // Which fields are active for current side
+  const sideFields = side === 'front' ? FRONT_FIELDS : BACK_FIELDS
+  const activeFields = sideFields.filter(
     (k) => k === 'qr' || enabledFields?.[k]?.enabled !== false,
   )
 
@@ -116,7 +247,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
         },
       }))
     },
-    [dragging],
+    [dragging, setLayout],
   )
 
   const onUp = useCallback(() => setDragging(null), [])
@@ -140,7 +271,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
     setSaving(true)
     setMsg(null)
     try {
-      await onSave(layout)
+      await onSave({ front: frontLayout, back: backLayout })
       setMsg({ ok: true, text: 'Layout saved successfully.' })
     } catch {
       setMsg({ ok: false, text: 'Failed to save layout.' })
@@ -155,6 +286,24 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
 
   return (
     <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      {/* ── Side tabs ── */}
+      <div style={{ width: '100%', marginBottom: '12px', display: 'flex', gap: '8px' }}>
+        <button
+          className={`mode-btn ${side === 'front' ? 'active' : ''}`}
+          onClick={() => { setSide('front'); setSelected(null); }}
+          style={{ flex: 1 }}
+        >
+          🎨 Front
+        </button>
+        <button
+          className={`mode-btn ${side === 'back' ? 'active' : ''}`}
+          onClick={() => { setSide('back'); setSelected(null); }}
+          style={{ flex: 1 }}
+        >
+          🔙 Back
+        </button>
+      </div>
+
       {/* ── Card preview ── */}
       <div style={{ flexShrink: 0 }}>
         <p
@@ -165,7 +314,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
             lineHeight: '1.5',
           }}
         >
-          Drag the colored boxes to position each field on your card.
+          Drag the colored boxes to position each field on your card. Click Front/Back tabs to switch sides.
         </p>
 
         <div
@@ -211,7 +360,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
           )}
 
           {activeFields.map((field) => {
-            const pos = layout[field] || DEFAULT_LAYOUT[field]
+            const pos = layout[field] || defaultLayout[field]
             if (!pos) return null
             const { color, bg, label } = FIELD_META[field]
             const isImg = pos.type === 'image'
@@ -314,7 +463,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
                   flexShrink: 0,
                 }}
               />
-              {selMeta.label}
+              {selMeta.label} ({side})
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -461,7 +610,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
             }}
           >
             Click a colored box on the card to select it, then adjust its position, size, and text
-            style here.
+            style here. Use the Front/Back tabs above to edit each side.
           </div>
         )}
 
@@ -477,12 +626,12 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
           <button
             className="btn-outline"
             onClick={() => {
-              setLayout({ ...DEFAULT_LAYOUT })
+              setLayout({ ...defaultLayout })
               setSelected(null)
             }}
             style={{ width: '100%', fontSize: '12px' }}
           >
-            Reset to defaults
+            Reset {side} to defaults
           </button>
           {msg && (
             <div className={msg.ok ? 'success-box' : 'error-box'} style={{ fontSize: '12px' }}>

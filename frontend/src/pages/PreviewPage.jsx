@@ -64,6 +64,8 @@ export default function PreviewPage() {
   const [submitting, setSubmitting] = useState(false)
 
   const [templateUrl, setTemplateUrl] = useState(null)
+  const [templateUrlFront, setTemplateUrlFront] = useState(null)
+  const [templateUrlBack, setTemplateUrlBack] = useState(null)
   const [cardLayout, setCardLayout] = useState(null)
   const [qrFields, setQrFields] = useState(null)
 
@@ -104,7 +106,11 @@ export default function PreviewPage() {
     if (tRes.status === 'fulfilled' && tRes.value.ok) {
       try {
         const t = await tRes.value.json()
-        setTemplateUrl(t.file_url)
+        // t is now { front: {...}, back: {...} }
+        setTemplateUrlFront(t.front?.file_url || null)
+        setTemplateUrlBack(t.back?.file_url || null)
+        // For backward compat, also set templateUrl to front
+        setTemplateUrl(t.front?.file_url || t.back?.file_url || null)
         setTemplateStatus('ready')
       } catch {
         setTemplateStatus('missing')
@@ -381,7 +387,8 @@ export default function PreviewPage() {
             <div style={{ padding: '16px 16px 0' }}>
               <CardCanvas
                 student={student}
-                templateUrl={templateUrl}
+                templateUrlFront={templateUrlFront}
+                templateUrlBack={templateUrlBack}
                 layout={cardLayout}
                 maxWidth={380}
               />

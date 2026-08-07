@@ -33,7 +33,7 @@ const DEFAULT_QR_FIELDS = {
   current_address: { label: 'Current Address', enabled: true },
 }
 
-const DEFAULT_LAYOUT = {
+const DEFAULT_LAYOUT_FRONT = {
   photo: { x: 0.1271, y: 0.1673, width: 0.7458, height: 0.3287, type: 'image' },
   full_name: {
     x: 0.5,
@@ -76,6 +76,102 @@ const DEFAULT_LAYOUT = {
     maxWidth: 0.5,
   },
   signature: { x: 0.5254, y: 0.8386, width: 0.3898, height: 0.0896, type: 'image' },
+  qr: { x: 0.0593, y: 0.8187, width: 0.2542, height: 0.1394, type: 'image' },
+}
+
+const DEFAULT_LAYOUT_BACK = {
+  qr: { x: 0.1, y: 0.15, width: 0.35, height: 0.35, type: 'image' },
+  emergency_contact_name: {
+    x: 0.5,
+    y: 0.15,
+    fontSize: 0.045,
+    color: '#1A1A1A',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  emergency_contact_phone: {
+    x: 0.5,
+    y: 0.22,
+    fontSize: 0.04,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  blood_type: {
+    x: 0.5,
+    y: 0.3,
+    fontSize: 0.05,
+    color: '#CC0000',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  programme: {
+    x: 0.5,
+    y: 0.38,
+    fontSize: 0.04,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  date_of_birth: {
+    x: 0.5,
+    y: 0.46,
+    fontSize: 0.038,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  nationality: {
+    x: 0.5,
+    y: 0.53,
+    fontSize: 0.038,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  county_of_origin: {
+    x: 0.5,
+    y: 0.6,
+    fontSize: 0.038,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  current_address: {
+    x: 0.5,
+    y: 0.67,
+    fontSize: 0.035,
+    color: '#1A1A1A',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.85,
+  },
+  student_email: {
+    x: 0.5,
+    y: 0.75,
+    fontSize: 0.032,
+    color: '#666666',
+    bold: false,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.85,
+  },
+  signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
 }
 
 // ── PUBLIC reads (cached, 5-minute TTL) ──
@@ -122,12 +218,19 @@ router.get('/layout', async (req, res) => {
     const cached = cache.get('settings:card_layout')
     if (cached) return res.json(cached)
 
-    const { data } = await supabase
-      .from('portal_settings')
-      .select('value')
-      .eq('key', 'card_layout')
-      .maybeSingle()
-    const result = data?.value || DEFAULT_LAYOUT
+    const [{ data: frontData }, { data: backData }] = await Promise.all([
+      supabase.from('portal_settings').select('value').eq('key', 'card_layout_front').maybeSingle(),
+      supabase.from('portal_settings').select('value').eq('key', 'card_layout_back').maybeSingle(),
+    ])
+    // Backward compatibility: if only card_layout exists, use it as front
+    const legacyData = !frontData?.value && !backData?.value
+      ? await supabase.from('portal_settings').select('value').eq('key', 'card_layout').maybeSingle()
+      : { data: null }
+
+    const result = {
+      front: frontData?.value || legacyData?.data?.value || DEFAULT_LAYOUT_FRONT,
+      back: backData?.value || DEFAULT_LAYOUT_BACK,
+    }
     cache.set('settings:card_layout', result, 300000)
     res.json(result)
   } catch (err) {
@@ -177,17 +280,56 @@ router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
 
 router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
   try {
-    const cfgErr = checkLayoutConfig(req.body)
-    if (cfgErr) return res.status(400).json({ error: cfgErr })
+    // Accept both old format (flat layout) and new format { front, back }
+    const { front, back } = req.body
+    const isNewFormat = front !== undefined || back !== undefined
 
-    const { data, error } = await supabase
-      .from('portal_settings')
-      .upsert({ key: 'card_layout', value: req.body, updated_at: new Date().toISOString() })
-      .select()
-      .single()
-    if (error) return res.status(400).json({ error: error.message })
-    cache.set('settings:card_layout', data.value, 300000)
-    res.json(data.value)
+    // Validate front layout
+    if (front !== undefined) {
+      const cfgErr = checkLayoutConfig(front)
+      if (cfgErr) return res.status(400).json({ error: `Front layout: ${cfgErr}` })
+    }
+    // Validate back layout
+    if (back !== undefined) {
+      const cfgErr = checkLayoutConfig(back)
+      if (cfgErr) return res.status(400).json({ error: `Back layout: ${cfgErr}` })
+    }
+
+    // If old format (flat), treat as front only
+    const frontLayout = isNewFormat ? front : req.body
+    const backLayout = isNewFormat ? back : undefined
+
+    const updates = []
+    if (frontLayout !== undefined) {
+      updates.push(
+        supabase
+          .from('portal_settings')
+          .upsert({ key: 'card_layout_front', value: frontLayout, updated_at: new Date().toISOString() })
+          .select()
+          .single(),
+      )
+    }
+    if (backLayout !== undefined) {
+      updates.push(
+        supabase
+          .from('portal_settings')
+          .upsert({ key: 'card_layout_back', value: backLayout, updated_at: new Date().toISOString() })
+          .select()
+          .single(),
+      )
+    }
+
+    const results = await Promise.all(updates)
+    for (const { error } of results) {
+      if (error) return res.status(400).json({ error: error.message })
+    }
+
+    const savedFront = results[0]?.data?.value
+    const savedBack = results[1]?.data?.value
+
+    const result = { front: savedFront, back: savedBack }
+    cache.set('settings:card_layout', result, 300000)
+    res.json(result)
   } catch (err) {
     logger.error({ err }, 'Settings PUT /layout error')
     res.status(500).json({ error: 'Failed to save settings.' })

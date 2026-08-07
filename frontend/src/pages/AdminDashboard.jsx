@@ -122,7 +122,8 @@ export default function AdminDashboard() {
   const [uploadMode, setUploadMode] = useState('csv')
 
   const [students, setStudents] = useState([])
-  const [activeTemplate, setActiveTemplate] = useState(null)
+  const [activeTemplateFront, setActiveTemplateFront] = useState(null)
+  const [activeTemplateBack, setActiveTemplateBack] = useState(null)
   const [stats, setStats] = useState({ total: 0, confirmed: 0, pending: 0, issues: 0 })
   const [analyticsData, setAnalyticsData] = useState(null)
   const [search, setSearch] = useState('')
@@ -130,7 +131,8 @@ export default function AdminDashboard() {
   const PAGE_SIZE = 20
   const [dataLoading, setDataLoading] = useState(false)
 
-  const [templateFile, setTemplateFile] = useState(null)
+  const [templateFileFront, setTemplateFileFront] = useState(null)
+  const [templateFileBack, setTemplateFileBack] = useState(null)
   const [csvFile, setCsvFile] = useState(null)
   const [zipFile, setZipFile] = useState(null)
   const [uploading, setUploading] = useState(false)
@@ -176,6 +178,7 @@ export default function AdminDashboard() {
 
   // Card layout state
   const [cardLayout, setCardLayout] = useState(null)
+  const [layoutSide, setLayoutSide] = useState('front') // 'front' | 'back'
 
   // Download state
   const [downloading, setDownloading] = useState({})
@@ -398,7 +401,11 @@ export default function AdminDashboard() {
 
   async function loadTemplate() {
     const res = await adminFetch('/api/templates/active')
-    if (res.ok) setActiveTemplate(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      setActiveTemplateFront(data.front || null)
+      setActiveTemplateBack(data.back || null)
+    }
   }
 
   async function loadFields() {
@@ -470,6 +477,7 @@ export default function AdminDashboard() {
   }
 
   async function saveLayout(layout) {
+    // layout is now the full { front, back } object from LayoutMapper
     const res = await adminJson('/api/settings/layout', 'PUT', layout)
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -530,19 +538,25 @@ export default function AdminDashboard() {
     }
   }
 
-  async function handleTemplateUpload() {
-    if (!templateFile) return
+  async function handleTemplateUpload(side) {
+    const file = side === 'front' ? templateFileFront : templateFileBack
+    if (!file) return
     setUploading(true)
     setUploadMsg(null)
     try {
       const form = new FormData()
-      form.append('file', templateFile)
-      const res = await adminForm('/api/templates', 'POST', form)
+      form.append('file', file)
+      const res = await adminForm(`/api/templates?side=${side}`, 'POST', form)
       const data = await res.json()
       if (res.ok) {
-        setActiveTemplate(data)
-        setTemplateFile(null)
-        setUploadMsg({ ok: true, text: 'Template uploaded and set as active.' })
+        if (side === 'front') {
+          setActiveTemplateFront(data)
+          setTemplateFileFront(null)
+        } else {
+          setActiveTemplateBack(data)
+          setTemplateFileBack(null)
+        }
+        setUploadMsg({ ok: true, text: `${side.charAt(0).toUpperCase() + side.slice(1)} template uploaded and set as active.` })
       } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
     } catch {
       setUploadMsg({ ok: false, text: 'Upload failed. Please check your connection.' })
@@ -1559,54 +1573,110 @@ export default function AdminDashboard() {
 
             <div className="divider" />
 
-            {/* Template upload */}
+            {/* Template upload - Front & Back */}
             <div className="section-title">
-              ID card design template <span className="new-badge">Master design</span>
+              ID Card Templates <span className="new-badge">Front & Back</span>
             </div>
             <p className="section-desc">
-              Upload your master card background (PNG/JPG). Student data will overlay automatically.
+              Upload separate background images for the front and back of the ID card. Each side can have its own design.
             </p>
-            {activeTemplate && (
-              <div className="template-row">
-                <div className="template-icon">🎨</div>
-                <div className="template-info">
-                  <div className="template-name">{activeTemplate.file_name}</div>
-                  <div className="template-meta">Currently active · CR-80</div>
-                </div>
-                <span className="pill pill-green">Active</span>
+
+            {/* Front Template */}
+            <div style={{ marginBottom: '24px' }}>
+              <div className="section-title" style={{ fontSize: '14px', marginBottom: '8px' }}>
+                🎨 Front Template
               </div>
-            )}
-            <div
-              className="upload-zone"
-              onClick={() => document.getElementById('template-input').click()}
-            >
-              <input
-                id="template-input"
-                type="file"
-                accept=".png,.jpg,.jpeg"
-                hidden
-                onChange={(e) => {
-                  setTemplateFile(e.target.files[0])
-                  setUploadMsg(null)
-                }}
-              />
-              {templateFile ? (
-                <p className="upload-selected">📄 {templateFile.name}</p>
-              ) : (
-                <>
-                  <p className="upload-icon">⬆</p>
-                  <p className="upload-text">
-                    Drop template or <span className="upload-link">browse</span>
-                  </p>
-                  <p className="upload-hint">PNG or JPG · 1012 × 638 px (CR-80 at 300 DPI)</p>
-                </>
+              {activeTemplateFront && (
+                <div className="template-row" style={{ marginBottom: '10px' }}>
+                  <div className="template-icon">🎨</div>
+                  <div className="template-info">
+                    <div className="template-name">{activeTemplateFront.file_name}</div>
+                    <div className="template-meta">Currently active · CR-80</div>
+                  </div>
+                  <span className="pill pill-green">Active</span>
+                </div>
+              )}
+              <div
+                className="upload-zone"
+                onClick={() => document.getElementById('template-input-front').click()}
+              >
+                <input
+                  id="template-input-front"
+                  type="file"
+                  accept=".png,.jpg,.jpeg"
+                  hidden
+                  onChange={(e) => {
+                    setTemplateFileFront(e.target.files[0])
+                    setUploadMsg(null)
+                  }}
+                />
+                {templateFileFront ? (
+                  <p className="upload-selected">📄 {templateFileFront.name}</p>
+                ) : (
+                  <>
+                    <p className="upload-icon">⬆</p>
+                    <p className="upload-text">
+                      Drop front template or <span className="upload-link">browse</span>
+                    </p>
+                    <p className="upload-hint">PNG or JPG · 1012 × 638 px (CR-80 at 300 DPI)</p>
+                  </>
+                )}
+              </div>
+              {templateFileFront && (
+                <button className="btn-gold-full" onClick={() => handleTemplateUpload('front')} disabled={uploading} style={{ marginTop: '8px', width: '100%' }}>
+                  {uploading ? 'Uploading...' : 'Upload Front Template'}
+                </button>
               )}
             </div>
-            {templateFile && (
-              <button className="btn-gold-full" onClick={handleTemplateUpload} disabled={uploading}>
-                {uploading ? 'Uploading...' : 'Upload Template'}
-              </button>
-            )}
+
+            {/* Back Template */}
+            <div>
+              <div className="section-title" style={{ fontSize: '14px', marginBottom: '8px' }}>
+                🔙 Back Template
+              </div>
+              {activeTemplateBack && (
+                <div className="template-row" style={{ marginBottom: '10px' }}>
+                  <div className="template-icon">🎨</div>
+                  <div className="template-info">
+                    <div className="template-name">{activeTemplateBack.file_name}</div>
+                    <div className="template-meta">Currently active · CR-80</div>
+                  </div>
+                  <span className="pill pill-green">Active</span>
+                </div>
+              )}
+              <div
+                className="upload-zone"
+                onClick={() => document.getElementById('template-input-back').click()}
+              >
+                <input
+                  id="template-input-back"
+                  type="file"
+                  accept=".png,.jpg,.jpeg"
+                  hidden
+                  onChange={(e) => {
+                    setTemplateFileBack(e.target.files[0])
+                    setUploadMsg(null)
+                  }}
+                />
+                {templateFileBack ? (
+                  <p className="upload-selected">📄 {templateFileBack.name}</p>
+                ) : (
+                  <>
+                    <p className="upload-icon">⬆</p>
+                    <p className="upload-text">
+                      Drop back template or <span className="upload-link">browse</span>
+                    </p>
+                    <p className="upload-hint">PNG or JPG · 1012 × 638 px (CR-80 at 300 DPI)</p>
+                  </>
+                )}
+              </div>
+              {templateFileBack && (
+                <button className="btn-gold-full" onClick={() => handleTemplateUpload('back')} disabled={uploading} style={{ marginTop: '8px', width: '100%' }}>
+                  {uploading ? 'Uploading...' : 'Upload Back Template'}
+                </button>
+              )}
+            </div>
+
             {uploadMsg && (
               <div
                 className={uploadMsg.ok ? 'success-box' : 'error-box'}
@@ -1985,30 +2055,49 @@ export default function AdminDashboard() {
         {activeTab === 'layout' && (
           <div>
             <div className="section-title">
-              Card layout mapper <span className="new-badge">Template 2</span>
+              Card layout mapper <span className="new-badge">Front & Back</span>
             </div>
             <p className="section-desc">
-              Drag each coloured box to position it on your card template. Use the panel on the
-              right to fine-tune coordinates, size, font size, and text colour. Click Save layout
-              when done — your preview pages will update immediately.
+              Configure field positions for both sides of the ID card. Each side uses its own template
+              and layout. Drag fields on the preview, adjust properties in the panel, then save.
             </p>
-            {!activeTemplate && (
+
+            {/* Side selector tabs */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <button
+                className="mode-btn active"
+                style={{ flex: '1 1 200px' }}
+                onClick={() => setLayoutSide('front')}
+              >
+                🎨 Front Layout
+              </button>
+              <button
+                className="mode-btn"
+                style={{ flex: '1 1 200px' }}
+                onClick={() => setLayoutSide('back')}
+              >
+                🔙 Back Layout
+              </button>
+            </div>
+
+            {(layoutSide === 'front' && !activeTemplateFront) || (layoutSide === 'back' && !activeTemplateBack) ? (
               <div className="error-box" style={{ marginBottom: '14px' }}>
-                No template uploaded yet.{' '}
+                No {layoutSide} template uploaded yet.{' '}
                 <span
                   style={{ textDecoration: 'underline', cursor: 'pointer' }}
                   onClick={() => setActiveTab('upload')}
                 >
-                  Upload your card design first →
+                  Upload your {layoutSide} template first →
                 </span>
               </div>
+            ) : (
+              <LayoutMapper
+                enabledFields={fields}
+                templateUrl={layoutSide === 'front' ? activeTemplateFront?.file_url : activeTemplateBack?.file_url}
+                initialLayout={cardLayout?.[layoutSide] || null}
+                onSave={(layout) => saveLayout({ ...cardLayout, [layoutSide]: layout })}
+              />
             )}
-            <LayoutMapper
-              enabledFields={fields}
-              templateUrl={activeTemplate?.file_url || null}
-              initialLayout={cardLayout}
-              onSave={saveLayout}
-            />
           </div>
         )}
 
