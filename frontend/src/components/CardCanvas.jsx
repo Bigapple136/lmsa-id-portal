@@ -13,12 +13,12 @@ function loadImg(src) {
 
 function formatClass(value) {
   const mdMap = {
-    '1st Year': 'MD1',
-    '2nd Year': 'MD2',
-    '3rd Year': 'MD3',
-    '4th Year': 'MD4',
-    '5th Year': 'MD5',
-    '6th Year': 'MD6',
+    '1st Year': 'Year 1 . MD1',
+    '2nd Year': 'Year 2 . MD2',
+    '3rd Year': 'Year 3 . MD3',
+    '4th Year': 'Year 4 . MD4',
+    '5th Year': 'Year 5 . MD5',
+    '6th Year': 'Year 6 . MD6',
   }
   return mdMap[value] || value || ''
 }

@@ -2116,7 +2116,7 @@ export default function AdminDashboard() {
               <LayoutMapper
                 enabledFields={fields}
                 templateUrl={layoutSide === 'front' ? activeTemplateFront?.file_url : activeTemplateBack?.file_url}
-                initialLayout={cardLayout?.[layoutSide] || null}
+                initialLayout={cardLayout}
                 onSave={saveLayout}
               />
             )}

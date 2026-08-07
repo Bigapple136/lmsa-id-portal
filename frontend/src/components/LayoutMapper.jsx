@@ -143,7 +143,7 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
     if (initialLayout) {
       if (initialLayout.front) {
         setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout.front, ...prev }))
-      } else if (initialLayout && !initialLayout.front && !initialLayout.back) {
+      } else if (!initialLayout.back) {
         // Old flat format - apply to front only
         setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout, ...prev }))
       }
