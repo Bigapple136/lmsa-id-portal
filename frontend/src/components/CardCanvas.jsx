@@ -11,11 +11,34 @@ function loadImg(src) {
   })
 }
 
+function formatClass(value) {
+  const mdMap = {
+    '1st Year': 'MD1',
+    '2nd Year': 'MD2',
+    '3rd Year': 'MD3',
+    '4th Year': 'MD4',
+    '5th Year': 'MD5',
+    '6th Year': 'MD6',
+  }
+  return mdMap[value] || value || ''
+}
+
+function formatDate(value) {
+  if (!value) return ''
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[2]}/${match[3]}/${match[1]}`
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}/${dd}/${d.getFullYear()}`
+}
+
 function getFieldText(field, student) {
   const map = {
     full_name: student.full_name || '',
     student_id: student.student_id || '',
-    year_level: student.year_level || '',
+    year_level: formatClass(student.year_level),
     position: student.position || '',
     programme: student.programme || '',
     blood_type: student.blood_type || '',
@@ -26,6 +49,8 @@ function getFieldText(field, student) {
     nationality: student.nationality || '',
     county_of_origin: student.county_of_origin || '',
     current_address: student.current_address || '',
+    issue_date: formatDate(student.issue_date),
+    valid_until: formatDate(student.valid_until),
   }
   return map[field] || ''
 }
@@ -79,11 +104,21 @@ export const CALIBRATED_LAYOUT_FRONT = {
 }
 
 export const CALIBRATED_LAYOUT_BACK = {
-  qr: { x: 0.1, y: 0.15, width: 0.35, height: 0.35, type: 'image' },
-  emergency_contact_name: {
+  qr: { x: 0.1, y: 0.13, width: 0.35, height: 0.3, type: 'image' },
+  blood_type: {
     x: 0.5,
     y: 0.15,
-    fontSize: 0.045,
+    fontSize: 0.05,
+    color: '#CC0000',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  emergency_contact_name: {
+    x: 0.5,
+    y: 0.27,
+    fontSize: 0.04,
     color: '#1A1A1A',
     bold: true,
     textAlign: 'center',
@@ -92,7 +127,7 @@ export const CALIBRATED_LAYOUT_BACK = {
   },
   emergency_contact_phone: {
     x: 0.5,
-    y: 0.22,
+    y: 0.34,
     fontSize: 0.04,
     color: '#1A1A1A',
     bold: false,
@@ -100,19 +135,9 @@ export const CALIBRATED_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  blood_type: {
+  issue_date: {
     x: 0.5,
-    y: 0.3,
-    fontSize: 0.05,
-    color: '#CC0000',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  programme: {
-    x: 0.5,
-    y: 0.38,
+    y: 0.58,
     fontSize: 0.04,
     color: '#1A1A1A',
     bold: false,
@@ -120,55 +145,15 @@ export const CALIBRATED_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  date_of_birth: {
+  valid_until: {
     x: 0.5,
-    y: 0.46,
-    fontSize: 0.038,
+    y: 0.66,
+    fontSize: 0.04,
     color: '#1A1A1A',
     bold: false,
     textAlign: 'center',
     type: 'text',
     maxWidth: 0.8,
-  },
-  nationality: {
-    x: 0.5,
-    y: 0.53,
-    fontSize: 0.038,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  county_of_origin: {
-    x: 0.5,
-    y: 0.6,
-    fontSize: 0.038,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  current_address: {
-    x: 0.5,
-    y: 0.67,
-    fontSize: 0.035,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.85,
-  },
-  student_email: {
-    x: 0.5,
-    y: 0.75,
-    fontSize: 0.032,
-    color: '#666666',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.85,
   },
   signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
 }
@@ -185,9 +170,11 @@ const FRONT_FIELD_ORDER = [
 
 const BACK_FIELD_ORDER = [
   'qr',
+  'blood_type',
   'emergency_contact_name',
   'emergency_contact_phone',
-  'blood_type',
+  'issue_date',
+  'valid_until',
   'programme',
   'date_of_birth',
   'nationality',

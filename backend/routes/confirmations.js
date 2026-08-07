@@ -23,7 +23,7 @@ router.post('/student', async (req, res) => {
 
   const { data: student, error: lookupErr } = await supabase
     .from('students')
-    .select('student_id')
+    .select('student_id, issue_date')
     .eq('student_id', studentId)
     .maybeSingle()
   if (lookupErr || !student) return res.status(404).json({ error: 'Student not found.' })
@@ -34,9 +34,15 @@ router.post('/student', async (req, res) => {
   if (confError) return res.status(400).json({ error: confError.message })
 
   const newStatus = resolvedAction === 'confirmed' ? 'confirmed' : 'issue'
+  const nowIso = new Date().toISOString()
+  const updatePayload = { status: newStatus }
+  if (resolvedAction === 'confirmed') {
+    if (!student.issue_date) updatePayload.issue_date = nowIso.slice(0, 10)
+    updatePayload.confirmed_at = nowIso
+  }
   const { error: updateError } = await supabase
     .from('students')
-    .update({ status: newStatus })
+    .update(updatePayload)
     .eq('student_id', studentId)
   if (updateError) return res.status(400).json({ error: updateError.message })
 
@@ -57,15 +63,21 @@ router.post('/', requireAdmin, async (req, res) => {
   // Verify student exists before accepting confirmation
   const { data: student, error: lookupErr } = await supabase
     .from('students')
-    .select('student_id')
+    .select('student_id, issue_date')
     .eq('student_id', student_id)
     .maybeSingle()
   if (lookupErr || !student) return res.status(404).json({ error: 'Student not found.' })
 
   const newStatus = action === 'confirmed' ? 'confirmed' : 'issue'
+  const nowIso = new Date().toISOString()
+  const updatePayload = { status: newStatus }
+  if (action === 'confirmed') {
+    if (!student.issue_date) updatePayload.issue_date = nowIso.slice(0, 10)
+    updatePayload.confirmed_at = nowIso
+  }
   const { error: updateError } = await supabase
     .from('students')
-    .update({ status: newStatus })
+    .update(updatePayload)
     .eq('student_id', student_id)
   if (updateError) return res.status(400).json({ error: updateError.message })
 

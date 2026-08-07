@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS students (
   nationality       TEXT,
   county_of_origin  TEXT,
   current_address   TEXT,
+  issue_date        DATE,
+  valid_until       DATE,
   qr_url            TEXT,
   status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
                       'pending','confirmed','issue','photo_issue'

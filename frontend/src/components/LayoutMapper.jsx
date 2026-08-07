@@ -19,6 +19,8 @@ const FIELD_META = {
   county_of_origin: { label: 'County', color: '#6366F1', bg: '#E0E7FF' },
   current_address: { label: 'Address', color: '#6366F1', bg: '#E0E7FF' },
   student_email: { label: 'Email', color: '#6B7280', bg: '#F3F4F6' },
+  issue_date: { label: 'Issued', color: '#0EA5E9', bg: '#E0F2FE' },
+  valid_until: { label: 'Valid Until', color: '#0EA5E9', bg: '#E0F2FE' },
 }
 
 const DEFAULT_LAYOUT_FRONT = {
@@ -66,11 +68,21 @@ const DEFAULT_LAYOUT_FRONT = {
 }
 
 const DEFAULT_LAYOUT_BACK = {
-  qr: { x: 0.1, y: 0.15, width: 0.35, height: 0.35, type: 'image' },
-  emergency_contact_name: {
+  qr: { x: 0.1, y: 0.13, width: 0.35, height: 0.3, type: 'image' },
+  blood_type: {
     x: 0.5,
     y: 0.15,
-    fontSize: 0.045,
+    fontSize: 0.05,
+    color: '#CC0000',
+    bold: true,
+    textAlign: 'center',
+    type: 'text',
+    maxWidth: 0.8,
+  },
+  emergency_contact_name: {
+    x: 0.5,
+    y: 0.27,
+    fontSize: 0.04,
     color: '#1A1A1A',
     bold: true,
     textAlign: 'center',
@@ -79,7 +91,7 @@ const DEFAULT_LAYOUT_BACK = {
   },
   emergency_contact_phone: {
     x: 0.5,
-    y: 0.22,
+    y: 0.34,
     fontSize: 0.04,
     color: '#1A1A1A',
     bold: false,
@@ -87,19 +99,9 @@ const DEFAULT_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  blood_type: {
+  issue_date: {
     x: 0.5,
-    y: 0.3,
-    fontSize: 0.05,
-    color: '#CC0000',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  programme: {
-    x: 0.5,
-    y: 0.38,
+    y: 0.58,
     fontSize: 0.04,
     color: '#1A1A1A',
     bold: false,
@@ -107,61 +109,21 @@ const DEFAULT_LAYOUT_BACK = {
     type: 'text',
     maxWidth: 0.8,
   },
-  date_of_birth: {
+  valid_until: {
     x: 0.5,
-    y: 0.46,
-    fontSize: 0.038,
+    y: 0.66,
+    fontSize: 0.04,
     color: '#1A1A1A',
     bold: false,
     textAlign: 'center',
     type: 'text',
     maxWidth: 0.8,
-  },
-  nationality: {
-    x: 0.5,
-    y: 0.53,
-    fontSize: 0.038,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  county_of_origin: {
-    x: 0.5,
-    y: 0.6,
-    fontSize: 0.038,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  current_address: {
-    x: 0.5,
-    y: 0.67,
-    fontSize: 0.035,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.85,
-  },
-  student_email: {
-    x: 0.5,
-    y: 0.75,
-    fontSize: 0.032,
-    color: '#666666',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.85,
   },
   signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
 }
 
 const FRONT_FIELDS = ['photo', 'full_name', 'student_id', 'year_level', 'position', 'signature', 'qr']
-const BACK_FIELDS = ['qr', 'emergency_contact_name', 'emergency_contact_phone', 'blood_type', 'programme', 'date_of_birth', 'nationality', 'county_of_origin', 'current_address', 'student_email', 'signature']
+const BACK_FIELDS = ['qr', 'blood_type', 'emergency_contact_name', 'emergency_contact_phone', 'issue_date', 'valid_until', 'programme', 'date_of_birth', 'nationality', 'county_of_origin', 'current_address', 'student_email', 'signature']
 
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
   const [side, setSide] = useState('front') // 'front' | 'back'
