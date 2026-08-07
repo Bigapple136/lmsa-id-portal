@@ -42,6 +42,7 @@ const DEFAULT_LAYOUT_FRONT = {
     fontSize: 0.038,
     color: '#C9A84C',
     bold: false,
+    textAlign: 'center',
     type: 'text',
     maxWidth: 0.5,
   },
@@ -51,6 +52,7 @@ const DEFAULT_LAYOUT_FRONT = {
     fontSize: 0.035,
     color: '#444444',
     bold: false,
+    textAlign: 'center',
     type: 'text',
     maxWidth: 0.5,
   },
@@ -308,9 +310,9 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
     const chars = EST_CHARS[field] || 12
     // fontSize is a fraction of card WIDTH in CardCanvas; clamp to box width and height
     const fontSize = Math.min(zone.width / (chars * 0.62), zone.height * aspect * 0.8, 0.12)
-    // text is drawn with textBaseline 'top', so center it in the box midline
-    const textH = fontSize / aspect
-    const y = zone.top + (zone.height - textH) / 2
+    // Center-aligned text is drawn with textBaseline 'middle', so (x, y) is the
+    // exact center of the box — no manual offset needed
+    const y = zone.top + zone.height / 2
     setLayout((prev) => ({
       ...prev,
       [field]: {
@@ -360,7 +362,8 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
             lineHeight: '1.5',
           }}
         >
-          Drag the colored boxes to position each field on your card. Click Front/Back tabs to switch sides.
+          Drag each field into its spot on the card — text centers itself on the point where you drop it.
+          Click Front/Back tabs to switch sides.
         </p>
 
         <p
@@ -376,10 +379,10 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
           }}
         >
           {zonesLoading
-            ? 'Detecting template boxes…'
+            ? 'Scanning the template for field boxes…'
             : zones.length > 0
               ? `Detected ${zones.length} template box${zones.length === 1 ? '' : 'es'}. Click a blue box, then choose a field to snap it in place.`
-              : 'No field boxes detected on this template. Drag fields manually.'}
+              : 'No field boxes detected. Drag each field to its spot — text centers itself on the drop point.'}
         </p>
 
         <div
@@ -457,6 +460,15 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
             const { color, bg, label } = FIELD_META[field]
             const isImg = pos.type === 'image'
             const isSel = selected === field
+            const align = pos.textAlign || 'left'
+            const aspect = imgSize.height / imgSize.width
+            const chipW = isImg ? pos.width : pos.maxWidth || 0.3
+            const chipH = isImg ? pos.height : (pos.fontSize || 0.04) / aspect
+            // Chip mirrors the renderer: centered text is anchored at its center,
+            // left text at its top-left, right text at its top-right
+            const anchorLeft =
+              isImg || align === 'left' ? pos.x : align === 'right' ? pos.x - chipW : pos.x - chipW / 2
+            const anchorTop = isImg || align !== 'center' ? pos.y : pos.y - chipH / 2
 
             return (
               <div
@@ -464,14 +476,10 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
                 onPointerDown={(e) => startDrag(e, field)}
                 style={{
                   position: 'absolute',
-                  left: `${pos.x * 100}%`,
-                  top: `${pos.y * 100}%`,
-                  width: isImg
-                    ? `${pos.width * 100}%`
-                    : pos.maxWidth
-                      ? `${pos.maxWidth * 100}%`
-                      : 'auto',
-                  height: isImg ? `${pos.height * 100}%` : 'auto',
+                  left: `${anchorLeft * 100}%`,
+                  top: `${anchorTop * 100}%`,
+                  width: isImg ? `${pos.width * 100}%` : `${chipW * 100}%`,
+                  height: isImg ? `${pos.height * 100}%` : `${chipH * 100}%`,
                   minWidth: isImg ? undefined : '34px',
                   background: bg + 'CC',
                   border: `${isSel ? 2 : 1}px ${isSel ? 'solid' : 'dashed'} ${color}`,
@@ -729,6 +737,18 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
                     >
                       Bold
                     </label>
+                  </div>
+                  <div style={{ gridColumn: '1/-1' }}>
+                    <label className="field-label">Text alignment</label>
+                    <select
+                      className="field-input"
+                      value={sel.textAlign || 'left'}
+                      onChange={(e) => set(selected, 'textAlign', e.target.value)}
+                    >
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
                   </div>
                 </>
               )}

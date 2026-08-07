@@ -75,7 +75,7 @@ export const CALIBRATED_LAYOUT_FRONT = {
     fontSize: 0.0576,
     color: '#CC0000',
     bold: false,
-    textAlign: 'left',
+    textAlign: 'center',
     type: 'text',
     maxWidth: 0.5,
   },
@@ -95,7 +95,7 @@ export const CALIBRATED_LAYOUT_FRONT = {
     fontSize: 0.0508,
     color: '#1A1A1A',
     bold: true,
-    textAlign: 'left',
+    textAlign: 'center',
     type: 'text',
     maxWidth: 0.5,
   },
@@ -292,7 +292,9 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
             const weight = pos.bold ? 'bold ' : ''
             ctx.font = `${weight}${fontSize}px Arial, sans-serif`
             ctx.fillStyle = pos.color || '#000000'
-            ctx.textBaseline = 'top'
+            // Center-aligned text treats (x, y) as its true center so the text
+            // stays centered on the drop point even when maxWidth shrinks it
+            ctx.textBaseline = pos.textAlign === 'center' ? 'middle' : 'top'
 
             if (pos.maxWidth) {
               const maxPx = pos.maxWidth * W
