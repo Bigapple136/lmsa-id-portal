@@ -122,8 +122,8 @@ const DEFAULT_LAYOUT_BACK = {
   signature: { x: 0.1, y: 0.85, width: 0.8, height: 0.1, type: 'image' },
 }
 
-const FRONT_FIELDS = ['photo', 'full_name', 'student_id', 'year_level', 'position', 'signature', 'qr']
-const BACK_FIELDS = ['qr', 'blood_type', 'emergency_contact_name', 'emergency_contact_phone', 'issue_date', 'valid_until', 'programme', 'date_of_birth', 'nationality', 'county_of_origin', 'current_address', 'student_email', 'signature']
+const FRONT_FIELDS = ['photo', 'full_name', 'student_id', 'year_level', 'position', 'signature']
+const BACK_FIELDS = ['qr', 'blood_type', 'emergency_contact_name', 'emergency_contact_phone', 'issue_date', 'valid_until', 'signature']
 
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
   const [side, setSide] = useState('front') // 'front' | 'back'

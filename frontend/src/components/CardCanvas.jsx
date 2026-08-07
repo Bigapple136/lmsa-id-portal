@@ -165,7 +165,6 @@ const FRONT_FIELD_ORDER = [
   'position',
   'year_level',
   'signature',
-  'qr',
 ]
 
 const BACK_FIELD_ORDER = [
@@ -175,12 +174,6 @@ const BACK_FIELD_ORDER = [
   'emergency_contact_phone',
   'issue_date',
   'valid_until',
-  'programme',
-  'date_of_birth',
-  'nationality',
-  'county_of_origin',
-  'current_address',
-  'student_email',
   'signature',
 ]
 
