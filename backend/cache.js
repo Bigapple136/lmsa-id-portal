@@ -21,6 +21,29 @@ class MemoryCache {
           logger.debug('Cache cleared via IPC')
         }
       })
+    } else if (cluster.isPrimary) {
+      // Primary listens for invalidation requests from workers
+      for (const id in cluster.workers) {
+        cluster.workers[id].on('message', (msg) => {
+          if (msg.type === 'cache:invalidate') {
+            this._broadcastInvalidate(msg.key)
+          } else if (msg.type === 'cache:clear') {
+            this._broadcastClear()
+          }
+        })
+      }
+    }
+  }
+
+  _broadcastInvalidate(key) {
+    for (const id in cluster.workers) {
+      cluster.workers[id].send({ type: 'cache:invalidate', key })
+    }
+  }
+
+  _broadcastClear() {
+    for (const id in cluster.workers) {
+      cluster.workers[id].send({ type: 'cache:clear' })
     }
   }
 
@@ -34,15 +57,13 @@ class MemoryCache {
     return entry.value
   }
 
-  // Delete a single key and broadcast invalidation to other workers (mirrors
-  // the IPC behavior of set/clear). Used by rotatable QR keys so verify picks
-  // up an active->retired/revoked transition without waiting the cache TTL.
+  // Delete a single key and broadcast invalidation to other workers
   delete(key) {
     this.store.delete(key)
     if (cluster.isPrimary) {
-      for (const id in cluster.workers) {
-        cluster.workers[id].send({ type: 'cache:invalidate', key })
-      }
+      this._broadcastInvalidate(key)
+    } else if (cluster.isWorker) {
+      process.send({ type: 'cache:invalidate', key })
     }
   }
 
@@ -56,9 +77,9 @@ class MemoryCache {
 
     // Broadcast invalidation to other workers in cluster mode
     if (cluster.isPrimary) {
-      for (const id in cluster.workers) {
-        cluster.workers[id].send({ type: 'cache:invalidate', key })
-      }
+      this._broadcastInvalidate(key)
+    } else if (cluster.isWorker) {
+      process.send({ type: 'cache:invalidate', key })
     }
   }
 
@@ -74,9 +95,9 @@ class MemoryCache {
 
     // Broadcast clear to all workers
     if (cluster.isPrimary) {
-      for (const id in cluster.workers) {
-        cluster.workers[id].send({ type: 'cache:clear' })
-      }
+      this._broadcastClear()
+    } else if (cluster.isWorker) {
+      process.send({ type: 'cache:clear' })
     }
   }
 }

@@ -96,14 +96,6 @@ export default function App() {
           <Route path="/submit" element={<StudentSubmissionForm />} />
           <Route path="/status" element={<StudentStatusPage />} />
           <Route path="/check-status" element={<StudentStatusCheck />} />
-          <Route
-            path="/admin/qr-keys"
-            element={
-              <SentryErrorBoundary>
-                <QrKeyManagement />
-              </SentryErrorBoundary>
-            }
-          />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

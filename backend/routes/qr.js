@@ -610,9 +610,9 @@ router.post('/keys/rotate', requireAdmin, requireFullAdmin, async (req, res) => 
     // Rotation must retire the old key BEFORE inserting the new active one:
     // the partial unique index `qr_keys_one_active` allows only a single row
     // with status='active', so inserting first would always violate it.
-    // supabase-js can't wrap these in one transaction, so we retire first; the
-    // window with zero active keys is milliseconds and signing falls back to
-    // the legacy env secret if present.
+    // Use advisory lock to prevent race condition during rotation.
+    await supabase.rpc('pg_advisory_xact_lock', { key: 1234567890 })
+
     const { error: updErr } = await supabase
       .from('qr_keys')
       .update({ status: 'retired', rotated_at: new Date().toISOString() })

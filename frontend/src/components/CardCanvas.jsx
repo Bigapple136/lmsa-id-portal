@@ -297,9 +297,9 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
             const family = pos.fontFamily || 'Arial, sans-serif'
             ctx.font = `${weight}${fontSize}px ${family}`
             ctx.fillStyle = pos.color || '#000000'
-            // Center-aligned text treats (x, y) as its true center so the text
+            // All text treats (x, y) as its true center so the text
             // stays centered on the drop point even when maxWidth shrinks it
-            ctx.textBaseline = pos.textAlign === 'center' ? 'middle' : 'top'
+            ctx.textBaseline = 'middle'
 
             if (pos.maxWidth) {
               const maxPx = pos.maxWidth * W
@@ -329,7 +329,7 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
     return () => {
       cancelled = true
     }
-  }, [student, currentTemplateUrl, resolvedLayout, side, fieldOrder])
+  }, [student, currentTemplateUrl, resolvedLayout, side, fieldOrder, currentLayout])
 
   if (failed) return <IDCardDisplay student={student} />
 

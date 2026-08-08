@@ -3,6 +3,7 @@ const router = express.Router()
 const multer = require('multer')
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
+const logger = require('../logger')
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -27,6 +28,7 @@ router.get('/active', async (req, res) => {
     }
     res.json(result)
   } catch (err) {
+    logger.error({ err }, 'Templates GET /active error')
     res.status(500).json({ error: 'Failed to load templates.' })
   }
 })
