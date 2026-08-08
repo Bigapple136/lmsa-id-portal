@@ -485,6 +485,10 @@ export default function AdminDashboard() {
     }
     const saved = await res.json()
     setCardLayout(saved)
+    // Notify other tabs (e.g., PreviewPage) that layout changed
+    if (typeof BroadcastChannel !== 'undefined') {
+      new BroadcastChannel('layout-changes').postMessage({ type: 'layout-updated' })
+    }
   }
 
   async function saveFields() {
@@ -2116,7 +2120,8 @@ export default function AdminDashboard() {
             ) : (
               <LayoutMapper
                 enabledFields={fields}
-                templateUrl={layoutSide === 'front' ? activeTemplateFront?.file_url : activeTemplateBack?.file_url}
+                templateUrlFront={activeTemplateFront?.file_url}
+                templateUrlBack={activeTemplateBack?.file_url}
                 initialLayout={cardLayout}
                 onSave={saveLayout}
               />

@@ -95,6 +95,18 @@ export default function PreviewPage() {
     fetchTemplateAndLayout()
   }, [token])
 
+  // Listen for layout changes from admin dashboard and auto-refresh
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return
+    const channel = new BroadcastChannel('layout-changes')
+    channel.onmessage = (event) => {
+      if (event.data?.type === 'layout-updated') {
+        fetchTemplateAndLayout()
+      }
+    }
+    return () => channel.close()
+  }, [])
+
   async function fetchTemplateAndLayout() {
     // Fetch each resource independently so one failing endpoint never discards
     // the already-succeeded template/layout/qr-field responses.

@@ -142,8 +142,11 @@ const FONT_OPTIONS = [
   { label: 'Sans', value: 'sans-serif' },
 ]
 
-export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {
+export default function LayoutMapper({ enabledFields, templateUrlFront, templateUrlBack, initialLayout, onSave }) {
   const [side, setSide] = useState('front') // 'front' | 'back'
+  
+  // Use the correct template URL for the current side
+  const templateUrl = side === 'front' ? templateUrlFront : templateUrlBack
   
   // Separate layout state for each side
   const [frontLayout, setFrontLayout] = useState(() => ({
@@ -171,19 +174,19 @@ export default function LayoutMapper({ enabledFields, templateUrl, initialLayout
   const defaultLayout = side === 'front' ? DEFAULT_LAYOUT_FRONT : DEFAULT_LAYOUT_BACK
 
   // Merge new initialLayout without discarding unsaved edits
-  // initialLayout is the authoritative persisted layout, so spread it LAST —
-  // on first mount it arrives after render (cardLayout starts null), and
-  // spreading the mount-time defaults over it would clobber the saved layout.
+  // initialLayout is the authoritative persisted layout; spread it BEFORE
+  // unsaved edits (prev) so the saved layout loads on mount, but pending
+  // edits are preserved if the prop updates for any reason.
   useEffect(() => {
     if (initialLayout) {
       if (initialLayout.front) {
-        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...prev, ...initialLayout.front }))
+        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout.front, ...prev }))
       } else if (!initialLayout.back) {
         // Old flat format - apply to front only
-        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...prev, ...initialLayout }))
+        setFrontLayout((prev) => ({ ...DEFAULT_LAYOUT_FRONT, ...initialLayout, ...prev }))
       }
       if (initialLayout.back) {
-        setBackLayout((prev) => ({ ...DEFAULT_LAYOUT_BACK, ...prev, ...initialLayout.back }))
+        setBackLayout((prev) => ({ ...DEFAULT_LAYOUT_BACK, ...initialLayout.back, ...prev }))
       }
     }
   }, [initialLayout])
