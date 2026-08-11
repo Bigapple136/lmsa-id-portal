@@ -2668,6 +2668,18 @@ a:focus:not(:focus-visible) {
   background: rgba(201,168,76,0.12);
 }
 
+/* Desktop: keep clear breathing room between filter pills and the notification list */
+@media (min-width: 1025px) {
+  .nc-filter-tabs {
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+  }
+
+  .nc-list {
+    padding-top: 8px;
+  }
+}
+
 /* Per-notification mark-as-read button */
 .nc-read-btn {
   flex-shrink: 0;
