@@ -1,29 +1,49 @@
 // Template box detection for the layout mapper.
 //
 // Strategy: threshold the template's luminance, extract long horizontal and
-// vertical dark runs (printed box borders), merge thickness into single lines,
-// then find rectangles by pairing top/bottom horizontal lines with left/right
-// vertical lines. Pure functions are exported so they can be unit-tested
-// without a real canvas.
+// vertical dark runs (printed box borders), collapse parallel runs into bands,
+// use each band's outer edges as border lines, then find rectangles by pairing
+// top/bottom horizontal lines with left/right vertical lines. Overlapping
+// rectangles are deduped to their largest representative. Pure functions are
+// exported so they can be unit-tested without a real canvas.
 
-export function mergeLineRuns(runs, axisKey, startKey, endKey, gap = 2) {
+// Group collinear stroke runs into "bands". A solid filled region or a thick
+// (3px+) border produces a run on every parallel row/column; collapsing them
+// into a single band keeps only the outer edges, so filled areas don't spawn
+// hundreds of near-identical box candidates.
+export function mergeBands(runs, axisKey, startKey, endKey, gap = 2) {
+  const loKey = axisKey + 'Lo'
+  const hiKey = axisKey + 'Hi'
   const sorted = runs.slice().sort((a, b) => a[axisKey] - b[axisKey])
-  const lines = []
+  const bands = []
   for (const r of sorted) {
-    const last = lines[lines.length - 1]
-    const sameLine =
-      last &&
-      r[axisKey] - last[axisKey] <= gap &&
-      r[startKey] <= last[endKey] &&
-      r[endKey] >= last[startKey]
-    if (sameLine) {
-      last[startKey] = Math.min(last[startKey], r[startKey])
-      last[endKey] = Math.max(last[endKey], r[endKey])
+    let best = null
+    for (const b of bands) {
+      if (
+        b[loKey] - gap <= r[axisKey] &&
+        r[axisKey] <= b[hiKey] + gap &&
+        r[startKey] <= b[endKey] &&
+        r[endKey] >= b[startKey]
+      ) {
+        best = b
+        break
+      }
+    }
+    if (best) {
+      best[loKey] = Math.min(best[loKey], r[axisKey])
+      best[hiKey] = Math.max(best[hiKey], r[axisKey])
+      best[startKey] = Math.min(best[startKey], r[startKey])
+      best[endKey] = Math.max(best[endKey], r[endKey])
     } else {
-      lines.push({ [axisKey]: r[axisKey], [startKey]: r[startKey], [endKey]: r[endKey] })
+      bands.push({
+        [loKey]: r[axisKey],
+        [hiKey]: r[axisKey],
+        [startKey]: r[startKey],
+        [endKey]: r[endKey],
+      })
     }
   }
-  return lines
+  return bands
 }
 
 function verticalStrokes(lum, width, height, threshold) {
@@ -113,13 +133,42 @@ export function findBoxes(lum, width, height, opts = {}) {
     }
   }
 
+  // Collapse runs into bands, then use each band's outer edges as box-border
+  // candidates. Solid filled regions (photos, colour bars) and thick borders
+  // collapse to their two outer edges, so they can no longer emit hundreds of
+  // parallel "lines" that pair into tiny slivers.
+  const hBands = mergeBands(hRuns, 'y', 'x0', 'x1')
+  const vBands = mergeBands(vRuns, 'x', 'y0', 'y1')
+
+  const expandBands = (bands, axisKey, startKey, endKey) => {
+    const lines = []
+    for (const b of bands) {
+      const lo = b[axisKey + 'Lo']
+      const hi = b[axisKey + 'Hi']
+      lines.push({ [axisKey]: lo, [startKey]: b[startKey], [endKey]: b[endKey] })
+      if (hi !== lo) {
+        lines.push({ [axisKey]: hi, [startKey]: b[startKey], [endKey]: b[endKey] })
+      }
+    }
+    // Drop duplicate edge lines (1px bands yield both edges at the same index)
+    const unique = []
+    const seen = new Set()
+    for (const l of lines) {
+      const key = `${l[axisKey]},${l[startKey]},${l[endKey]}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      unique.push(l)
+    }
+    return unique
+  }
+
   // Re-join corners (2px) that stroke filtering clipped off
-  const hLines = mergeLineRuns(hRuns, 'y', 'x0', 'x1')
+  const hLines = expandBands(hBands, 'y', 'x0', 'x1')
     .map((l) => ({ y: l.y, x0: l.x0 - 2, x1: l.x1 + 2 }))
     .sort((a, b) => b.x1 - b.x0 - (a.x1 - a.x0))
     .slice(0, maxLines)
     .sort((a, b) => a.y - b.y)
-  const vLines = mergeLineRuns(vRuns, 'x', 'y0', 'y1')
+  const vLines = expandBands(vBands, 'x', 'y0', 'y1')
     .map((l) => ({ x: l.x, y0: l.y0 - 2, y1: l.y1 + 2 }))
     .sort((a, b) => b.y1 - b.y0 - (a.y1 - a.y0))
     .slice(0, maxLines)
@@ -152,7 +201,27 @@ export function findBoxes(lum, width, height, opts = {}) {
       }
     }
   }
-  return rects
+
+  // The same border produces several rectangles (inner and outer edges of a
+  // thick border, or boxes sharing a rule). Keep the largest representative and
+  // drop any rectangle that overlaps an already-kept one by more than half.
+  rects.sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0))
+  const kept = []
+  for (const r of rects) {
+    const area = (r.x1 - r.x0) * (r.y1 - r.y0)
+    if (area <= 0) continue
+    const overlapsKept = kept.some((k) => {
+      const ox = Math.max(0, Math.min(r.x1, k.x1) - Math.max(r.x0, k.x0))
+      const oy = Math.max(0, Math.min(r.y1, k.y1) - Math.max(r.y0, k.y0))
+      const i = ox * oy
+      return i > 0.5 * area || i > 0.5 * (k.x1 - k.x0) * (k.y1 - k.y0)
+    })
+    if (overlapsKept) continue
+    kept.push(r)
+    if (kept.length >= maxRects) break
+  }
+  kept.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0)
+  return kept
 }
 
 function luminanceData(canvas, width, height) {

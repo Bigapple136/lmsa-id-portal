@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findBoxes, mergeLineRuns } from '../lib/detectZones'
+import { findBoxes, mergeBands } from '../lib/detectZones'
 
 function drawBox(lum, width, x0, y0, x1, y1) {
   for (let x = x0; x <= x1; x++) {
@@ -59,11 +59,28 @@ describe('findBoxes', () => {
     const boxes = findBoxes(lum, W, H)
     expect(boxes).toHaveLength(1)
   })
+
+  it('treats a solid filled region as a single bounding box, not slivers', () => {
+    const W = 120
+    const H = 90
+    const lum = new Uint8Array(W * H).fill(255)
+    // A filled block: every interior row/column is dark, so without band
+    // collapsing it would pair into dozens of tiny nested rectangles.
+    for (let y = 10; y <= 40; y++) {
+      for (let x = 10; x <= 40; x++) lum[y * W + x] = 0
+    }
+    drawBox(lum, W, 50, 10, 110, 40)
+    const boxes = findBoxes(lum, W, H)
+    expect(boxes).toEqual([
+      expect.objectContaining({ x0: 10, y0: 10, x1: 40, y1: 40 }),
+      expect.objectContaining({ x0: 50, y0: 10, x1: 110, y1: 40 }),
+    ])
+  })
 })
 
-describe('mergeLineRuns', () => {
-  it('merges adjacent rows and unions their spans', () => {
-    const lines = mergeLineRuns(
+describe('mergeBands', () => {
+  it('collapses adjacent rows into one band and unions their spans', () => {
+    const bands = mergeBands(
       [
         { y: 10, x0: 5, x1: 50 },
         { y: 11, x0: 6, x1: 49 },
@@ -73,11 +90,11 @@ describe('mergeLineRuns', () => {
       'x0',
       'x1',
     )
-    expect(lines).toEqual([{ y: 10, x0: 5, x1: 50 }])
+    expect(bands).toEqual([{ yLo: 10, yHi: 12, x0: 5, x1: 50 }])
   })
 
-  it('keeps distinct lines that do not overlap in span', () => {
-    const lines = mergeLineRuns(
+  it('keeps distinct bands whose runs do not overlap in span', () => {
+    const bands = mergeBands(
       [
         { y: 10, x0: 5, x1: 50 },
         { y: 11, x0: 70, x1: 100 },
@@ -86,6 +103,19 @@ describe('mergeLineRuns', () => {
       'x0',
       'x1',
     )
-    expect(lines).toHaveLength(2)
+    expect(bands).toHaveLength(2)
+  })
+
+  it('splits bands separated by more than the gap', () => {
+    const bands = mergeBands(
+      [
+        { y: 10, x0: 5, x1: 50 },
+        { y: 15, x0: 6, x1: 49 },
+      ],
+      'y',
+      'x0',
+      'x1',
+    )
+    expect(bands).toHaveLength(2)
   })
 })
