@@ -356,7 +356,15 @@ export default function LayoutMapper({
       if (templateUrlFront) payload.front = cleanLayout(frontLayout)
       if (templateUrlBack) payload.back = cleanLayout(backLayout)
       await onSave(payload)
-      setMsg({ ok: true, text: 'Layout saved successfully.' })
+      const frontHasFields = frontLayout && Object.keys(frontLayout).length > 0
+      const backHasFields = backLayout && Object.keys(backLayout).length > 0
+      const isComplete = frontHasFields && backHasFields
+      setMsg({
+        ok: true,
+        text: isComplete
+          ? '✓ Layout saved and activated for students (both sides mapped)'
+          : '⚠ Layout saved. Complete mapping of both front and back to activate for students.'
+      })
     } catch {
       setMsg({ ok: false, text: 'Failed to save layout.' })
     } finally {

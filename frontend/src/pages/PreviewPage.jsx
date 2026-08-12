@@ -6,6 +6,7 @@ import PrintPreviewModal from '../components/PrintPreviewModal'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
 import { useToast } from '../components/Toast'
+import { isLayoutComplete } from '../lib/layoutConstants'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
@@ -90,6 +91,18 @@ export default function PreviewPage() {
     const expInfo = formatExpiry(claims.exp)
     return { version: 'v2', exp: claims.exp, expInfo, claims }
   }, [token])
+
+  // Check if layout is complete (both front and back have fields mapped)
+  const useCustomLayout = useMemo(
+    () => isLayoutComplete(cardLayout),
+    [cardLayout]
+  )
+
+  // Decide whether to show canvas or fallback based on completeness
+  const useDisplayCanvas = useMemo(
+    () => useCustomLayout && templateUrl && fieldSides,
+    [useCustomLayout, templateUrl, fieldSides]
+  )
 
   useEffect(() => {
     fetchStudent()
@@ -414,9 +427,9 @@ export default function PreviewPage() {
             <span className="preview-topbar-title">Your ID Card Preview</span>
           </div>
 
-          {templateUrl && cardLayout ? (
+          {useDisplayCanvas ? (
             <div style={{ padding: '16px 16px 0' }}>
-              {console.log('[LAYOUT] preview renders CardCanvas — templateUrl:', templateUrl, 'cardLayout keys:', cardLayout && Object.keys(cardLayout))}
+              {console.log('[LAYOUT] preview renders CardCanvas with custom layout — both sides mapped')}
               <CardCanvas
                 student={student}
                 templateUrlFront={templateUrlFront}
@@ -425,11 +438,19 @@ export default function PreviewPage() {
                 fieldSides={fieldSides}
                 maxWidth={380}
               />
+              <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '8px', padding: '0 16px' }}>
+                ✓ Using custom layout (both sides mapped)
+              </p>
             </div>
           ) : (
             <div>
-              {console.warn('[LAYOUT] preview fell back to IDCardDisplay — templateUrl:', templateUrl, 'cardLayout:', cardLayout)}
+              {console.warn('[LAYOUT] preview fell back to IDCardDisplay — layout incomplete')}
               <IDCardDisplay student={student} />
+              {cardLayout && !useCustomLayout && (
+                <p style={{ fontSize: '11px', color: 'var(--warning)', marginTop: '8px', padding: '0 16px' }}>
+                  Using default layout (admin must map both front and back to activate custom layout)
+                </p>
+              )}
             </div>
           )}
           <div style={{ padding: '0 16px 16px' }}>

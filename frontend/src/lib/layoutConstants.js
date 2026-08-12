@@ -142,6 +142,14 @@ export const BACK_FIELDS = [
   'valid_until',
 ]
 
+// Check if layout has mapped fields on BOTH front and back
+// Returns true only if both sides have at least one field mapped
+export function isLayoutComplete(layout) {
+  const hasFrontFields = layout?.front && Object.keys(layout.front).length > 0
+  const hasBackFields = layout?.back && Object.keys(layout.back).length > 0
+  return hasFrontFields && hasBackFields
+}
+
 // Estimated characters per field, used to auto-fit font size to a detected box
 export const EST_CHARS = {
   full_name: 18,

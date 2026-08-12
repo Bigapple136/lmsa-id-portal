@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import IDCardDisplay from './IDCardDisplay'
 import { apiFetch } from '../lib/api'
 import CardCanvas from './CardCanvas'
+import { isLayoutComplete } from '../lib/layoutConstants'
 
 export default function PrintPreviewModal({ student, onClose }) {
   const [templateUrl, setTemplateUrl] = useState(null)
@@ -39,7 +40,8 @@ export default function PrintPreviewModal({ student, onClose }) {
     load()
   }, [])
 
-  const useCanvas = ready && templateUrl && cardLayout
+  const useCustomLayout = ready && isLayoutComplete(cardLayout)
+  const useCanvas = useCustomLayout && templateUrl
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -66,16 +68,30 @@ export default function PrintPreviewModal({ student, onClose }) {
             </div>
           )}
           {ready && useCanvas && (
-            <CardCanvas
-              student={student}
-              templateUrlFront={templateUrlFront}
-              templateUrlBack={templateUrlBack}
-              layout={cardLayout}
-              fieldSides={fieldSides}
-              maxWidth={340}
-            />
+            <>
+              <CardCanvas
+                student={student}
+                templateUrlFront={templateUrlFront}
+                templateUrlBack={templateUrlBack}
+                layout={cardLayout}
+                fieldSides={fieldSides}
+                maxWidth={340}
+              />
+              <p style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '12px', textAlign: 'center' }}>
+                This is exactly how your card will look when printed (both sides shown).
+              </p>
+            </>
           )}
-          {ready && !useCanvas && <IDCardDisplay student={student} />}
+          {ready && !useCanvas && (
+            <>
+              <IDCardDisplay student={student} />
+              {cardLayout && !useCustomLayout && (
+                <p style={{ fontSize: '12px', color: 'var(--warning)', marginTop: '12px', textAlign: 'center' }}>
+                  Using default layout. Admin must map both sides for custom layout.
+                </p>
+              )}
+            </>
+          )}
           <p className="print-size-note">
             {useCanvas
               ? 'This is exactly how your card will look when printed.'
