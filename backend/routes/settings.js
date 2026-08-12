@@ -32,6 +32,23 @@ const DEFAULT_QR_FIELDS = {
   current_address: { label: 'Current Address', enabled: true },
 }
 
+// Which side each card field is printed on. 'both' means it appears on the
+// back layout (qr is shared). Kept in sync with frontend/src/lib/layoutConstants.js
+// FRONT_FIELDS / BACK_FIELDS.
+const DEFAULT_FIELD_SIDES = {
+  photo: 'front',
+  full_name: 'front',
+  student_id: 'front',
+  year_level: 'front',
+  position: 'front',
+  signature: 'front',
+  qr: 'both',
+  blood_type: 'back',
+  emergency_contact_phone: 'back',
+  issue_date: 'back',
+  valid_until: 'back',
+}
+
 const DEFAULT_LAYOUT_FRONT = {
   photo: { x: 0.1271, y: 0.1673, width: 0.7458, height: 0.3287, type: 'image' },
   full_name: {
@@ -50,7 +67,7 @@ const DEFAULT_LAYOUT_FRONT = {
     fontSize: 0.0576,
     color: '#CC0000',
     bold: false,
-    textAlign: 'left',
+    textAlign: 'center',
     type: 'text',
     maxWidth: 0.5,
   },
@@ -70,13 +87,15 @@ const DEFAULT_LAYOUT_FRONT = {
     fontSize: 0.0508,
     color: '#1A1A1A',
     bold: true,
-    textAlign: 'left',
+    textAlign: 'center',
     type: 'text',
     maxWidth: 0.5,
   },
   signature: { x: 0.5254, y: 0.8386, width: 0.3898, height: 0.0896, type: 'image' },
   qr: { x: 0.0593, y: 0.8187, width: 0.2542, height: 0.1394, type: 'image' },
 }
+
+// Keep in sync with frontend/src/lib/layoutConstants.js
 
 const DEFAULT_LAYOUT_BACK = {
   qr: { x: 0.1, y: 0.13, width: 0.35, height: 0.3, type: 'image' },
@@ -158,6 +177,22 @@ router.get('/qr-fields', async (req, res) => {
   }
 })
 
+// Which side each field is printed on (front / back / both)
+router.get('/field-sides', async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from('portal_settings')
+      .select('value')
+      .eq('key', 'card_field_sides')
+      .maybeSingle()
+    const result = data?.value || DEFAULT_FIELD_SIDES
+    res.json(result)
+  } catch (err) {
+    logger.error({ err }, 'Settings GET /field-sides error')
+    res.status(500).json({ error: 'Failed to load settings.' })
+  }
+})
+
 router.get('/layout', async (req, res) => {
   try {
     const [{ data: frontData }, { data: backData }] = await Promise.all([
@@ -171,9 +206,26 @@ router.get('/layout', async (req, res) => {
       ? await supabase.from('portal_settings').select('value').eq('key', 'card_layout').maybeSingle()
       : { data: null }
 
+    let frontLayout = frontData?.data?.value
+    let backLayout = backData?.data?.value
+
+    // Lazy migration: if legacy layout exists but front/back don't, migrate it
+    if (legacyData?.data?.value && (!frontLayout || !backLayout)) {
+      frontLayout = legacyData.data.value
+      backLayout = backLayout || DEFAULT_LAYOUT_BACK
+
+      // Async migration: write front/back, then delete legacy (fire-and-forget)
+      supabase.from('portal_settings').upsert([
+        { key: 'card_layout_front', value: frontLayout, updated_at: new Date().toISOString() },
+        { key: 'card_layout_back', value: backLayout, updated_at: new Date().toISOString() },
+      ]).then(() => {
+        supabase.from('portal_settings').delete().eq('key', 'card_layout')
+      }).catch(() => { /* ignore migration errors */ })
+    }
+
     const result = {
-      front: frontData?.data?.value || legacyData?.data?.value || DEFAULT_LAYOUT_FRONT,
-      back: backData?.data?.value || DEFAULT_LAYOUT_BACK,
+      front: frontLayout || DEFAULT_LAYOUT_FRONT,
+      back: backLayout || DEFAULT_LAYOUT_BACK,
     }
     res.json(result)
   } catch (err) {
@@ -215,6 +267,26 @@ router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
     res.json(data.value)
   } catch (err) {
     logger.error({ err }, 'Settings PUT /qr-fields error')
+    res.status(500).json({ error: 'Failed to save settings.' })
+  }
+})
+
+// Persist which side each field is printed on
+router.put('/field-sides', requireAdmin, requireFullAdmin, async (req, res) => {
+  try {
+    const sides = req.body
+    if (!sides || typeof sides !== 'object') {
+      return res.status(400).json({ error: 'Invalid field-sides payload.' })
+    }
+    const { data, error } = await supabase
+      .from('portal_settings')
+      .upsert({ key: 'card_field_sides', value: sides, updated_at: new Date().toISOString() })
+      .select()
+      .single()
+    if (error) return res.status(400).json({ error: error.message })
+    res.json(data.value)
+  } catch (err) {
+    logger.error({ err }, 'Settings PUT /field-sides error')
     res.status(500).json({ error: 'Failed to save settings.' })
   }
 })

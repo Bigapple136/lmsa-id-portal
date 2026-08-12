@@ -6,14 +6,16 @@ import CardCanvas from './CardCanvas'
 export default function PrintPreviewModal({ student, onClose }) {
   const [templateUrl, setTemplateUrl] = useState(null)
   const [cardLayout, setCardLayout] = useState(null)
+  const [fieldSides, setFieldSides] = useState(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     async function load() {
       try {
-        const [tRes, lRes] = await Promise.all([
+        const [tRes, lRes, fsRes] = await Promise.all([
           apiFetch('/api/templates/active'),
           apiFetch('/api/settings/layout'),
+          apiFetch('/api/settings/field-sides'),
         ])
         if (tRes.ok) {
           const t = await tRes.json()
@@ -21,6 +23,9 @@ export default function PrintPreviewModal({ student, onClose }) {
         }
         if (lRes.ok) {
           setCardLayout(await lRes.json())
+        }
+        if (fsRes.ok) {
+          setFieldSides(await fsRes.json())
         }
       } catch (err) {
         console.warn('[PrintPreview] Failed to load card data:', err)
@@ -61,6 +66,7 @@ export default function PrintPreviewModal({ student, onClose }) {
               student={student}
               templateUrl={templateUrl}
               layout={cardLayout}
+              fieldSides={fieldSides}
               maxWidth={340}
             />
           )}

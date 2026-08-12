@@ -68,6 +68,7 @@ export default function PreviewPage() {
   const [templateUrlBack, setTemplateUrlBack] = useState(null)
   const [cardLayout, setCardLayout] = useState(null)
   const [qrFields, setQrFields] = useState(null)
+  const [fieldSides, setFieldSides] = useState(null)
 
   const [step, setStep] = useState('idle')
   const [selectedIssues, setSelectedIssues] = useState([])
@@ -110,10 +111,11 @@ export default function PreviewPage() {
   async function fetchTemplateAndLayout() {
     // Fetch each resource independently so one failing endpoint never discards
     // the already-succeeded template/layout/qr-field responses.
-    const [tRes, lRes, qrRes] = await Promise.allSettled([
+    const [tRes, lRes, qrRes, fsRes] = await Promise.allSettled([
       apiFetch('/api/templates/active'),
       apiFetch('/api/settings/layout'),
       apiFetch('/api/settings/qr-fields'),
+      apiFetch('/api/settings/field-sides'),
     ])
     if (tRes.status === 'fulfilled' && tRes.value.ok) {
       try {
@@ -138,6 +140,11 @@ export default function PreviewPage() {
     if (qrRes.status === 'fulfilled' && qrRes.value.ok) {
       try {
         setQrFields(await qrRes.value.json())
+      } catch {}
+    }
+    if (fsRes.status === 'fulfilled' && fsRes.value.ok) {
+      try {
+        setFieldSides(await fsRes.value.json())
       } catch {}
     }
   }
@@ -402,6 +409,7 @@ export default function PreviewPage() {
                 templateUrlFront={templateUrlFront}
                 templateUrlBack={templateUrlBack}
                 layout={cardLayout}
+                fieldSides={fieldSides}
                 maxWidth={380}
               />
             </div>

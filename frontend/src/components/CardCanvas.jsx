@@ -7,6 +7,9 @@ import {
   BACK_FIELD_ORDER,
 } from '../lib/layoutConstants'
 
+// Master field order used to build the per-side render list from fieldSides
+const MASTER_FIELD_ORDER = [...new Set([...FRONT_FIELD_ORDER, ...BACK_FIELD_ORDER])]
+
 function loadImg(src) {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -61,7 +64,7 @@ function getFieldText(field, student) {
   return map[field] || ''
 }
 
-export default function CardCanvas({ student, templateUrl, templateUrlFront, templateUrlBack, layout, maxWidth = 300 }) {
+export default function CardCanvas({ student, templateUrl, templateUrlFront, templateUrlBack, layout, fieldSides, maxWidth = 300 }) {
   const canvasRef = useRef(null)
   const [rendered, setRendered] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -90,7 +93,14 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
   }, [layout])
 
   const currentLayout = resolvedLayout[side]
-  const fieldOrder = side === 'front' ? FRONT_FIELD_ORDER : BACK_FIELD_ORDER
+  // Render only fields assigned to this side (front | back | both). When
+  // fieldSides isn't provided, fall back to the static per-side order.
+  const fieldOrder = useMemo(() => {
+    if (!fieldSides) return side === 'front' ? FRONT_FIELD_ORDER : BACK_FIELD_ORDER
+    return MASTER_FIELD_ORDER.filter(
+      (f) => fieldSides[f] === side || fieldSides[f] === 'both',
+    )
+  }, [fieldSides, side])
 
   const flipCard = useCallback(() => {
     if (isFlipping) return

@@ -178,7 +178,9 @@ export default function AdminDashboard() {
 
   // Card layout state
   const [cardLayout, setCardLayout] = useState(null)
-  const [layoutSide, setLayoutSide] = useState('front') // 'front' | 'back'
+
+  // Field→side assignment (front | back | both)
+  const [fieldSides, setFieldSides] = useState(null)
 
   // Download state
   const [downloading, setDownloading] = useState({})
@@ -356,6 +358,7 @@ export default function AdminDashboard() {
           safeLoad(loadFields),
           safeLoad(loadQrFields),
           safeLoad(loadLayout),
+          safeLoad(loadFieldSides),
           safeLoad(loadSubmissions),
           safeLoad(loadSubmissionForm),
           safeLoad(loadAnalytics),
@@ -447,6 +450,24 @@ export default function AdminDashboard() {
   async function loadLayout() {
     const res = await adminFetch('/api/settings/layout')
     if (res.ok) setCardLayout(await res.json())
+  }
+
+  async function loadFieldSides() {
+    const res = await adminFetch('/api/settings/field-sides')
+    if (res.ok) setFieldSides(await res.json())
+  }
+
+  async function saveFieldSides(sides) {
+    try {
+      const res = await adminJson('/api/settings/field-sides', 'PUT', sides)
+      if (res.ok) setFieldSides(await res.json())
+      // Notify other tabs (e.g., PreviewPage) that field sides changed
+      if (typeof BroadcastChannel !== 'undefined') {
+        new BroadcastChannel('layout-changes').postMessage({ type: 'layout-updated' })
+      }
+    } catch {
+      /* non-critical — layout save still works */
+    }
   }
 
   async function loadSubmissions(statusFilter) {
@@ -2086,46 +2107,23 @@ export default function AdminDashboard() {
             </div>
             <p className="section-desc">
               Configure field positions for both sides of the ID card. Each side uses its own template
-              and layout. Drag fields on the preview, adjust properties in the panel, then save.
+              and layout. Drag fields on the preview, adjust properties in the panel, then save. Use the
+              Front/Back tabs in the mapper to switch sides.
             </p>
 
-            {/* Side selector tabs */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-              <button
-                className="mode-btn active"
-                style={{ flex: '1 1 200px' }}
-                onClick={() => setLayoutSide('front')}
-              >
-                🎨 Front Layout
-              </button>
-              <button
-                className="mode-btn"
-                style={{ flex: '1 1 200px' }}
-                onClick={() => setLayoutSide('back')}
-              >
-                🔙 Back Layout
-              </button>
-            </div>
-
-            {(layoutSide === 'front' && !activeTemplateFront) || (layoutSide === 'back' && !activeTemplateBack) ? (
-              <div className="error-box" style={{ marginBottom: '14px' }}>
-                No {layoutSide} template uploaded yet.{' '}
-                <span
-                  style={{ textDecoration: 'underline', cursor: 'pointer' }}
-                  onClick={() => setActiveTab('upload')}
-                >
-                  Upload your {layoutSide} template first →
-                </span>
-              </div>
-            ) : (
-              <LayoutMapper
-                enabledFields={fields}
-                templateUrlFront={activeTemplateFront?.file_url}
-                templateUrlBack={activeTemplateBack?.file_url}
-                initialLayout={cardLayout}
-                onSave={saveLayout}
-              />
-            )}
+            <LayoutMapper
+              enabledFields={fields}
+              templateUrlFront={activeTemplateFront?.file_url}
+              templateUrlBack={activeTemplateBack?.file_url}
+              templateNameFront={activeTemplateFront?.file_name}
+              templateNameBack={activeTemplateBack?.file_name}
+              initialLayout={cardLayout}
+              onSave={saveLayout}
+              suggestedLayoutFront={activeTemplateFront?.suggested_layout_front}
+              suggestedLayoutBack={activeTemplateBack?.suggested_layout_back}
+              fieldSides={fieldSides}
+              onSaveFieldSides={saveFieldSides}
+            />
           </div>
         )}
 
