@@ -79,18 +79,20 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
   // Strict mode: the saved admin layout is the ONLY layout the card renders
   // with. Never merge calibrated defaults back in. Calibrated defaults are
   // only used when no layout has been saved at all.
+  // FIX: If a side's layout is an empty object (truthy but no fields), use
+  // the defaults instead of rendering a blank side.
   const resolvedLayout = useMemo(() => {
     if (!layout) return { front: CALIBRATED_LAYOUT_FRONT, back: CALIBRATED_LAYOUT_BACK }
     if (layout.front || layout.back) {
       return {
-        front: layout.front || {},
-        back: layout.back || {},
+        front: (layout.front && Object.keys(layout.front).length > 0) ? layout.front : CALIBRATED_LAYOUT_FRONT,
+        back: (layout.back && Object.keys(layout.back).length > 0) ? layout.back : CALIBRATED_LAYOUT_BACK,
       }
     }
     // Old flat format - use as front only
     return {
       front: layout,
-      back: {},
+      back: CALIBRATED_LAYOUT_BACK,
     }
   }, [layout])
 
@@ -104,6 +106,10 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
     )
   }, [fieldSides, side])
 
+  console.log('[LAYOUT] CardCanvas props — layout:', layout, 'fieldSides:', fieldSides, 'side:', side)
+  console.log('[LAYOUT] CardCanvas resolvedLayout:', resolvedLayout)
+  console.log('[LAYOUT] CardCanvas currentLayout:', currentLayout)
+  console.log('[LAYOUT] CardCanvas fieldOrder:', fieldOrder)
   const flipCard = useCallback(() => {
     if (isFlipping) return
     setIsFlipping(true)

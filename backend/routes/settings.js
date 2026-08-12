@@ -223,10 +223,15 @@ router.get('/layout', async (req, res) => {
       }).catch(() => { /* ignore migration errors */ })
     }
 
+    // FIX: Ensure we never return empty layout objects that would render blank
+    // If a layout exists but is empty, use the defaults
+    const frontResult = (frontLayout && Object.keys(frontLayout).length > 0) ? frontLayout : DEFAULT_LAYOUT_FRONT
+    const backResult = (backLayout && Object.keys(backLayout).length > 0) ? backLayout : DEFAULT_LAYOUT_BACK
     const result = {
-      front: frontLayout || DEFAULT_LAYOUT_FRONT,
-      back: backLayout || DEFAULT_LAYOUT_BACK,
+      front: frontResult,
+      back: backResult,
     }
+    logger.debug({ keys: { front: Object.keys(frontLayout || {}).length, back: Object.keys(backLayout || {}).length } }, 'Layout GET response')
     res.json(result)
   } catch (err) {
     logger.error({ err }, 'Settings GET /layout error')
@@ -297,20 +302,35 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     const { front, back } = req.body
     const isNewFormat = front !== undefined || back !== undefined
 
+    // Ensure at least one layout is being saved
+    if (!isNewFormat && (!req.body || Object.keys(req.body).length === 0)) {
+      return res.status(400).json({ error: 'Layout update requires at least front or back layout.' })
+    }
+
     // Validate front layout
     if (front !== undefined) {
       const cfgErr = checkLayoutConfig(front)
       if (cfgErr) return res.status(400).json({ error: `Front layout: ${cfgErr}` })
+      // Warn if layout is empty or very small
+      if (Object.keys(front || {}).length === 0) {
+        logger.warn('Front layout is empty - admin may have accidentally saved blank layout')
+      }
     }
     // Validate back layout
     if (back !== undefined) {
       const cfgErr = checkLayoutConfig(back)
       if (cfgErr) return res.status(400).json({ error: `Back layout: ${cfgErr}` })
+      // Warn if layout is empty or very small
+      if (Object.keys(back || {}).length === 0) {
+        logger.warn('Back layout is empty - admin may have accidentally saved blank layout')
+      }
     }
 
     // If old format (flat), treat as front only
     const frontLayout = isNewFormat ? front : req.body
     const backLayout = isNewFormat ? back : undefined
+
+    logger.info({ frontFields: Object.keys(frontLayout || {}).length, backFields: Object.keys(backLayout || {}).length, hasBack: !!backLayout }, 'Layout PUT: saving layout')
 
     const updates = []
     if (frontLayout !== undefined) {
@@ -340,6 +360,7 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     const savedFront = results[0]?.data?.value
     const savedBack = results[1]?.data?.value
 
+    logger.info({ savedFrontFields: Object.keys(savedFront || {}).length, savedBackFields: Object.keys(savedBack || {}).length }, 'Layout PUT: saved successfully')
     const result = { front: savedFront, back: savedBack }
     res.json(result)
   } catch (err) {

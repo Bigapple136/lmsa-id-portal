@@ -134,8 +134,16 @@ export default function PreviewPage() {
     }
     if (lRes.status === 'fulfilled' && lRes.value.ok) {
       try {
-        setCardLayout(await lRes.value.json())
-      } catch {}
+        const layout = await lRes.value.json()
+        console.log('[LAYOUT] preview /api/settings/layout response:', layout)
+        console.log('[LAYOUT] preview layout front fields:', Object.keys(layout?.front || {}))
+        console.log('[LAYOUT] preview layout back fields:', Object.keys(layout?.back || {}))
+        setCardLayout(layout)
+      } catch {
+        console.warn('[LAYOUT] preview failed to parse layout JSON')
+      }
+    } else {
+      console.warn('[LAYOUT] preview /api/settings/layout request failed:', lRes.status)
     }
     if (qrRes.status === 'fulfilled' && qrRes.value.ok) {
       try {
@@ -144,8 +152,12 @@ export default function PreviewPage() {
     }
     if (fsRes.status === 'fulfilled' && fsRes.value.ok) {
       try {
-        setFieldSides(await fsRes.value.json())
+        const sides = await fsRes.value.json()
+        console.log('[LAYOUT] preview /api/settings/field-sides response:', sides)
+        setFieldSides(sides)
       } catch {}
+    } else {
+      console.warn('[LAYOUT] preview /api/settings/field-sides request failed:', fsRes.status)
     }
   }
 
@@ -404,6 +416,7 @@ export default function PreviewPage() {
 
           {templateUrl && cardLayout ? (
             <div style={{ padding: '16px 16px 0' }}>
+              {console.log('[LAYOUT] preview renders CardCanvas — templateUrl:', templateUrl, 'cardLayout keys:', cardLayout && Object.keys(cardLayout))}
               <CardCanvas
                 student={student}
                 templateUrlFront={templateUrlFront}
@@ -414,9 +427,11 @@ export default function PreviewPage() {
               />
             </div>
           ) : (
-            <IDCardDisplay student={student} />
+            <div>
+              {console.warn('[LAYOUT] preview fell back to IDCardDisplay — templateUrl:', templateUrl, 'cardLayout:', cardLayout)}
+              <IDCardDisplay student={student} />
+            </div>
           )}
-
           <div style={{ padding: '0 16px 16px' }}>
             <button className="btn-print" onClick={() => setShowPrint(true)}>
               🖨 View Print Preview

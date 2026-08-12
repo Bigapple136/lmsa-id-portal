@@ -209,7 +209,13 @@ export default function LayoutMapper({
   // wins on that first hydration, instead of the defaults permanently
   // overwriting it. After that, local state is authoritative so in-progress
   // edits survive any later prop update (e.g. the echo after Save).
+  // FIX: Reset layoutInitialized when templates change, so layout re-syncs
+  // if admin uploads new templates while the mapper is open.
   const layoutInitialized = useRef(false)
+  useEffect(() => {
+    // Reset when templates change (new upload)
+    layoutInitialized.current = false
+  }, [templateUrlFront, templateUrlBack])
   useEffect(() => {
     if (layoutInitialized.current || !initialLayout) return
     if (initialLayout.front) {
@@ -323,10 +329,21 @@ export default function LayoutMapper({
 
   // ── Save ──
   async function handleSave() {
+    // Check: at least one template must be uploaded to save layout
+    if (!templateUrlFront && !templateUrlBack) {
+      setMsg({ ok: false, text: 'Upload a template (front or back) before saving layout.' })
+      return
+    }
+
     setSaving(true)
     setMsg(null)
     try {
-      await onSave({ front: frontLayout, back: backLayout })
+      // Only send layout for sides that have uploaded templates.
+      // This prevents saving default/empty layouts for templates that don't exist yet.
+      const payload = {}
+      if (templateUrlFront) payload.front = frontLayout
+      if (templateUrlBack) payload.back = backLayout
+      await onSave(payload)
       setMsg({ ok: true, text: 'Layout saved successfully.' })
     } catch {
       setMsg({ ok: false, text: 'Failed to save layout.' })

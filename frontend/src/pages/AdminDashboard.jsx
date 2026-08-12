@@ -449,7 +449,13 @@ export default function AdminDashboard() {
 
   async function loadLayout() {
     const res = await adminFetch('/api/settings/layout')
-    if (res.ok) setCardLayout(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      console.log('[LAYOUT] admin loadLayout received:', data)
+      setCardLayout(data)
+    } else {
+      console.warn('[LAYOUT] admin loadLayout failed:', res.status, res.statusText)
+    }
   }
 
   async function loadFieldSides() {
@@ -499,12 +505,19 @@ export default function AdminDashboard() {
 
   async function saveLayout(layout) {
     // layout is now the full { front, back } object from LayoutMapper
+    console.log('[LAYOUT] admin saveLayout payload:', layout)
+    console.log('[LAYOUT] admin saveLayout front fields:', Object.keys(layout?.front || {}))
+    console.log('[LAYOUT] admin saveLayout back fields:', Object.keys(layout?.back || {}))
     const res = await adminJson('/api/settings/layout', 'PUT', layout)
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
+      console.warn('[LAYOUT] admin saveLayout failed:', res.status, data)
       throw new Error(data.error || 'Save failed')
     }
     const saved = await res.json()
+    console.log('[LAYOUT] admin saveLayout response:', saved)
+    console.log('[LAYOUT] admin saveLayout response front fields:', Object.keys(saved?.front || {}))
+    console.log('[LAYOUT] admin saveLayout response back fields:', Object.keys(saved?.back || {}))
     setCardLayout(saved)
     // Notify other tabs (e.g., PreviewPage) that layout changed
     if (typeof BroadcastChannel !== 'undefined') {
