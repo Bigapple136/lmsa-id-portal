@@ -201,18 +201,26 @@ export default function LayoutMapper({
     }
   }, [initialFieldSides])
 
-  // Merge new initialLayout without discarding unsaved edits
+  // Hydrate from the saved layout once it arrives from the server (mirrors
+  // the sidesInitialized pattern above). initialLayout is fetched async in
+  // AdminDashboard, so this effect often fires after the mapper has already
+  // mounted with the hardcoded defaults in frontLayout/backLayout. Guarding
+  // with a ref and spreading the server data LAST means the real saved map
+  // wins on that first hydration, instead of the defaults permanently
+  // overwriting it. After that, local state is authoritative so in-progress
+  // edits survive any later prop update (e.g. the echo after Save).
+  const layoutInitialized = useRef(false)
   useEffect(() => {
-    if (initialLayout) {
-      if (initialLayout.front) {
-        setFrontLayout((prev) => ({ ...CALIBRATED_LAYOUT_FRONT, ...initialLayout.front, ...prev }))
-      } else if (!initialLayout.back) {
-        setFrontLayout((prev) => ({ ...CALIBRATED_LAYOUT_FRONT, ...initialLayout, ...prev }))
-      }
-      if (initialLayout.back) {
-        setBackLayout((prev) => ({ ...CALIBRATED_LAYOUT_BACK, ...initialLayout.back, ...prev }))
-      }
+    if (layoutInitialized.current || !initialLayout) return
+    if (initialLayout.front) {
+      setFrontLayout((prev) => ({ ...CALIBRATED_LAYOUT_FRONT, ...prev, ...initialLayout.front }))
+    } else if (!initialLayout.back) {
+      setFrontLayout((prev) => ({ ...CALIBRATED_LAYOUT_FRONT, ...prev, ...initialLayout }))
     }
+    if (initialLayout.back) {
+      setBackLayout((prev) => ({ ...CALIBRATED_LAYOUT_BACK, ...prev, ...initialLayout.back }))
+    }
+    layoutInitialized.current = true
   }, [initialLayout])
 
   // Calculate display height from template aspect ratio
