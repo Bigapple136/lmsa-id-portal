@@ -44,16 +44,16 @@ const DEFAULT_LAYOUT = {
   },
   position: {
     x: 0.5,
-    y: 0.68,
-    fontSize: 0.032,
-    color: '#666666',
-    bold: false,
+    y: 0.7231,
+    fontSize: 0.0508,
+    color: '#1A1A1A',
+    bold: true,
     textAlign: 'center',
     type: 'text',
     maxWidth: 0.7,
   },
-  signature: { x: 0.06, y: 0.82, width: 0.55, height: 0.08, type: 'image' },
-  qr: { x: 0.68, y: 0.78, width: 0.26, height: 0.16, type: 'image' },
+  signature: { x: 0.5254, y: 0.8386, width: 0.3898, height: 0.0896, type: 'image' },
+  qr: { x: 0.0593, y: 0.8187, width: 0.2542, height: 0.1394, type: 'image' },
 }
 
 export default function LayoutMapper({ enabledFields, templateUrl, initialLayout, onSave }) {

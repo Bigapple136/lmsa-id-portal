@@ -73,6 +73,7 @@ const DEFAULT_LAYOUT = {
     maxWidth: 0.5,
   },
   signature: { x: 0.5254, y: 0.8386, width: 0.3898, height: 0.0896, type: 'image' },
+  qr: { x: 0.0593, y: 0.8187, width: 0.2542, height: 0.1394, type: 'image' },
 }
 
 // ── PUBLIC reads (cached, 5-minute TTL) ──
