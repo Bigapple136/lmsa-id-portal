@@ -4,6 +4,7 @@ import {
   CALIBRATED_LAYOUT_FRONT,
   CALIBRATED_LAYOUT_BACK,
   EST_CHARS,
+  VALID_LAYOUT_FIELDS,
 } from '../lib/layoutConstants'
 
 const DISPLAY_W = 260
@@ -338,11 +339,22 @@ export default function LayoutMapper({
     setSaving(true)
     setMsg(null)
     try {
+      // Filter out config keys (fontFamily, logoPosition, etc) - keep only valid student fields
+      const cleanLayout = (layout) => {
+        const cleaned = {}
+        Object.entries(layout || {}).forEach(([key, val]) => {
+          if (VALID_LAYOUT_FIELDS.has(key)) {
+            cleaned[key] = val
+          }
+        })
+        return cleaned
+      }
+
       // Only send layout for sides that have uploaded templates.
       // This prevents saving default/empty layouts for templates that don't exist yet.
       const payload = {}
-      if (templateUrlFront) payload.front = frontLayout
-      if (templateUrlBack) payload.back = backLayout
+      if (templateUrlFront) payload.front = cleanLayout(frontLayout)
+      if (templateUrlBack) payload.back = cleanLayout(backLayout)
       await onSave(payload)
       setMsg({ ok: true, text: 'Layout saved successfully.' })
     } catch {

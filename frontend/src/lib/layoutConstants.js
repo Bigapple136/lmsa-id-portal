@@ -109,6 +109,21 @@ export const BACK_FIELD_ORDER = [
   'valid_until',
 ]
 
+// Valid student data fields (config keys like fontFamily, logoPosition get filtered out)
+export const VALID_LAYOUT_FIELDS = new Set([
+  'photo',
+  'full_name',
+  'student_id',
+  'position',
+  'year_level',
+  'signature',
+  'qr',
+  'blood_type',
+  'emergency_contact_phone',
+  'issue_date',
+  'valid_until',
+])
+
 // Fields available for each side (used by LayoutMapper)
 export const FRONT_FIELDS = [
   'photo',

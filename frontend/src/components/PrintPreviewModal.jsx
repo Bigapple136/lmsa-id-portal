@@ -5,6 +5,8 @@ import CardCanvas from './CardCanvas'
 
 export default function PrintPreviewModal({ student, onClose }) {
   const [templateUrl, setTemplateUrl] = useState(null)
+  const [templateUrlFront, setTemplateUrlFront] = useState(null)
+  const [templateUrlBack, setTemplateUrlBack] = useState(null)
   const [cardLayout, setCardLayout] = useState(null)
   const [fieldSides, setFieldSides] = useState(null)
   const [ready, setReady] = useState(false)
@@ -19,6 +21,8 @@ export default function PrintPreviewModal({ student, onClose }) {
         ])
         if (tRes.ok) {
           const t = await tRes.json()
+          setTemplateUrlFront(t.front?.file_url || null)
+          setTemplateUrlBack(t.back?.file_url || null)
           setTemplateUrl(t.front?.file_url || t.back?.file_url || null)
         }
         if (lRes.ok) {
@@ -64,7 +68,8 @@ export default function PrintPreviewModal({ student, onClose }) {
           {ready && useCanvas && (
             <CardCanvas
               student={student}
-              templateUrl={templateUrl}
+              templateUrlFront={templateUrlFront}
+              templateUrlBack={templateUrlBack}
               layout={cardLayout}
               fieldSides={fieldSides}
               maxWidth={340}

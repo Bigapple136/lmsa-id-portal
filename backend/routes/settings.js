@@ -296,6 +296,33 @@ router.put('/field-sides', requireAdmin, requireFullAdmin, async (req, res) => {
   }
 })
 
+// Valid layout fields (config keys like fontFamily, logoPosition are filtered out)
+const VALID_LAYOUT_FIELDS = new Set([
+  'photo',
+  'full_name',
+  'student_id',
+  'position',
+  'year_level',
+  'signature',
+  'qr',
+  'blood_type',
+  'emergency_contact_phone',
+  'issue_date',
+  'valid_until',
+])
+
+// Filter out config keys from layout, keeping only valid student fields
+function cleanLayout(layout) {
+  if (!layout || typeof layout !== 'object') return layout
+  const cleaned = {}
+  Object.entries(layout).forEach(([key, val]) => {
+    if (VALID_LAYOUT_FIELDS.has(key)) {
+      cleaned[key] = val
+    }
+  })
+  return cleaned
+}
+
 router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
   try {
     // Accept both old format (flat layout) and new format { front, back }
@@ -327,8 +354,12 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     }
 
     // If old format (flat), treat as front only
-    const frontLayout = isNewFormat ? front : req.body
-    const backLayout = isNewFormat ? back : undefined
+    let frontLayout = isNewFormat ? front : req.body
+    let backLayout = isNewFormat ? back : undefined
+
+    // Filter out config keys (fontFamily, logoPosition, etc) - keep only valid student fields
+    frontLayout = cleanLayout(frontLayout)
+    backLayout = cleanLayout(backLayout)
 
     logger.info({ frontFields: Object.keys(frontLayout || {}).length, backFields: Object.keys(backLayout || {}).length, hasBack: !!backLayout }, 'Layout PUT: saving layout')
 
