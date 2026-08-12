@@ -281,6 +281,69 @@ open Preview/Print tabs refresh when an admin reassigns a field's side.
 
 ---
 
+## 8. Fix: Layout Mapper Discarding Saved Layout on Async Load (commit `1fdb2b8`)
+
+### Problem
+Admin-saved layout coordinates from the Layout tab were not showing up in the
+ID card Preview. Opening the Layout tab would sometimes show default field
+positions instead of the previously saved map, and saving from that state
+silently overwrote the real saved layout in the database with defaults. No
+error was raised in either direction, since the defaults are a valid layout
+object and pass `checkLayoutConfig` on the backend.
+
+### Root Cause
+`AdminDashboard.jsx` fetches the saved layout asynchronously (`loadLayout()`,
+part of `loadAll()`) and passes it into `LayoutMapper` as `initialLayout`.
+Because that fetch is async, `LayoutMapper` frequently mounts before it
+resolves, most reliably when the dashboard restores the admin's last-used tab
+as `layout` on reload. `frontLayout`/`backLayout` state then initializes to
+the hardcoded `CALIBRATED_LAYOUT_FRONT`/`CALIBRATED_LAYOUT_BACK` defaults.
+
+The effect meant to hydrate that state once the real `initialLayout` prop
+arrived spread local state last:
+
+```js
+setFrontLayout((prev) => ({ ...CALIBRATED_LAYOUT_FRONT, ...initialLayout.front, ...prev }))
+```
+
+Since `prev` won the merge, the incoming saved layout was discarded every
+time it arrived, and the mapper stayed on defaults. Any save from that state
+pushed the defaults back to the database, overwriting whatever the admin had
+actually mapped, for every field, not just the one they last touched.
+
+### Solution
+Hydrate `frontLayout`/`backLayout` from `initialLayout` once, using the same
+ref-guarded pattern already used for `fieldSides` (`sidesInitialized`, see
+7.1), with the server data spread last so it actually wins on that first
+load:
+
+```js
+const layoutInitialized = useRef(false)
+useEffect(() => {
+  if (layoutInitialized.current || !initialLayout) return
+  if (initialLayout.front) {
+    setFrontLayout((prev) => ({ ...CALIBRATED_LAYOUT_FRONT, ...prev, ...initialLayout.front }))
+  }
+  // ...back handled the same way
+  layoutInitialized.current = true
+}, [initialLayout])
+```
+
+After the first hydration, local state stays authoritative, so in-progress
+edits still survive a later prop update (e.g. the echo after Save).
+
+### Operational Note
+This fix stops future clobbering but does not restore lost data. Any layout
+saved while affected by this bug may currently be sitting at default
+coordinates in `portal_settings` (`card_layout_front` / `card_layout_back`).
+After deploying, re-open the Layout tab, re-map, and save once to restore
+the real coordinates.
+
+### Files Changed
+- `frontend/src/components/LayoutMapper.jsx`
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -290,6 +353,7 @@ open Preview/Print tabs refresh when an admin reassigns a field's side.
 | `394e1e3` | Unified layout coordinates | Pushed |
 | `6558846` | Backend/frontend default alignment | Pushed |
 | `56fd929` | Template/Layout/Preview integration + bug sweep | Pushed |
+| `1fdb2b8` | Layout mapper discarding saved layout on async load | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
