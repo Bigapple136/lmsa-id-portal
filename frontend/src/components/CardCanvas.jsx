@@ -76,19 +76,21 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
     ? (templateUrlFront || templateUrl) 
     : (templateUrlBack || templateUrl)
 
-  // Support both old format (flat layout) and new format { front, back }
+  // Strict mode: the saved admin layout is the ONLY layout the card renders
+  // with. Never merge calibrated defaults back in. Calibrated defaults are
+  // only used when no layout has been saved at all.
   const resolvedLayout = useMemo(() => {
     if (!layout) return { front: CALIBRATED_LAYOUT_FRONT, back: CALIBRATED_LAYOUT_BACK }
     if (layout.front || layout.back) {
       return {
-        front: { ...CALIBRATED_LAYOUT_FRONT, ...(layout.front || {}) },
-        back: { ...CALIBRATED_LAYOUT_BACK, ...(layout.back || {}) },
+        front: layout.front || {},
+        back: layout.back || {},
       }
     }
     // Old flat format - use as front only
     return {
-      front: { ...CALIBRATED_LAYOUT_FRONT, ...layout },
-      back: CALIBRATED_LAYOUT_BACK,
+      front: layout,
+      back: {},
     }
   }, [layout])
 
