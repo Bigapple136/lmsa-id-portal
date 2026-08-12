@@ -247,6 +247,40 @@ if (!frontLayout && !backLayout) {
 
 ---
 
+## 7. Bug Sweep (Pre-Push) ✅ COMPLETED
+
+Caught and fixed during a final review before pushing the integration work:
+
+### 7.1 Stale server echo clobbering field-side edits (`LayoutMapper.jsx`)
+The `initialFieldSides` effect re-merged the prop on every change, so a delayed
+`saveFieldSides` HTTP response could overwrite a newer local toggle. Now
+initialized once via a `useRef` guard — local state is authoritative afterward,
+and `AdminDashboard`'s `fieldSides` stays fresh for remounts.
+
+### 7.2 Side effect inside a `setState` updater (`assignSide`)
+`assignSide` called `onSaveFieldSides` *inside* the `setFieldSides` updater
+(impure; double-invoked under React StrictMode). Moved the call outside the
+updater.
+
+### 7.3 Missing `sharp` crashed the entire templates route
+`backend/utils/detectZones.js` did `require('sharp')` at module top. If `sharp`
+is not installed, the `templates.js` route module fails to load — breaking
+`GET /active` (used by Preview and AdminDashboard) too. Now `require('sharp')` is
+lazy/`try-catch`'d; detection simply fails gracefully and upload continues.
+
+### 7.4 Auto-Mapped image fields misplaced
+Image fields render from their **top-left** corner in `CardCanvas` (and in the
+LayoutMapper preview), but both the server `zoneToImageLayout` and the frontend
+`buildSuggestedLayout` stored image `x/y` as the box **center**. Auto-Mapped
+photo/QR fields were therefore offset. Both now store top-left, matching drag/
+snap and the calibrated defaults.
+
+### 7.5 Live field-side updates
+`saveFieldSides` now broadcasts over the `layout-changes` BroadcastChannel so
+open Preview/Print tabs refresh when an admin reassigns a field's side.
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -255,7 +289,12 @@ if (!frontLayout && !backLayout) {
 | `e9e33c8` | Notification desktop spacing | Pushed |
 | `394e1e3` | Unified layout coordinates | Pushed |
 | `6558846` | Backend/frontend default alignment | Pushed |
-| *(current)* | Template/Layout/Preview integration recreation | In Progress |
+| `56fd929` | Template/Layout/Preview integration + bug sweep | Pushed |
+
+**Apply before relying on server-side Auto-Map:**
+1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
+2. `npm install` in `backend/` so `sharp` is present.
+3. Re-upload (or activate) templates so `suggested_layout_*`/`zones_*` are populated.
 
 **Vercel deployment:** Unblocked — push triggers deploy.
 
