@@ -414,7 +414,6 @@ export default function PreviewPage() {
 
           {useDisplayCanvas ? (
             <div style={{ padding: '16px 16px 0' }}>
-              {console.log('[LAYOUT] preview renders CardCanvas with custom layout — both sides mapped')}
               <CardCanvas
                 student={student}
                 templateUrlFront={templateUrlFront}
@@ -423,17 +422,13 @@ export default function PreviewPage() {
                 fieldSides={fieldSides}
                 maxWidth={380}
               />
-              <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '8px', padding: '0 16px' }}>
-                ✓ Using custom layout (both sides mapped)
-              </p>
             </div>
           ) : (
             <div>
-              {console.warn('[LAYOUT] preview fell back to IDCardDisplay — layout incomplete')}
               <IDCardDisplay student={student} />
-              {cardLayout && !useCustomLayout && (
+              {!templateUrl && (
                 <p style={{ fontSize: '11px', color: 'var(--warning)', marginTop: '8px', padding: '0 16px' }}>
-                  Using default layout (admin must map both front and back to activate custom layout)
+                  No card template uploaded yet — showing the fallback layout.
                 </p>
               )}
             </div>

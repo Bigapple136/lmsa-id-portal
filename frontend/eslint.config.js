@@ -33,9 +33,20 @@ export default [
       'react/no-unescaped-entities': 'warn',
       'react/prop-types': 'warn',
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-undef': 'error',
       'prefer-const': 'error',
       'no-var': 'error',
       eqeqeq: ['error', 'always'],
+    },
+  },
+  {
+    files: ['**/*.test.{js,jsx}', 'src/test/**/*.{js,jsx}'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.es2022,
+        ...globals.vitest,
+      },
     },
   },
 ]
