@@ -107,15 +107,17 @@ router.get('/layout', async (req, res) => {
       supabase.from('portal_settings').select('value').eq('key', 'card_layout_front').maybeSingle(),
       supabase.from('portal_settings').select('value').eq('key', 'card_layout_back').maybeSingle(),
     ])
-    // Backward compatibility: if only card_layout exists, use it as front
-    // NOTE: maybeSingle() returns { data: { value } }, so the value is at
-    // .data.value, NOT .value.
-    const legacyData = !frontData?.data?.value && !backData?.data?.value
+    // Backward compatibility: if only card_layout exists, use it as front.
+    // frontData/backData are already unwrapped to the row itself via the
+    // { data: frontData } destructuring above, so the saved layout is at
+    // frontData.value — NOT frontData.data.value. (legacyData below is
+    // NOT pre-destructured, so legacyData.data.value is correct there.)
+    const legacyData = !frontData?.value && !backData?.value
       ? await supabase.from('portal_settings').select('value').eq('key', 'card_layout').maybeSingle()
       : { data: null }
 
-    let frontLayout = frontData?.data?.value || null
-    const backLayout = backData?.data?.value || null
+    let frontLayout = frontData?.value || null
+    const backLayout = backData?.value || null
 
     // One-time migration: an old flat card_layout row (pre front/back split)
     // becomes the front layout. Back is left unmapped — the frontend
