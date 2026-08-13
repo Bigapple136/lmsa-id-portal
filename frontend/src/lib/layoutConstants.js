@@ -143,10 +143,12 @@ export const BACK_FIELDS = [
 ]
 
 // Check if layout has mapped fields on BOTH front and back
-// Returns true only if both sides have at least one field mapped
+// Returns true only if both sides have at least one VALID student field (ignores config keys)
 export function isLayoutComplete(layout) {
-  const hasFrontFields = layout?.front && Object.keys(layout.front).length > 0
-  const hasBackFields = layout?.back && Object.keys(layout.back).length > 0
+  const hasFrontFields = layout?.front && 
+    Object.keys(layout.front).some(key => VALID_LAYOUT_FIELDS.has(key))
+  const hasBackFields = layout?.back && 
+    Object.keys(layout.back).some(key => VALID_LAYOUT_FIELDS.has(key))
   return hasFrontFields && hasBackFields
 }
 
