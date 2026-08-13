@@ -965,7 +965,7 @@ router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => 
     return res.status(400).json({ error: 'new_valid_until must be YYYY-MM-DD format.' })
   const { data, error } = await supabase
     .from('students')
-    .update({ valid_until: new_valid_until, status: 'confirmed' })
+    .update({ valid_until: new_valid_until })
     .eq('year_level', year_level)
     .select()
   if (error) return res.status(500).json({ error: error.message })

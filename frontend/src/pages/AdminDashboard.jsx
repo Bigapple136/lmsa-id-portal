@@ -2435,8 +2435,8 @@ export default function AdminDashboard() {
               <>
                 <div className="section-title">Card expiry / renewal</div>
                 <p className="section-desc">
-                  Renew all cards for a given year level by setting a new expiry date. This resets
-                  those students' status to confirmed.
+                  Renew all cards for a given year level by setting a new expiry date. Confirmation
+                  status is left untouched; students still confirm their own card individually.
                 </p>
                 <RenewCohortSection userRole={userRole} />
               </>

@@ -7,7 +7,10 @@ const logger = require('../logger')
 router.get('/', requireAdmin, async (req, res) => {
   try {
     const [confirmationsRes, submissionsRes, notificationsRes] = await Promise.all([
-      supabase.from('confirmations').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('confirmations')
+        .select('id', { count: 'exact', head: true })
+        .eq('action', 'confirmed'),
       supabase.from('student_submissions').select('status'),
       supabase.from('notifications').select('type'),
     ])
