@@ -478,6 +478,90 @@ students re-confirm naturally instead.
 
 ---
 
+## 11. Fix: Student Preview Crash, and the Real Reason Layouts Weren't Rendering (commits `15d954e`, `e98be23`)
+
+### Problem
+After item 9's rebuild, the admin's saved layout still wasn't appearing
+on the student-facing preview/print pages, even though the Layout
+Mapper's own live preview looked correct.
+
+### Root Cause — two separate bugs, found in sequence
+
+**1. `15d954e` — a real crash.** The item 9 rebuild removed the
+`useCustomLayout` variable from `PreviewPage.jsx` but missed one
+remaining reference to it further down the file, in a conditional
+status message. Every load of the student preview page threw
+`ReferenceError: useCustomLayout is not defined` and fell back to the
+error boundary — it wasn't rendering the wrong layout, it wasn't
+rendering *anything*. This wasn't caught by `npm run build` (referencing
+an undeclared identifier is valid JS syntax, so it's a runtime error,
+not a build error) or by `eslint` — this project's ESLint config only
+spread `eslint-plugin-react`'s recommended rules and never enabled the
+base `no-undef` rule. Added `no-undef: 'error'` (plus a
+`globals.vitest` override for test files, since `vitest.config.js` has
+`globals: true` and `no-undef` needs to know about `describe`/`it`/
+`expect`) so this class of bug fails lint going forward.
+
+**2. `e98be23` — the actual data bug**, found after fixing the crash and
+still seeing stale data. `GET /api/settings/layout` destructures
+`{ data: frontData }` / `{ data: backData }` directly from the
+`Promise.all` results, meaning `frontData`/`backData` are already the
+unwrapped row (e.g. `{ value: {...} }`). The code then read
+`frontData?.data?.value` — accessing a `.data` property that doesn't
+exist on an already-unwrapped row — always resolving to `undefined`.
+Confirmed empirically against the installed `@supabase/supabase-js`
+client: `maybeSingle()` resolves to `{ data, error, count, status,
+statusText }`, a single-level `data` key.
+
+Effect: `backLayout` was unconditionally `null` on every GET, since
+nothing else in the handler ever touches it — confirmed by browser
+console logs showing `back: null` on every `loadLayout` call, including
+immediately after a save whose own response had just confirmed
+persisting 5 real fields. `frontLayout` showed *some* data some of the
+time only because the legacy-migration fallback branch (which reads a
+differently-shaped, correctly-unwrapped `legacyData` object) kept
+kicking in whenever the buggy check thought front/back were empty —
+masking the bug by serving stale legacy data (mixed with old
+`fontFamily`/`primaryColor`/etc. config keys from the original schema
+seed) instead of a clean `null`, which is why front looked "partially
+working" rather than reliably broken like back.
+
+The `PUT` handler was never affected by this specific bug — its
+`results[i]` is the raw, non-destructured response, so
+`results[i]?.data?.value` was already correct there, which is why every
+save's own immediate response always looked fine and made the bug so
+confusing to chase.
+
+### Solution
+`frontData?.value` / `backData?.value` (single unwrap, matching what
+the destructuring already did). `legacyData` was never pre-destructured
+so its existing `legacyData?.data?.value` access was already correct
+and left unchanged.
+
+### Operational Note
+No data recovery needed — the saved layouts were correct in the
+database the whole time; only the read path was broken. Both front and
+back should render correctly immediately on deploy, no re-save
+required. The stray legacy config keys still sitting in the current
+`card_layout_front` row are harmless and will clear automatically on
+the next normal save via `cleanLayout()`.
+
+### Verification
+Empirical `maybeSingle()` shape test against the real installed
+`@supabase/supabase-js` client (no test harness exists in this repo for
+mocking Supabase at the route level, so this was the most rigorous
+check available short of a live DB). Backend eslint + syntax check,
+backend test suite (31/31), frontend eslint (0 errors after the
+`no-undef` fix), frontend build.
+
+### Files Changed
+- `frontend/src/pages/PreviewPage.jsx`
+- `frontend/eslint.config.js`
+- `backend/routes/settings.js`
+- `frontend/src/pages/AdminDashboard.jsx`
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -490,6 +574,8 @@ students re-confirm naturally instead.
 | `1fdb2b8` | Layout mapper discarding saved layout on async load | Pushed |
 | `2dad3bd` | Card preview system rebuild — one shared layout resolver | Pushed |
 | `0cae9d5` | renew-cohort no longer auto-confirms; analytics counts real confirmations only | Pushed |
+| `15d954e` | Fix crash on student preview from leftover useCustomLayout reference; enable no-undef lint | Pushed |
+| `e98be23` | Fix GET /layout double-unwrap — back was unconditionally null on every read | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
