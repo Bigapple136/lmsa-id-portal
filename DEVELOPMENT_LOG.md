@@ -344,6 +344,86 @@ the real coordinates.
 
 ---
 
+## 9. Rebuild: Card Preview System Around One Shared Layout Resolver (commit `2dad3bd`)
+
+### Problem
+Even after item 8's fix, the card preview still didn't reliably reflect
+the admin's saved layout. Between item 8 and this entry, a separate
+debugging effort (see `QUICK_FIX_SUMMARY.md`, `LAYOUT_MAPPING_FIX.md`,
+`DATA_FLOW_DIAGRAM.md`, `FINAL_IMPLEMENTATION_PLAN.md`, `SYSTEM_PLAN.md`
+for that trail) had added a second, independent "is this layout empty,
+fall back to defaults" check in `GET /api/settings/layout`, and a third
+one in an `isLayoutComplete()` gate that required BOTH front and back to
+be mapped before ANY custom layout would render in Preview/Print at all.
+Combined with `CardCanvas`'s own pre-existing empty-check, there were
+three copies of essentially the same defaulting decision, patched
+independently, each capable of masking bugs in the others. That's why
+fixes kept appearing to not work.
+
+### Root Cause
+No single bug this time — architectural drift. Three call sites each
+independently decided "does this layout have real data, or should I
+show defaults," with slightly different rules:
+1. `CardCanvas`'s `resolvedLayout` memo: per-key length check.
+2. Backend `GET /layout`: substituted `DEFAULT_LAYOUT_FRONT/BACK`
+   server-side whenever a saved side was empty, meaning a genuinely
+   broken save (empty by mistake) was indistinguishable from a healthy
+   default from the frontend's point of view.
+3. `isLayoutComplete()` in `PreviewPage`/`PrintPreviewModal`: required
+   BOTH sides mapped before using ANY custom layout — so mapping only
+   the front and leaving the back at defaults (a completely normal
+   admin workflow) would silently discard the front mapping too.
+
+The Layout Mapper also had no rendered-card preview of its own — only a
+drag-and-drop box overlay — so admins had no way to see whether what
+they'd mapped actually matched what `CardCanvas` would render for
+students until they navigated to a separate preview page.
+
+### Solution
+Collapsed all three checks into one function, called from one place:
+
+```js
+// lib/layoutConstants.js
+export function resolveLayoutSide(savedSide, defaults) {
+  const hasFields = savedSide && Object.keys(savedSide).some((key) => VALID_LAYOUT_FIELDS.has(key))
+  return hasFields ? savedSide : defaults
+}
+export function resolveCardLayout(saved) {
+  return {
+    front: resolveLayoutSide(saved?.front, CALIBRATED_LAYOUT_FRONT),
+    back: resolveLayoutSide(saved?.back, CALIBRATED_LAYOUT_BACK),
+  }
+}
+```
+
+- `GET /api/settings/layout` now returns the real saved values (`null`
+  for an unmapped side) instead of substituting defaults server-side.
+- `CardCanvas` calls `resolveCardLayout()` instead of its own copy of
+  the logic.
+- `isLayoutComplete()` and its both-sides gate are removed from
+  `PreviewPage`/`PrintPreviewModal` — each side activates independently
+  as soon as it has real saved data, matching how admins actually map
+  templates (usually one side at a time).
+- `LayoutMapper` now embeds a live `CardCanvas` preview, fed directly
+  from its own in-progress `frontLayout`/`backLayout` state (not a
+  separate fetch), using placeholder student data. What the admin sees
+  while dragging fields is the exact same render path students get —
+  no second implementation left to drift out of sync.
+
+### Verification
+Backend test suite (31/31 passing), frontend `eslint`, and frontend
+production `build` all clean.
+
+### Files Changed
+- `frontend/src/lib/layoutConstants.js`
+- `backend/routes/settings.js`
+- `frontend/src/components/CardCanvas.jsx`
+- `frontend/src/components/LayoutMapper.jsx`
+- `frontend/src/pages/PreviewPage.jsx`
+- `frontend/src/components/PrintPreviewModal.jsx`
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -354,6 +434,7 @@ the real coordinates.
 | `6558846` | Backend/frontend default alignment | Pushed |
 | `56fd929` | Template/Layout/Preview integration + bug sweep | Pushed |
 | `1fdb2b8` | Layout mapper discarding saved layout on async load | Pushed |
+| `2dad3bd` | Card preview system rebuild — one shared layout resolver | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
@@ -374,14 +455,14 @@ frontend/
 │   │   ├── detectZones.test.js      # Tests
 │   │   └── layoutConstants.js       # Shared calibrated layouts
 │   ├── components/
-│   │   ├── LayoutMapper.jsx         # Admin layout editor (redesign pending)
-│   │   ├── CardCanvas.jsx           # Student preview renderer
+│   │   ├── LayoutMapper.jsx         # Admin layout editor + live CardCanvas preview
+│   │   ├── CardCanvas.jsx           # Single rendering path — used by mapper, preview, print
 │   │   ├── NotificationCenter.jsx   # Notification bell + panel
 │   │   └── PrintPreviewModal.jsx    # Uses CardCanvas
 │   └── index.css                    # Notification spacing fix
 backend/
 ├── routes/
-│   ├── settings.js                  # Layout defaults + lazy migration
+│   ├── settings.js                  # Layout storage (raw values; defaults resolved in lib/layoutConstants.js)
 │   └── templates.js                 # Template upload/activate + zone detection
 ├── utils/
 │   └── detectZones.js               # NEW - Sharp-based detection
