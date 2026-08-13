@@ -142,14 +142,27 @@ export const BACK_FIELDS = [
   'valid_until',
 ]
 
-// Check if layout has mapped fields on BOTH front and back
-// Returns true only if both sides have at least one VALID student field (ignores config keys)
-export function isLayoutComplete(layout) {
-  const hasFrontFields = layout?.front && 
-    Object.keys(layout.front).some(key => VALID_LAYOUT_FIELDS.has(key))
-  const hasBackFields = layout?.back && 
-    Object.keys(layout.back).some(key => VALID_LAYOUT_FIELDS.has(key))
-  return hasFrontFields && hasBackFields
+// Resolve one side of a saved layout against its calibrated defaults. A
+// side counts as customized only if it has at least one real field entry
+// (stray config/meta keys don't count) — otherwise its calibrated defaults
+// are used. This is the ONLY place that decision gets made; CardCanvas,
+// the admin's live preview, and the student-facing preview/print pages all
+// call this instead of each re-implementing their own empty-layout check.
+export function resolveLayoutSide(savedSide, defaults) {
+  const hasFields = savedSide && Object.keys(savedSide).some((key) => VALID_LAYOUT_FIELDS.has(key))
+  return hasFields ? savedSide : defaults
+}
+
+// Resolve a full { front, back } saved layout (as returned by
+// GET /api/settings/layout) against the calibrated defaults for each side.
+// Front and back resolve independently — mapping only one side is enough
+// to activate it for that side; the other side just uses defaults until
+// it's mapped too.
+export function resolveCardLayout(saved) {
+  return {
+    front: resolveLayoutSide(saved?.front, CALIBRATED_LAYOUT_FRONT),
+    back: resolveLayoutSide(saved?.back, CALIBRATED_LAYOUT_BACK),
+  }
 }
 
 // Estimated characters per field, used to auto-fit font size to a detected box

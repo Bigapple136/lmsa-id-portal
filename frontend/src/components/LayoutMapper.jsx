@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { detectZonesFromImage } from '../lib/detectZones'
+import CardCanvas from './CardCanvas'
 import {
   CALIBRATED_LAYOUT_FRONT,
   CALIBRATED_LAYOUT_BACK,
@@ -8,6 +9,18 @@ import {
 } from '../lib/layoutConstants'
 
 const DISPLAY_W = 260
+
+// Placeholder data for the live preview panel — never real student data.
+const PREVIEW_STUDENT = {
+  full_name: 'Jane K. Doe',
+  student_id: 'AMD-2024-0001',
+  year_level: '3rd Year',
+  position: 'Class President',
+  blood_type: 'O+',
+  emergency_contact_phone: '+231 77 000 0000',
+  issue_date: new Date().toISOString().slice(0, 10),
+  valid_until: new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10),
+}
 
 // All fields that can be positioned on the card, in display order
 const LAYOUT_FIELD_ORDER = [
@@ -356,15 +369,7 @@ export default function LayoutMapper({
       if (templateUrlFront) payload.front = cleanLayout(frontLayout)
       if (templateUrlBack) payload.back = cleanLayout(backLayout)
       await onSave(payload)
-      const frontHasFields = frontLayout && Object.keys(frontLayout).length > 0
-      const backHasFields = backLayout && Object.keys(backLayout).length > 0
-      const isComplete = frontHasFields && backHasFields
-      setMsg({
-        ok: true,
-        text: isComplete
-          ? '✓ Layout saved and activated for students (both sides mapped)'
-          : '⚠ Layout saved. Complete mapping of both front and back to activate for students.'
-      })
+      setMsg({ ok: true, text: '✓ Layout saved — live for students now.' })
     } catch {
       setMsg({ ok: false, text: 'Failed to save layout.' })
     } finally {
@@ -693,6 +698,32 @@ export default function LayoutMapper({
               </div>
             ))}
           </div>
+        </div>
+
+        {/* ── Live preview: exactly what CardCanvas renders for students,
+            fed straight from this component's own live state so it can
+            never drift from what Save actually persists. ── */}
+        <div style={{ flexShrink: 0 }}>
+          <p
+            style={{
+              fontSize: '11px',
+              color: 'var(--muted)',
+              marginBottom: '8px',
+              lineHeight: '1.5',
+            }}
+          >
+            Live preview — what students see, with sample data. Click it to flip sides.
+          </p>
+          <CardCanvas
+            key={side}
+            initialSide={side}
+            student={PREVIEW_STUDENT}
+            templateUrlFront={templateUrlFront}
+            templateUrlBack={templateUrlBack}
+            layout={{ front: frontLayout, back: backLayout }}
+            fieldSides={fieldSides}
+            maxWidth={DISPLAY_W}
+          />
         </div>
 
         {/* ── Right panel ── */}

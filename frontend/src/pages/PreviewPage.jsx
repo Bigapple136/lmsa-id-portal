@@ -6,7 +6,6 @@ import PrintPreviewModal from '../components/PrintPreviewModal'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
 import { useToast } from '../components/Toast'
-import { isLayoutComplete } from '../lib/layoutConstants'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
@@ -92,16 +91,12 @@ export default function PreviewPage() {
     return { version: 'v2', exp: claims.exp, expInfo, claims }
   }, [token])
 
-  // Check if layout is complete (both front and back have fields mapped)
-  const useCustomLayout = useMemo(
-    () => isLayoutComplete(cardLayout),
-    [cardLayout]
-  )
-
-  // Decide whether to show canvas or fallback based on completeness
+  // CardCanvas resolves front/back independently against calibrated
+  // defaults, so it only needs a template and field-sides to render
+  // something correct — no completeness gate required.
   const useDisplayCanvas = useMemo(
-    () => useCustomLayout && templateUrl && fieldSides,
-    [useCustomLayout, templateUrl, fieldSides]
+    () => Boolean(templateUrl && fieldSides),
+    [templateUrl, fieldSides]
   )
 
   useEffect(() => {
@@ -147,16 +142,10 @@ export default function PreviewPage() {
     }
     if (lRes.status === 'fulfilled' && lRes.value.ok) {
       try {
-        const layout = await lRes.value.json()
-        console.log('[LAYOUT] preview /api/settings/layout response:', layout)
-        console.log('[LAYOUT] preview layout front fields:', Object.keys(layout?.front || {}))
-        console.log('[LAYOUT] preview layout back fields:', Object.keys(layout?.back || {}))
-        setCardLayout(layout)
+        setCardLayout(await lRes.value.json())
       } catch {
-        console.warn('[LAYOUT] preview failed to parse layout JSON')
+        /* layout fetch parsed nothing usable — CardCanvas falls back to defaults */
       }
-    } else {
-      console.warn('[LAYOUT] preview /api/settings/layout request failed:', lRes.status)
     }
     if (qrRes.status === 'fulfilled' && qrRes.value.ok) {
       try {
@@ -165,12 +154,8 @@ export default function PreviewPage() {
     }
     if (fsRes.status === 'fulfilled' && fsRes.value.ok) {
       try {
-        const sides = await fsRes.value.json()
-        console.log('[LAYOUT] preview /api/settings/field-sides response:', sides)
-        setFieldSides(sides)
+        setFieldSides(await fsRes.value.json())
       } catch {}
-    } else {
-      console.warn('[LAYOUT] preview /api/settings/field-sides request failed:', fsRes.status)
     }
   }
 

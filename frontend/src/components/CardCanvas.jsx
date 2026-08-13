@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import IDCardDisplay from './IDCardDisplay'
 import {
-  CALIBRATED_LAYOUT_FRONT,
-  CALIBRATED_LAYOUT_BACK,
   FRONT_FIELD_ORDER,
   BACK_FIELD_ORDER,
+  resolveCardLayout,
 } from '../lib/layoutConstants'
 
 // Master field order used to build the per-side render list from fieldSides
@@ -64,11 +63,11 @@ function getFieldText(field, student) {
   return map[field] || ''
 }
 
-export default function CardCanvas({ student, templateUrl, templateUrlFront, templateUrlBack, layout, fieldSides, maxWidth = 300 }) {
+export default function CardCanvas({ student, templateUrl, templateUrlFront, templateUrlBack, layout, fieldSides, maxWidth = 300, initialSide = 'front' }) {
   const canvasRef = useRef(null)
   const [rendered, setRendered] = useState(false)
   const [failed, setFailed] = useState(false)
-  const [side, setSide] = useState('front') // 'front' | 'back'
+  const [side, setSide] = useState(initialSide) // 'front' | 'back'
   const [isFlipping, setIsFlipping] = useState(false)
 
   // Determine template URL for current side
@@ -76,25 +75,10 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
     ? (templateUrlFront || templateUrl) 
     : (templateUrlBack || templateUrl)
 
-  // Strict mode: the saved admin layout is the ONLY layout the card renders
-  // with. Never merge calibrated defaults back in. Calibrated defaults are
-  // only used when no layout has been saved at all.
-  // FIX: If a side's layout is an empty object (truthy but no fields), use
-  // the defaults instead of rendering a blank side.
-  const resolvedLayout = useMemo(() => {
-    if (!layout) return { front: CALIBRATED_LAYOUT_FRONT, back: CALIBRATED_LAYOUT_BACK }
-    if (layout.front || layout.back) {
-      return {
-        front: (layout.front && Object.keys(layout.front).length > 0) ? layout.front : CALIBRATED_LAYOUT_FRONT,
-        back: (layout.back && Object.keys(layout.back).length > 0) ? layout.back : CALIBRATED_LAYOUT_BACK,
-      }
-    }
-    // Old flat format - use as front only
-    return {
-      front: layout,
-      back: CALIBRATED_LAYOUT_BACK,
-    }
-  }, [layout])
+  // The saved admin layout is what renders, resolved per-side against
+  // calibrated defaults by the single shared resolver (see
+  // lib/layoutConstants.js) — front and back activate independently.
+  const resolvedLayout = useMemo(() => resolveCardLayout(layout), [layout])
 
   const currentLayout = resolvedLayout[side]
   // Render only fields assigned to this side (front | back | both). When
@@ -106,10 +90,6 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
     )
   }, [fieldSides, side])
 
-  console.log('[LAYOUT] CardCanvas props — layout:', layout, 'fieldSides:', fieldSides, 'side:', side)
-  console.log('[LAYOUT] CardCanvas resolvedLayout:', resolvedLayout)
-  console.log('[LAYOUT] CardCanvas currentLayout:', currentLayout)
-  console.log('[LAYOUT] CardCanvas fieldOrder:', fieldOrder)
   const flipCard = useCallback(() => {
     if (isFlipping) return
     setIsFlipping(true)

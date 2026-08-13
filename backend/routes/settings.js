@@ -49,98 +49,6 @@ const DEFAULT_FIELD_SIDES = {
   valid_until: 'back',
 }
 
-const DEFAULT_LAYOUT_FRONT = {
-  photo: { x: 0.1271, y: 0.1673, width: 0.7458, height: 0.3287, type: 'image' },
-  full_name: {
-    x: 0.5,
-    y: 0.5896,
-    fontSize: 0.0678,
-    color: '#1A1A1A',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.88,
-  },
-  student_id: {
-    x: 0.2441,
-    y: 0.6614,
-    fontSize: 0.0576,
-    color: '#CC0000',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.5,
-  },
-  position: {
-    x: 0.5,
-    y: 0.7231,
-    fontSize: 0.0508,
-    color: '#1A1A1A',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.7,
-  },
-  year_level: {
-    x: 0.0593,
-    y: 0.7749,
-    fontSize: 0.0508,
-    color: '#1A1A1A',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.5,
-  },
-  signature: { x: 0.5254, y: 0.8386, width: 0.3898, height: 0.0896, type: 'image' },
-  qr: { x: 0.0593, y: 0.8187, width: 0.2542, height: 0.1394, type: 'image' },
-}
-
-// Keep in sync with frontend/src/lib/layoutConstants.js
-
-const DEFAULT_LAYOUT_BACK = {
-  qr: { x: 0.1, y: 0.13, width: 0.35, height: 0.3, type: 'image' },
-  blood_type: {
-    x: 0.5,
-    y: 0.15,
-    fontSize: 0.05,
-    color: '#CC0000',
-    bold: true,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  emergency_contact_phone: {
-    x: 0.5,
-    y: 0.34,
-    fontSize: 0.04,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  issue_date: {
-    x: 0.5,
-    y: 0.58,
-    fontSize: 0.04,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-  valid_until: {
-    x: 0.5,
-    y: 0.66,
-    fontSize: 0.04,
-    color: '#1A1A1A',
-    bold: false,
-    textAlign: 'center',
-    type: 'text',
-    maxWidth: 0.8,
-  },
-}
-
 // ── PUBLIC reads ──
 // Note: these settings are NOT cached in-process. With multiple cluster
 // workers each holding their own MemoryCache, a write handled by one worker
@@ -206,33 +114,28 @@ router.get('/layout', async (req, res) => {
       ? await supabase.from('portal_settings').select('value').eq('key', 'card_layout').maybeSingle()
       : { data: null }
 
-    let frontLayout = frontData?.data?.value
-    let backLayout = backData?.data?.value
+    let frontLayout = frontData?.data?.value || null
+    const backLayout = backData?.data?.value || null
 
-    // Lazy migration: if legacy layout exists but front/back don't, migrate it
+    // One-time migration: an old flat card_layout row (pre front/back split)
+    // becomes the front layout. Back is left unmapped — the frontend
+    // resolves it to calibrated defaults until the admin maps it for real.
     if (legacyData?.data?.value && (!frontLayout || !backLayout)) {
       frontLayout = legacyData.data.value
-      backLayout = backLayout || DEFAULT_LAYOUT_BACK
 
-      // Async migration: write front/back, then delete legacy (fire-and-forget)
       supabase.from('portal_settings').upsert([
         { key: 'card_layout_front', value: frontLayout, updated_at: new Date().toISOString() },
-        { key: 'card_layout_back', value: backLayout, updated_at: new Date().toISOString() },
       ]).then(() => {
         supabase.from('portal_settings').delete().eq('key', 'card_layout')
       }).catch(() => { /* ignore migration errors */ })
     }
 
-    // FIX: Ensure we never return empty layout objects that would render blank
-    // If a layout exists but is empty, use the defaults
-    const frontResult = (frontLayout && Object.keys(frontLayout).length > 0) ? frontLayout : DEFAULT_LAYOUT_FRONT
-    const backResult = (backLayout && Object.keys(backLayout).length > 0) ? backLayout : DEFAULT_LAYOUT_BACK
-    const result = {
-      front: frontResult,
-      back: backResult,
-    }
-    logger.debug({ keys: { front: Object.keys(frontLayout || {}).length, back: Object.keys(backLayout || {}).length } }, 'Layout GET response')
-    res.json(result)
+    // Return the saved layout as-is — null for a side the admin hasn't
+    // mapped yet. Falling back to calibrated defaults is a rendering
+    // decision made once, by resolveCardLayout on the frontend, not
+    // duplicated here — so an actually-empty save is visible instead of
+    // silently masked as "working".
+    res.json({ front: frontLayout, back: backLayout })
   } catch (err) {
     logger.error({ err }, 'Settings GET /layout error')
     res.status(500).json({ error: 'Failed to load settings.' })
@@ -338,19 +241,11 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     if (front !== undefined) {
       const cfgErr = checkLayoutConfig(front)
       if (cfgErr) return res.status(400).json({ error: `Front layout: ${cfgErr}` })
-      // Warn if layout is empty or very small
-      if (Object.keys(front || {}).length === 0) {
-        logger.warn('Front layout is empty - admin may have accidentally saved blank layout')
-      }
     }
     // Validate back layout
     if (back !== undefined) {
       const cfgErr = checkLayoutConfig(back)
       if (cfgErr) return res.status(400).json({ error: `Back layout: ${cfgErr}` })
-      // Warn if layout is empty or very small
-      if (Object.keys(back || {}).length === 0) {
-        logger.warn('Back layout is empty - admin may have accidentally saved blank layout')
-      }
     }
 
     // If old format (flat), treat as front only
@@ -360,8 +255,6 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     // Filter out config keys (fontFamily, logoPosition, etc) - keep only valid student fields
     frontLayout = cleanLayout(frontLayout)
     backLayout = cleanLayout(backLayout)
-
-    logger.info({ frontFields: Object.keys(frontLayout || {}).length, backFields: Object.keys(backLayout || {}).length, hasBack: !!backLayout }, 'Layout PUT: saving layout')
 
     const updates = []
     if (frontLayout !== undefined) {
@@ -391,9 +284,11 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     const savedFront = results[0]?.data?.value
     const savedBack = results[1]?.data?.value
 
-    logger.info({ savedFrontFields: Object.keys(savedFront || {}).length, savedBackFields: Object.keys(savedBack || {}).length }, 'Layout PUT: saved successfully')
-    const result = { front: savedFront, back: savedBack }
-    res.json(result)
+    logger.info(
+      { frontFields: Object.keys(savedFront || {}).length, backFields: Object.keys(savedBack || {}).length },
+      'Layout PUT: saved',
+    )
+    res.json({ front: savedFront, back: savedBack })
   } catch (err) {
     logger.error({ err }, 'Settings PUT /layout error')
     res.status(500).json({ error: 'Failed to save settings.' })
