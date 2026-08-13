@@ -424,6 +424,60 @@ production `build` all clean.
 
 ---
 
+## 10. Fix: renew-cohort No Longer Auto-Confirms; Analytics Counts Real Confirmations Only (commit `0cae9d5`)
+
+### Problem
+Students were showing as "Confirmed" in the Overview stat card and status
+doughnut with zero students having actually gone through the confirm
+flow.
+
+### Root Cause
+Every writer of `students.status = 'confirmed'` was traced. There were
+three: a student confirming their own card, an admin manually confirming
+one, and `PUT /api/students/renew-cohort` (the Settings > Card expiry /
+renewal tool), which stamped `status: 'confirmed'` on every student in
+the chosen year level as a side effect of extending `valid_until`,
+unconditionally and regardless of whether that student had ever seen
+their preview link. This was documented in the Settings UI copy itself,
+so it was intentional, just conflating two unrelated concerns: "the card
+is still valid" and "the student reviewed and confirmed it's correct."
+Running the renewal tool for a cohort was the actual explanation for the
+reported symptom.
+
+Separately, `GET /api/analytics` counted every row in the `confirmations`
+activity-log table as a confirmation, including `'issue'`,
+`'photo_issue'`, and `'self_corrected'` actions logged by the student
+self-correct flow (`students.js`). Not wired into any current UI, but
+wrong regardless of whether it's displayed.
+
+### Solution
+- `renew-cohort` now only updates `valid_until`; confirmation status is
+  untouched. Settings copy updated to match.
+- `GET /api/analytics`'s confirmations count now filters
+  `.eq('action', 'confirmed')`.
+
+### Operational Note
+This stops future auto-confirms; it does not retroactively fix students
+already renewed under the old behavior, who still have
+`status = 'confirmed'` in the DB. If none of those students have
+separately confirmed for real, this resets them:
+
+```sql
+update students set status = 'pending', confirmed_at = null
+where status = 'confirmed';
+```
+
+Skip it if there's any chance some of those students separately clicked
+confirm for real, since it can't distinguish the two — let those
+students re-confirm naturally instead.
+
+### Files Changed
+- `backend/routes/students.js`
+- `backend/routes/analytics.js`
+- `frontend/src/pages/AdminDashboard.jsx`
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -435,6 +489,7 @@ production `build` all clean.
 | `56fd929` | Template/Layout/Preview integration + bug sweep | Pushed |
 | `1fdb2b8` | Layout mapper discarding saved layout on async load | Pushed |
 | `2dad3bd` | Card preview system rebuild — one shared layout resolver | Pushed |
+| `0cae9d5` | renew-cohort no longer auto-confirms; analytics counts real confirmations only | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
