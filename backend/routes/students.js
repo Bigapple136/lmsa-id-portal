@@ -12,6 +12,7 @@ const { enqueueImport } = require('../queue')
 const { email, maxLength } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 const logger = require('../logger')
+const { logAdminAction } = require('../auditLog')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
 
@@ -254,7 +255,7 @@ router.delete('/:studentId', requireAdmin, requireFullAdmin, async (req, res) =>
 
   const { data: student, error: fetchErr } = await supabase
     .from('students')
-    .select('student_id, year_level')
+    .select('student_id, full_name, year_level')
     .eq('student_id', studentId)
     .maybeSingle()
 
@@ -280,6 +281,14 @@ router.delete('/:studentId', requireAdmin, requireFullAdmin, async (req, res) =>
   if (deleteErr) return res.status(500).json({ error: 'Failed to delete student.' })
 
   await supabase.from('confirmations').delete().eq('student_id', studentId)
+
+  // Capture identifying info now — target_id alone is useless to look up
+  // once the record is actually gone.
+  await logAdminAction(req, 'student_delete', {
+    targetType: 'student',
+    targetId: studentId,
+    details: { full_name: student.full_name, year_level: student.year_level },
+  })
 
   res.status(204).send()
 })
@@ -969,6 +978,11 @@ router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => 
     .eq('year_level', year_level)
     .select()
   if (error) return res.status(500).json({ error: error.message })
+  await logAdminAction(req, 'renew_cohort', {
+    targetType: 'cohort',
+    targetId: year_level,
+    details: { new_valid_until, affected_count: data?.length || 0 },
+  })
   res.json({ renewed: data?.length || 0 })
 })
 

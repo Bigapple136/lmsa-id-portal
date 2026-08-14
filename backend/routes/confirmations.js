@@ -3,6 +3,7 @@ const router = express.Router()
 const { supabase } = require('../db')
 const { requireAdmin } = require('../middleware/auth')
 const { verifyStudentToken } = require('./qr')
+const { logAdminAction } = require('../auditLog')
 
 const ALLOWED_ACTIONS = ['confirmed', 'issue']
 const MAX_NOTE_LENGTH = 1000
@@ -85,6 +86,12 @@ router.post('/', requireAdmin, async (req, res) => {
     .from('confirmations')
     .insert({ student_id, action, note: note?.slice(0, MAX_NOTE_LENGTH) || null })
   if (confError) return res.status(400).json({ error: confError.message })
+
+  await logAdminAction(req, 'manual_confirmation', {
+    targetType: 'student',
+    targetId: student_id,
+    details: { action, note: note || null },
+  })
 
   res.json({ success: true, status: newStatus })
 })

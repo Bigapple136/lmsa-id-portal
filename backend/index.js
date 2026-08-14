@@ -25,6 +25,7 @@ const submissionsRouter = require('./routes/submissions')
 const backupRouter = require('./routes/backup')
 const notificationsRouter = require('./routes/notifications')
 const analyticsRouter = require('./routes/analytics')
+const adminActionsRouter = require('./routes/adminActions')
 
 const app = express()
 
@@ -145,6 +146,7 @@ app.use('/api/submissions', submissionsRouter)
 app.use('/api/backup', backupRouter)
 app.use('/api/notifications', notificationsRouter)
 app.use('/api/analytics', analyticsRouter)
+app.use('/api/admin-actions', adminActionsRouter)
 
 app.get('/api/auth/me', requireAdmin, async (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, role: req.userRole })

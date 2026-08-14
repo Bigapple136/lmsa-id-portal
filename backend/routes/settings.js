@@ -11,6 +11,7 @@ const {
   checkLayoutConfig,
 } = require('../middleware/validate')
 const logger = require('../logger')
+const { logAdminAction } = require('../auditLog')
 
 const DEFAULT_FIELDS = {
   full_name: { label: 'Full Name', enabled: true, locked: false },
@@ -228,6 +229,39 @@ function cleanLayout(layout) {
   return cleaned
 }
 
+const LAYOUT_HISTORY_RETENTION = 20
+
+// Records a layout_history row for one side, then prunes anything beyond
+// the most recent LAYOUT_HISTORY_RETENTION entries for that side. Never
+// throws — a history-recording hiccup must never break the save it's
+// recording.
+async function recordLayoutHistory(side, value, req) {
+  try {
+    const { error } = await supabase.from('layout_history').insert({
+      side,
+      value,
+      saved_by: req.user?.id || null,
+      saved_by_email: req.user?.email || null,
+    })
+    if (error) {
+      logger.error({ err: error, side }, 'Failed to record layout history')
+      return
+    }
+    const { data: cutoffRow } = await supabase
+      .from('layout_history')
+      .select('created_at')
+      .eq('side', side)
+      .order('created_at', { ascending: false })
+      .range(LAYOUT_HISTORY_RETENTION - 1, LAYOUT_HISTORY_RETENTION - 1)
+      .maybeSingle()
+    if (cutoffRow?.created_at) {
+      await supabase.from('layout_history').delete().eq('side', side).lt('created_at', cutoffRow.created_at)
+    }
+  } catch (err) {
+    logger.error({ err, side }, 'Failed to record layout history')
+  }
+}
+
 router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
   try {
     // Accept both old format (flat layout) and new format { front, back }
@@ -286,6 +320,24 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
     const savedFront = results[0]?.data?.value
     const savedBack = results[1]?.data?.value
 
+    // History is recorded from what was actually persisted (not the raw
+    // request body), so a revert always replays a value that really was
+    // live at some point.
+    const historyWrites = []
+    if (savedFront !== undefined) historyWrites.push(recordLayoutHistory('front', savedFront, req))
+    if (savedBack !== undefined) historyWrites.push(recordLayoutHistory('back', savedBack, req))
+    await Promise.all(historyWrites)
+
+    const savedSides = [savedFront !== undefined && 'front', savedBack !== undefined && 'back'].filter(Boolean)
+    await logAdminAction(req, 'layout_save', {
+      targetType: 'layout',
+      targetId: savedSides.join('+') || null,
+      details: {
+        frontFields: savedFront ? Object.keys(savedFront) : undefined,
+        backFields: savedBack ? Object.keys(savedBack) : undefined,
+      },
+    })
+
     logger.info(
       { frontFields: Object.keys(savedFront || {}).length, backFields: Object.keys(savedBack || {}).length },
       'Layout PUT: saved',
@@ -294,6 +346,68 @@ router.put('/layout', requireAdmin, requireFullAdmin, async (req, res) => {
   } catch (err) {
     logger.error({ err }, 'Settings PUT /layout error')
     res.status(500).json({ error: 'Failed to save settings.' })
+  }
+})
+
+// GET /api/settings/layout/history?side=front&limit=10
+// Recent saved layouts for one side, most recent first. side is required
+// since history/retention is tracked per side.
+router.get('/layout/history', requireAdmin, async (req, res) => {
+  try {
+    const { side } = req.query
+    if (side !== 'front' && side !== 'back') {
+      return res.status(400).json({ error: 'side must be "front" or "back".' })
+    }
+    const limit = Math.min(Number(req.query.limit) || LAYOUT_HISTORY_RETENTION, LAYOUT_HISTORY_RETENTION)
+    const { data, error } = await supabase
+      .from('layout_history')
+      .select('id, value, saved_by_email, created_at')
+      .eq('side', side)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) return res.status(500).json({ error: error.message })
+    res.json(data || [])
+  } catch (err) {
+    logger.error({ err }, 'GET /layout/history error')
+    res.status(500).json({ error: 'Failed to load layout history.' })
+  }
+})
+
+// POST /api/settings/layout/history/:id/revert
+// Re-applies a past layout_history entry as the current layout for its
+// side. This is itself just another save: it goes through cleanLayout,
+// gets its own new layout_history entry (so the revert joins the
+// timeline instead of erasing it), and is logged as an admin action.
+router.post('/layout/history/:id/revert', requireAdmin, requireFullAdmin, async (req, res) => {
+  try {
+    const { data: entry, error: fetchErr } = await supabase
+      .from('layout_history')
+      .select('id, side, value')
+      .eq('id', req.params.id)
+      .maybeSingle()
+    if (fetchErr) return res.status(500).json({ error: fetchErr.message })
+    if (!entry) return res.status(404).json({ error: 'History entry not found.' })
+
+    const cleaned = cleanLayout(entry.value)
+    const key = entry.side === 'front' ? 'card_layout_front' : 'card_layout_back'
+    const { data: saved, error: saveErr } = await supabase
+      .from('portal_settings')
+      .upsert({ key, value: cleaned, updated_at: new Date().toISOString() })
+      .select()
+      .single()
+    if (saveErr) return res.status(500).json({ error: saveErr.message })
+
+    await recordLayoutHistory(entry.side, cleaned, req)
+    await logAdminAction(req, 'layout_revert', {
+      targetType: 'layout',
+      targetId: entry.side,
+      details: { revertedToHistoryId: entry.id, fields: Object.keys(cleaned) },
+    })
+
+    res.json({ side: entry.side, value: saved?.value })
+  } catch (err) {
+    logger.error({ err }, 'POST /layout/history/:id/revert error')
+    res.status(500).json({ error: 'Failed to revert layout.' })
   }
 })
 
