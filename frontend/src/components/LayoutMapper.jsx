@@ -158,6 +158,8 @@ export default function LayoutMapper({
   suggestedLayoutBack,
   onSaveFieldSides,
   fieldSides: initialFieldSides,
+  onLoadLayoutHistory,
+  onRevertLayout,
 }) {
   const [side, setSide] = useState('front') // 'front' | 'back'
 
@@ -197,6 +199,10 @@ export default function LayoutMapper({
   const [activeZone, setActiveZone] = useState(null)
   const [autoMap, setAutoMap] = useState(null) // { side, layout, rows }
   const [fieldSidesOpen, setFieldSidesOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [revertingId, setRevertingId] = useState(null)
   const containerRef = useRef(null)
 
   const templateUrl = side === 'front' ? templateUrlFront : templateUrlBack
@@ -371,10 +377,45 @@ export default function LayoutMapper({
       if (templateUrlBack) payload.back = cleanLayout(backLayout)
       await onSave(payload)
       setMsg({ ok: true, text: '✓ Layout saved — live for students now.' })
+      if (historyOpen) loadHistory()
     } catch {
       setMsg({ ok: false, text: 'Failed to save layout.' })
     } finally {
       setSaving(false)
+      setTimeout(() => setMsg(null), 2500)
+    }
+  }
+
+  // ── Version history ──
+  const loadHistory = useCallback(async () => {
+    if (!onLoadLayoutHistory) return
+    setHistoryLoading(true)
+    try {
+      setHistory((await onLoadLayoutHistory(side)) || [])
+    } catch {
+      setHistory([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [onLoadLayoutHistory, side])
+
+  useEffect(() => {
+    if (historyOpen) loadHistory()
+  }, [historyOpen, side, loadHistory])
+
+  async function handleRevert(entry) {
+    if (!onRevertLayout) return
+    setRevertingId(entry.id)
+    try {
+      const { side: revertedSide, value } = await onRevertLayout(entry.id)
+      if (revertedSide === 'front') setFrontLayout({ ...CALIBRATED_LAYOUT_FRONT, ...value })
+      else setBackLayout({ ...CALIBRATED_LAYOUT_BACK, ...value })
+      setMsg({ ok: true, text: `✓ Reverted to ${new Date(entry.created_at).toLocaleString()}` })
+      loadHistory()
+    } catch {
+      setMsg({ ok: false, text: 'Failed to revert.' })
+    } finally {
+      setRevertingId(null)
       setTimeout(() => setMsg(null), 2500)
     }
   }
@@ -784,6 +825,98 @@ export default function LayoutMapper({
               </>
             )}
           </div>
+
+          {/* Version history */}
+          {onLoadLayoutHistory && (
+            <div
+              style={{
+                background: 'var(--bg)',
+                border: '0.5px solid var(--border)',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '12px',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setHistoryOpen((v) => !v)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--text)',
+                  marginBottom: historyOpen ? '4px' : 0,
+                }}
+              >
+                Version history
+                <span
+                  style={{
+                    fontSize: '10px',
+                    color: 'var(--muted)',
+                    transform: historyOpen ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 0.15s ease',
+                  }}
+                >
+                  ▾
+                </span>
+              </button>
+              {historyOpen && (
+                <>
+                  <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', lineHeight: '1.5' }}>
+                    Recent saves for the {side} side. Reverting applies that version and saves it again.
+                  </p>
+                  {historyLoading ? (
+                    <p style={{ fontSize: '11px', color: 'var(--muted)' }}>Loading…</p>
+                  ) : history.length === 0 ? (
+                    <p style={{ fontSize: '11px', color: 'var(--muted)' }}>No saved versions yet.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                      {history.map((entry, i) => (
+                        <div
+                          key={entry.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            fontSize: '11px',
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ color: 'var(--text)' }}>
+                              {new Date(entry.created_at).toLocaleString()}
+                              {i === 0 && <span style={{ color: 'var(--muted)' }}> (current)</span>}
+                            </div>
+                            {entry.saved_by_email && (
+                              <div style={{ color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {entry.saved_by_email}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-outline"
+                            disabled={i === 0 || revertingId === entry.id}
+                            onClick={() => handleRevert(entry)}
+                            style={{ fontSize: '10px', padding: '4px 8px', flexShrink: 0 }}
+                          >
+                            {revertingId === entry.id ? 'Reverting…' : 'Revert'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {activeZone !== null && zones[activeZone] && (
             <div
