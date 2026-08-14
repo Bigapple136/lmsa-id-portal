@@ -2711,7 +2711,7 @@ export default function AdminDashboard() {
                                 onClick={async () => {
                                   try {
                                     const res = await fetch(
-                                      `${import.meta.env.VITE_API_URL || ''}/api/students/preview-url/${encodeURIComponent(s.student_id)}`,
+                                      `/api/students/preview-url/${encodeURIComponent(s.student_id)}`,
                                       {
                                         headers: {
                                           Authorization: `Bearer ${session.access_token}`,
@@ -2741,7 +2741,7 @@ export default function AdminDashboard() {
                                 onClick={async () => {
                                   try {
                                     const res = await fetch(
-                                      `${import.meta.env.VITE_API_URL || ''}/api/qr/verification-url/${encodeURIComponent(s.student_id)}`,
+                                      `/api/qr/verification-url/${encodeURIComponent(s.student_id)}`,
                                       {
                                         headers: {
                                           Authorization: `Bearer ${session.access_token}`,

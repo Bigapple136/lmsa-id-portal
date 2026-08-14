@@ -1,10 +1,15 @@
 // Central API helper
 // In dev: uses relative /api paths (proxied by Vite to localhost:4000)
-// In production: uses VITE_API_URL env var pointing to Render backend
+// In production: uses relative /api paths, which Vercel rewrites (see
+// vercel.json) to the Render backend. Keeping every request on the
+// frontend's OWN origin is what stops campus firewalls / ISP / privacy
+// blockers from blocking the cross-origin onrender.com API — the original
+// cause of "Unable to load the form" / "Failed to load resource". We no
+// longer point API calls at an absolute backend URL.
 
 import { supabase } from './supabase'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
+const API_BASE = ''
 const REQUEST_TIMEOUT = 45000
 
 function withTimeout(signal, ms) {

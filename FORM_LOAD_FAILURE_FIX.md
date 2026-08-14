@@ -137,3 +137,39 @@ rate limiting is preserved. If that ever resolves to Vercel's IP instead, the
 per-IP limits would pool all students together — the generous `publicReadLimiter`
 (3000) keeps the form-load reads safe in that case.
 
+---
+
+# Round 3 — same symptom on the landing-page ID card view
+
+## Confirmation, not a new bug
+A report came in: students visiting the landing page to view their ID card got
+`Failed to load resource: lmsa-id-portal.onrender.com`. This is the **same root
+cause** — the ID card view (`PreviewPage.jsx`) loads the card via `apiFetch(...)`
+→ `API_BASE = VITE_API_URL = https://lmsa-id-portal.onrender.com` → a cross-origin
+`fetch` blocked on restrictive networks. The card *images* (template, photo, QR)
+all come from **Supabase Storage** (`*.supabase.co`, allowed by the CSP
+`img-src`), so those are not the failing resource — the failing resource is the
+API `fetch` itself, which is exactly why the console names `onrender.com`.
+
+So the Round 2 fix (Vercel proxy + rate limiter) covers **both** the submission
+form and the landing-page card view.
+
+## Hardening so the fix can't be bypassed
+To remove any reliance on clearing `VITE_API_URL`, the frontend now forces
+same-origin relative paths regardless of that env var:
+- `frontend/src/lib/api.js`: `API_BASE` is now `''` (always relative). All
+  `apiFetch`/`adminFetch` calls go to `/api/*` on the frontend's own origin.
+- `frontend/src/pages/AdminDashboard.jsx`: the two raw `fetch` calls for
+  `preview-url` / `verification-url` now use relative `/api/...` paths instead of
+  `import.meta.env.VITE_API_URL || ''`.
+
+With this, the Vercel proxy is always used — clearing `VITE_API_URL` is no longer
+*required* (but still harmless). Deploying the new frontend is sufficient.
+
+## Remaining edge case (admin-only, out of scope for the student report)
+`backend/routes/qr.js:197` returns `${BACKEND_URL}/api/qr/html/${token}` for the
+admin "verification URL", which `AdminDashboard` opens via `window.open`. On a
+restrictive network that admin link would still open `onrender.com` cross-origin.
+Low impact (few admin users, usually unblocked networks). Fix later by making that
+URL relative (`/api/qr/html/${token}`) so it also flows through the proxy.
+
