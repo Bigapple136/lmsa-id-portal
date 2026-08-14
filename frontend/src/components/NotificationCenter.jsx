@@ -206,6 +206,36 @@ export default function NotificationCenter() {
     }
   }
 
+  async function deleteOne(id) {
+    try {
+      const res = await adminFetch(`/api/notifications/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setNotifications((prev) => {
+          const target = prev.find((n) => n.id === id)
+          if (target && !target.is_read_by_me) setUnread((u) => Math.max(0, u - 1))
+          return prev.filter((n) => n.id !== id)
+        })
+        setTotal((prev) => Math.max(0, prev - 1))
+      }
+    } catch {
+      // silent
+    }
+  }
+
+  async function clearAll() {
+    try {
+      const res = await adminFetch('/api/notifications', { method: 'DELETE' })
+      if (res.ok) {
+        setNotifications([])
+        setUnread(0)
+        setTotal(0)
+        setOffset(0)
+      }
+    } catch {
+      // silent
+    }
+  }
+
   function loadMore() {
     if (loading || notifications.length >= total) return
     fetchNotifications(offset, true)
@@ -237,11 +267,18 @@ export default function NotificationCenter() {
         <div ref={panelRef} className="nc-panel">
           <div className="nc-header">
             <span className="nc-title">Notifications</span>
-            {unread > 0 && (
-              <button className="nc-mark-read" onClick={markAllRead}>
-                Mark all as read
-              </button>
-            )}
+            <div className="nc-header-actions">
+              {unread > 0 && (
+                <button className="nc-mark-read" onClick={markAllRead}>
+                  Mark all as read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button className="nc-clear" onClick={clearAll} title="Clear all notifications">
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Type filter tabs */}
@@ -278,18 +315,30 @@ export default function NotificationCenter() {
                   <div className="nc-item-msg">{n.message}</div>
                   <div className="nc-item-time">{timeAgo(n.created_at)}</div>
                 </div>
-                {!n.is_read_by_me && (
+                <div className="nc-item-actions">
+                  {!n.is_read_by_me && (
+                    <button
+                      className="nc-read-btn"
+                      onClick={() => markRead(n.id)}
+                      aria-label="Mark as read"
+                      title="Mark as read"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 4L4 12M4 4l8 8" />
+                      </svg>
+                    </button>
+                  )}
                   <button
-                    className="nc-read-btn"
-                    onClick={() => markRead(n.id)}
-                    aria-label="Mark as read"
-                    title="Mark as read"
+                    className="nc-delete-btn"
+                    onClick={() => deleteOne(n.id)}
+                    aria-label="Delete notification"
+                    title="Delete notification"
                   >
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 4L4 12M4 4l8 8" />
+                      <path d="M2 4h12M6 4V2h4v2M4 4l1 10h6l1-10" />
                     </svg>
                   </button>
-                )}
+                </div>
               </div>
             ))}
             {loading && <div className="nc-loading">Loading...</div>}
