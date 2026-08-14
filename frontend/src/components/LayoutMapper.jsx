@@ -196,6 +196,7 @@ export default function LayoutMapper({
   const [zonesLoading, setZonesLoading] = useState(false)
   const [activeZone, setActiveZone] = useState(null)
   const [autoMap, setAutoMap] = useState(null) // { side, layout, rows }
+  const [fieldSidesOpen, setFieldSidesOpen] = useState(false)
   const containerRef = useRef(null)
 
   const templateUrl = side === 'front' ? templateUrlFront : templateUrlBack
@@ -714,43 +715,74 @@ export default function LayoutMapper({
               marginBottom: '12px',
             }}
           >
-            <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)', marginBottom: '4px' }}>
+            <button
+              type="button"
+              onClick={() => setFieldSidesOpen((v) => !v)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600',
+                color: 'var(--text)',
+                marginBottom: fieldSidesOpen ? '4px' : 0,
+              }}
+            >
               Field sides
-            </div>
-            <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', lineHeight: '1.5' }}>
-              Choose which side each field is printed on.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {LAYOUT_FIELD_ORDER.map((f) => (
-                <div
-                  key={f}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{
+                  fontSize: '10px',
+                  color: 'var(--muted)',
+                  transform: fieldSidesOpen ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.15s ease',
+                }}
+              >
+                ▾
+              </span>
+            </button>
+            {fieldSidesOpen && (
+              <>
+                <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', lineHeight: '1.5' }}>
+                  Choose which side each field is printed on.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {LAYOUT_FIELD_ORDER.map((f) => (
                     <div
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '2px',
-                        background: FIELD_META[f].color,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span style={{ fontSize: '11px', color: 'var(--text)' }}>{FIELD_META[f].label}</span>
-                  </div>
-                  <select
-                    className="field-input"
-                    value={fieldSides[f] || 'front'}
-                    onChange={(e) => assignSide(f, e.target.value)}
-                    style={{ fontSize: '11px', padding: '4px 6px', flexShrink: 0 }}
-                  >
-                    <option value="front">Front</option>
-                    <option value="back">Back</option>
-                    <option value="both">Both</option>
-                  </select>
+                      key={f}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '2px',
+                            background: FIELD_META[f].color,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span style={{ fontSize: '11px', color: 'var(--text)' }}>{FIELD_META[f].label}</span>
+                      </div>
+                      <select
+                        className="field-input"
+                        value={fieldSides[f] || 'front'}
+                        onChange={(e) => assignSide(f, e.target.value)}
+                        style={{ fontSize: '11px', padding: '4px 6px', flexShrink: 0 }}
+                      >
+                        <option value="front">Front</option>
+                        <option value="back">Back</option>
+                        <option value="both">Both</option>
+                      </select>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
 
           {activeZone !== null && zones[activeZone] && (
