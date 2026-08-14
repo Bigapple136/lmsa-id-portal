@@ -994,13 +994,14 @@ router.get('/export/card-design', requireAdmin, async (req, res) => {
     const grouped = {}
     for (const s of students) (grouped[s.year_level] ||= []).push(s)
 
+    // Front-facing details. Photo & signature are intentionally excluded — the
+    // design team only needs the textual layout, and embedding images was the
+    // cause of docx packing failures (unsupported formats like webp/heic).
     const fieldsFront = [
-      { key: 'photo', label: 'Photo', image: true },
       { key: 'full_name', label: 'Full Name' },
       { key: 'student_id', label: 'Student ID' },
       { key: 'year_level', label: 'Year Level' },
       { key: 'position', label: 'Position', enabled: cardFields.position?.enabled },
-      { key: 'signature', label: 'Signature', image: true },
     ]
     const fieldsBack = [
       { key: 'qr', label: 'QR Code', image: true },
@@ -1046,22 +1047,20 @@ router.get('/export/card-design', requireAdmin, async (req, res) => {
       }
     }
 
-    async function fieldParagraphs(fields, student) {
+    async function fieldParagraphs(fields, student, skipImages) {
       const paras = []
       for (const f of fields) {
         if (f.image) {
+          if (skipImages) {
+            paras.push(new Paragraph({ children: [new TextRun(`${f.label}: (image omitted)`)] }))
+            continue
+          }
           const img = await fetchImage(student[f.key])
           if (img) {
             paras.push(
               new Paragraph({ children: [new TextRun({ text: `${f.label}: `, bold: true })] }),
               new Paragraph({
-                children: [
-                  new ImageRun({
-                    data: img.data,
-                    type: img.type,
-                    transformation: { width: f.key === 'qr' ? 90 : 80, height: f.key === 'qr' ? 90 : 107 },
-                  }),
-                ],
+                children: [new ImageRun({ data: img.data, type: img.type, transformation: { width: 90, height: 90 } })],
               }),
             )
           } else {
@@ -1090,62 +1089,75 @@ router.get('/export/card-design', requireAdmin, async (req, res) => {
       return paras
     }
 
-    const children = [
-      new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun('LMSA ID Card — Design Roster')] }),
-      new Paragraph({
-        children: [
-          new TextRun(
-            `Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
-          ),
-        ],
-      }),
-      new Paragraph({ text: '' }),
-    ]
-
-    for (const year of yearOrder) {
-      const list = grouped[year]
-      if (!list?.length) continue
-      children.push(
-        new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(`${year} — ${list.length} student(s)`)] }),
-      )
-      for (const s of list) {
-        const frontParas = await fieldParagraphs(fieldsFront, s)
-        const backParas = await fieldParagraphs(fieldsBack, s)
+    async function buildChildren(skipImages) {
+      const children = [
+        new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun('LMSA ID Card — Design Roster')] }),
+        new Paragraph({
+          children: [
+            new TextRun(
+              `Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+            ),
+          ],
+        }),
+        new Paragraph({ text: '' }),
+      ]
+      for (const year of yearOrder) {
+        const list = grouped[year]
+        if (!list?.length) continue
         children.push(
-          new Paragraph({ children: [new TextRun({ text: `${s.full_name} — ${s.student_id} — ${s.year_level || ''}`, bold: true })] }),
-          new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE },
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({ shading: { fill: 'D9E2F3' }, children: [new Paragraph({ children: [new TextRun({ text: 'FRONT OF CARD', bold: true })] })] }),
-                  new TableCell({ shading: { fill: 'FCE4D6' }, children: [new Paragraph({ children: [new TextRun({ text: 'BACK OF CARD', bold: true })] })] }),
-                ],
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({ children: frontParas }),
-                  new TableCell({ children: backParas }),
-                ],
-              }),
-            ],
-          }),
-          new Paragraph({ text: '' }),
+          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(`${year} — ${list.length} student(s)`)] }),
         )
+        for (const s of list) {
+          const frontParas = await fieldParagraphs(fieldsFront, s, skipImages)
+          const backParas = await fieldParagraphs(fieldsBack, s, skipImages)
+          children.push(
+            new Paragraph({ children: [new TextRun({ text: `${s.full_name} — ${s.student_id} — ${s.year_level || ''}`, bold: true })] }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({ shading: { fill: 'D9E2F3' }, children: [new Paragraph({ children: [new TextRun({ text: 'FRONT OF CARD', bold: false })] })] }),
+                    new TableCell({ shading: { fill: 'FCE4D6' }, children: [new Paragraph({ children: [new TextRun({ text: 'BACK OF CARD', bold: false })] })] }),
+                  ],
+                }),
+                new TableRow({
+                  children: [new TableCell({ children: frontParas }), new TableCell({ children: backParas })],
+                }),
+              ],
+            }),
+            new Paragraph({ text: '' }),
+          )
+        }
       }
+      return children
     }
 
-    const doc = new Document({ sections: [{ children }] })
-    const buffer = await Packer.toBuffer(doc)
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    )
-    res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Card_Design_Roster.docx"')
-    res.send(buffer)
+    const sendDoc = (buffer) => {
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      )
+      res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Card_Design_Roster.docx"')
+      res.send(buffer)
+    }
+
+    try {
+      const children = await buildChildren(false)
+      sendDoc(await Packer.toBuffer(new Document({ sections: [{ children }] })))
+    } catch (packErr) {
+      logger.error({ packErr }, 'card-design pack failed with images; retrying without')
+      try {
+        const children = await buildChildren(true)
+        sendDoc(await Packer.toBuffer(new Document({ sections: [{ children }] })))
+      } catch (err) {
+        logger.error({ err }, 'Card design export failed')
+        res.status(500).json({ error: 'Failed to generate card design roster.', detail: String(err?.message || err) })
+      }
+    }
   } catch (err) {
     logger.error({ err }, 'Card design export failed')
-    res.status(500).json({ error: 'Failed to generate card design roster.' })
+    res.status(500).json({ error: 'Failed to generate card design roster.', detail: String(err?.message || err) })
   }
 })
 

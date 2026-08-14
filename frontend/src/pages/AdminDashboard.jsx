@@ -2611,7 +2611,7 @@ export default function AdminDashboard() {
               </div>
               <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
                 Export a Word document with each student's front- and back-facing card
-                details (with photos and QR) for the design team.
+                details (QR included) for the design team.
               </div>
               <button
                 className="btn-outline"
