@@ -67,6 +67,10 @@ env-var misconfiguration is irrelevant to this symptom.
   - network: "We couldn't reach the server…"
 
 ## Action item (config, not code)
-Verify the production **`ALLOWED_ORIGINS`** env var on Render includes the frontend's
-origin. A cross-origin API without the origin whitelisted will be blocked by the
-browser regardless of the code fix.
+**Resolved:** `ALLOWED_ORIGINS` is set to `https://lmsa-id-portal.vercel.app` (the
+Vercel frontend origin). The CORS `origin` check in `backend/index.js` allows that
+exact origin, and the fact that some users already load the form from it confirms
+cross-origin requests succeed — so cause #5 is ruled out. No code change needed here.
+
+`VITE_API_URL` is likewise correctly pointing at the Render backend (otherwise no
+user from the Vercel origin could load the form).
