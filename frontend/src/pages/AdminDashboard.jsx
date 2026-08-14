@@ -2591,6 +2591,43 @@ export default function AdminDashboard() {
             </div>
 
             <div
+              style={{
+                background: 'var(--bg)',
+                border: '0.5px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                padding: '12px',
+                marginBottom: '14px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                }}
+              >
+                🎨 Card Design Roster
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                Export a Word document with each student's front- and back-facing card
+                details (with photos and QR) for the design team.
+              </div>
+              <button
+                className="btn-outline"
+                onClick={() =>
+                  handleDownload('/api/students/export/card-design', 'LMSA_Card_Design_Roster.docx')
+                }
+                disabled={downloading['/api/students/export/card-design']}
+                style={{ fontSize: '12px', padding: '7px 14px' }}
+              >
+                {downloading['/api/students/export/card-design']
+                  ? 'Exporting...'
+                  : '⬇ Export Card Design Roster (DOCX)'}
+              </button>
+            </div>
+
+            <div
               style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}
             >
               <input
