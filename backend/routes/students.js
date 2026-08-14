@@ -976,9 +976,7 @@ router.get('/export/card-design', requireAdmin, async (req, res) => {
   try {
     const { data: students, error } = await supabase
       .from('students')
-      .select(
-        'student_id, full_name, year_level, position, programme, blood_type, student_email, emergency_contact_name, emergency_contact_phone, date_of_birth, nationality, county_of_origin, current_address, photo_url, signature_url, qr_url, status, confirmed_at, valid_until',
-      )
+      .select('*')
       .order('year_level')
       .order('full_name')
     if (error) return res.status(500).json({ error: error.message })
@@ -1022,14 +1020,27 @@ router.get('/export/card-design', requireAdmin, async (req, res) => {
     async function fetchImage(url) {
       if (!url) return null
       try {
+        // data: URLs (e.g. generated QR codes) — embed directly
+        const dataMatch = /^data:(image\/[a-zA-Z+]+);base64,(.+)$/.exec(String(url))
+        if (dataMatch) {
+          const mime = dataMatch[1]
+          const data = Buffer.from(dataMatch[2], 'base64')
+          const type = mime.includes('png') ? 'png' : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : null
+          return type ? { data, type } : null
+        }
         const ctrl = new AbortController()
         const t = setTimeout(() => ctrl.abort(), 8000)
         const r = await fetch(url, { signal: ctrl.signal })
         clearTimeout(t)
         if (!r.ok) return null
+        const ct = r.headers.get('content-type') || ''
+        if (!ct.includes('image/')) return null
         const data = Buffer.from(await r.arrayBuffer())
-        const type = (r.headers.get('content-type') || '').includes('png') ? 'png' : 'jpg'
-        return { data, type }
+        // Detect by magic bytes — content-type alone is unreliable (webp/heic etc.)
+        let type = null
+        if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) type = 'png'
+        else if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) type = 'jpg'
+        return type ? { data, type } : null
       } catch {
         return null
       }
