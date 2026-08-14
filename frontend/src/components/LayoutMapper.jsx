@@ -522,7 +522,9 @@ export default function LayoutMapper({
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        {/* ── Left: template editor + its property panel ── */}
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap', flex: '1 1 480px' }}>
         {/* ── Card preview ── */}
         <div style={{ flexShrink: 0 }}>
           <p
@@ -698,32 +700,6 @@ export default function LayoutMapper({
               </div>
             ))}
           </div>
-        </div>
-
-        {/* ── Live preview: exactly what CardCanvas renders for students,
-            fed straight from this component's own live state so it can
-            never drift from what Save actually persists. ── */}
-        <div style={{ flexShrink: 0 }}>
-          <p
-            style={{
-              fontSize: '11px',
-              color: 'var(--muted)',
-              marginBottom: '8px',
-              lineHeight: '1.5',
-            }}
-          >
-            Live preview — what students see, with sample data. Click it to flip sides.
-          </p>
-          <CardCanvas
-            key={side}
-            initialSide={side}
-            student={PREVIEW_STUDENT}
-            templateUrlFront={templateUrlFront}
-            templateUrlBack={templateUrlBack}
-            layout={{ front: frontLayout, back: backLayout }}
-            fieldSides={fieldSides}
-            maxWidth={DISPLAY_W}
-          />
         </div>
 
         {/* ── Right panel ── */}
@@ -1036,6 +1012,33 @@ export default function LayoutMapper({
               {msg.text}
             </div>
           )}
+        </div>
+        </div>
+
+        {/* ── Right: live preview — exactly what CardCanvas renders for
+            students, fed straight from this component's own live state
+            so it can never drift from what Save actually persists. ── */}
+        <div style={{ flexShrink: 0 }}>
+          <p
+            style={{
+              fontSize: '11px',
+              color: 'var(--muted)',
+              marginBottom: '8px',
+              lineHeight: '1.5',
+            }}
+          >
+            Live preview — what students see, with sample data. Click it to flip sides.
+          </p>
+          <CardCanvas
+            key={side}
+            initialSide={side}
+            student={PREVIEW_STUDENT}
+            templateUrlFront={templateUrlFront}
+            templateUrlBack={templateUrlBack}
+            layout={{ front: frontLayout, back: backLayout }}
+            fieldSides={fieldSides}
+            maxWidth={DISPLAY_W}
+          />
         </div>
       </div>
 
