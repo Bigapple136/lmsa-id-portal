@@ -562,6 +562,101 @@ backend test suite (31/31), frontend eslint (0 errors after the
 
 ---
 
+## 12. Feature: Admin Action Audit Log + Layout Version History (commits `28b97a4`, `f4a7425`)
+
+### Motivation
+Directly motivated by item 10's investigation: explaining why students
+showed as confirmed required reconstructing, from scratch, that the
+renew-cohort tool had been used — nothing in the system recorded that
+it had run, on what, or when. Two additions to close that gap for
+future incidents.
+
+### 1. Admin action audit log
+New `admin_actions` table (`sql/012`) plus `backend/auditLog.js`'s
+`logAdminAction(req, action, { targetType, targetId, details })` —
+fails safe (logs its own errors, never throws), so a logging hiccup
+can never break the action it's recording. Wired into a first-pass set
+of the highest-value mutation points:
+- `renew-cohort` — the actual incident that motivated this feature.
+- Student delete — captures `full_name`/`year_level` *before* the
+  record is gone, since `target_id` alone is useless to look up
+  afterward.
+- Admin manual-confirmation.
+- Layout save (see below — ties into version history too).
+
+Read-only `GET /api/admin-actions` (optionally filtered by `action`,
+`target_type`, `target_id`) to browse it. Entries are only ever
+written via the internal helper, never accepted directly over HTTP, so
+the log can't be fabricated or tampered with through the API itself.
+
+More endpoints (bulk import, QR field changes, field-side changes,
+etc.) can be instrumented the same way later — `logAdminAction` is
+generic, this was a deliberately-scoped first pass, not full coverage.
+
+### 2. Layout version history
+New `layout_history` table (`sql/012`). Every successful
+`PUT /settings/layout` save now also writes a history row per side
+(front/back tracked independently), via `recordLayoutHistory()`, which
+also prunes anything beyond the most recent 20 entries per side.
+
+- `GET /settings/layout/history?side=front|back` — list recent
+  versions, most recent first.
+- `POST /settings/layout/history/:id/revert` — re-applies a past
+  entry as the current layout for its side. A revert is just another
+  save: it goes through `cleanLayout()`, gets its own new
+  `layout_history` entry (so the revert joins the timeline instead of
+  erasing it), and is logged as a `layout_revert` admin action.
+
+### UI
+- **Layout Mapper**: a new collapsible "Version history" panel,
+  placed right after "Field sides" (both are occasional-use utility
+  panels, grouped together, kept out of the way of the property editor
+  that's used constantly while dragging fields). Lists recent saves
+  for the currently active side with timestamp and who saved it; the
+  current entry can't be reverted to itself. History loads lazily on
+  first expand and on side switch while open. Reverting updates local
+  layout state immediately, so the live preview reflects it without a
+  reload.
+- **Settings tab**: a new collapsed-by-default "Recent admin activity"
+  section listing `admin_actions` entries with a human-readable action
+  label, actor, target, and a compact JSON dump of the details.
+
+### Mistakes caught while building this (fixed before commit)
+- An edit accidentally deleted the `FRONTEND_URL` constant in
+  `students.js` — restored, verified by grepping every usage site.
+- The revert endpoint reproduced the *exact* double-unwrap bug from
+  item 11 (`saved?.data?.value` instead of `saved?.value`) — caught by
+  a full grep sweep of every file touched this session, confirmed it
+  was the only instance.
+- A `str_replace` anchor line (the `activeZone` conditional's opening)
+  got consumed instead of preserved while inserting the history panel,
+  breaking the JSX parse — caught immediately by eslint's parse error,
+  fixed, re-verified.
+
+### Operational Note
+`sql/012_admin_actions_and_layout_history.sql` has **not** been run
+against the live Supabase database yet — none of this works in
+production until it is. Run it in the Supabase SQL Editor after
+`011_students_confirmed_at.sql`, matching this repo's existing
+migration convention.
+
+### Verification
+Backend: syntax check + eslint (0 errors) on every touched file, full
+test suite (31/31). Frontend: eslint (0 errors), production build.
+
+### Files Changed
+- `sql/012_admin_actions_and_layout_history.sql`
+- `backend/auditLog.js`
+- `backend/routes/adminActions.js`
+- `backend/index.js`
+- `backend/routes/students.js`
+- `backend/routes/confirmations.js`
+- `backend/routes/settings.js`
+- `frontend/src/components/LayoutMapper.jsx`
+- `frontend/src/pages/AdminDashboard.jsx`
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -576,6 +671,8 @@ backend test suite (31/31), frontend eslint (0 errors after the
 | `0cae9d5` | renew-cohort no longer auto-confirms; analytics counts real confirmations only | Pushed |
 | `15d954e` | Fix crash on student preview from leftover useCustomLayout reference; enable no-undef lint | Pushed |
 | `e98be23` | Fix GET /layout double-unwrap — back was unconditionally null on every read | Pushed |
+| `28b97a4` | Admin action audit log + layout version history (backend) | Pushed |
+| `f4a7425` | Admin action audit log + layout version history (frontend) | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
