@@ -562,7 +562,79 @@ backend test suite (31/31), frontend eslint (0 errors after the
 
 ---
 
-## 12. Feature: Admin Action Audit Log + Layout Version History (commits `28b97a4`, `f4a7425`)
+## 12. Fix: Notification "Mark as read" Never Stuck and Bell Counter Never Cleared; Missing Clear/Delete (commit `90bcb22`)
+
+### Problem
+Two related notification issues, reported together:
+1. When an admin marked a notification as read, it kept showing as "new" and the
+   bell counter never cleared.
+2. There was no way to clear/remove notifications at all — they behaved as a
+   permanent system log that could only be marked read.
+
+### Root Cause — #1 (the real bug)
+The backend connects with the **service-role** key (`backend/db.js:3`), but the
+per-admin read state was computed inside the `admin_notifications` view using
+`auth.uid()` (`sql/008_notification_reads.sql:48`). A service-role client has
+`auth.uid() === NULL`, so `nr.admin_id = auth.uid()` never matched and the view
+reported `is_read_by_me = false` for **every** notification, for **every** admin.
+
+The `GET /api/notifications` handler (`backend/routes/notifications.js`) relied
+on that view, so:
+- Marking read *did* insert a correct `notification_reads` row, but the
+  list/counter query never reflected it.
+- The bell's unread count was therefore always equal to the total number of
+  notifications and never dropped.
+
+The mark-read endpoints themselves were correct — the read records are written
+with the explicit `req.user.id` — only the read path that *displayed* them was
+broken.
+
+### Root Cause — #2 (missing feature)
+There was simply no delete endpoint. The `notifications` table's own comment even
+described it as a "Persistent notification log", and the only mutations were
+mark-as-read. So "clearing" was impossible by design.
+
+### Solution
+**`backend/routes/notifications.js`:**
+- `GET /api/notifications` no longer uses the `admin_notifications` view. It loads
+  `notifications` directly and joins *this* admin's read records explicitly via
+  `notification_reads` (filtered by `req.user.id`), computing `is_read_by_me` and
+  the unread count correctly per admin.
+- Added `DELETE /api/notifications/:id` — delete a single notification.
+- Added `DELETE /api/notifications` — clear **all** notifications (deletes the
+  underlying rows; `notification_reads` is `ON DELETE CASCADE`).
+
+**`frontend/src/components/NotificationCenter.jsx`:**
+- Added `deleteOne(id)` and `clearAll()` handlers calling the new DELETE endpoints.
+- Added a **"Clear all"** button in the header and a **trash/delete** button per
+  item (next to the existing mark-read button). Both update the list, badge
+  counter, and total immediately.
+
+**`frontend/src/index.css`:**
+- Styled `.nc-header-actions`, `.nc-clear`, `.nc-item-actions`, `.nc-delete-btn`
+  (mirroring the existing mark-read button styles).
+
+### Design Note
+`notifications` is a single shared table, so delete/clear is a **global** action —
+clearing or deleting affects every admin's feed (consistent with "not a system
+log"). If per-admin soft-delete is ever wanted, that requires a separate
+`notification_dismissals` table; out of scope here.
+
+### Verification
+- `npx eslint routes/notifications.js` — clean.
+- `npx eslint src/components/NotificationCenter.jsx` — clean.
+- `node --check backend/routes/notifications.js` — clean.
+- (No backend route-level test harness exists for Supabase mocking in this repo,
+  so this was verified by code review + lint/syntax checks.)
+
+### Files Changed
+- `backend/routes/notifications.js`
+- `frontend/src/components/NotificationCenter.jsx`
+- `frontend/src/index.css`
+
+---
+
+## 13. Feature: Admin Action Audit Log + Layout Version History (commits `28b97a4`, `f4a7425`)
 
 ### Motivation
 Directly motivated by item 10's investigation: explaining why students
@@ -671,8 +743,9 @@ test suite (31/31). Frontend: eslint (0 errors), production build.
 | `0cae9d5` | renew-cohort no longer auto-confirms; analytics counts real confirmations only | Pushed |
 | `15d954e` | Fix crash on student preview from leftover useCustomLayout reference; enable no-undef lint | Pushed |
 | `e98be23` | Fix GET /layout double-unwrap — back was unconditionally null on every read | Pushed |
-| `28b97a4` | Admin action audit log + layout version history (backend) | Pushed |
-| `f4a7425` | Admin action audit log + layout version history (frontend) | Pushed |
+| `90bcb22` | Fix notification per-admin read state (service-role `auth.uid()` bug); add clear/delete endpoints + UI | Pushed |
+| `28b97a4` | Admin action audit log + layout version history (backend) | Not pushed |
+| `f4a7425` | Admin action audit log + layout version history (frontend) | Not pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
@@ -715,11 +788,11 @@ supabase/
 
 1. **Layout changes**: Edit `frontend/src/lib/layoutConstants.js` — all consumers stay in sync.
 2. **Zone detection**: Backend uses `backend/utils/detectZones.js` (Sharp), frontend uses `frontend/src/lib/detectZones.js` (Canvas) — keep algorithms in sync.
-3. **Notification UI**: Spacing controlled in `index.css` under `.nc-filter-tabs` / `.nc-list`.
+3. **Notification UI**: Spacing controlled in `index.css` under `.nc-filter-tabs` / `.nc-list`. Per-admin read state is computed server-side in `backend/routes/notifications.js` (joins `notification_reads` by `req.user.id`) — do NOT reintroduce the `admin_notifications` view there, since the backend uses the service-role key and `auth.uid()` is always NULL. Clear/delete = `DELETE /api/notifications` and `DELETE /api/notifications/:id` (global, shared table).
 4. **Templates**: Stored in Supabase `templates` table; active per side (front/back).
 5. **Settings persistence**: `portal_settings` table with keys `card_layout_front`, `card_layout_back`, `card_field_sides`.
 6. **Template zones**: Stored in `templates.zones_front/back`, suggested layouts in `suggested_layout_front/back`.
 
 ---
 
-*Last updated: August 12, 2026*
+*Last updated: August 14, 2026*

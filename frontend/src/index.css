@@ -2544,6 +2544,12 @@ a:focus:not(:focus-visible) {
   color: var(--text);
 }
 
+.nc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .nc-mark-read {
   background: none;
   border: none;
@@ -2554,6 +2560,17 @@ a:focus:not(:focus-visible) {
   min-height: 32px;
 }
 .nc-mark-read:hover { color: var(--navy); text-decoration: underline; }
+
+.nc-clear {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px 4px;
+  min-height: 32px;
+}
+.nc-clear:hover { color: var(--error-text); text-decoration: underline; }
 
 .nc-list {
   flex: 1;
@@ -2703,6 +2720,40 @@ a:focus:not(:focus-visible) {
   background: var(--success-bg);
 }
 .nc-read-btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Per-notification action group (mark read + delete) */
+.nc-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.nc-delete-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.nc-delete-btn:hover {
+  color: var(--error-text);
+  background: var(--error-bg);
+}
+.nc-delete-btn:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
 }

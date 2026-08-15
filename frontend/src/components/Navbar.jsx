@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
-export default function Navbar({ showLogin = true }) {
+export default function Navbar({ showLogin = true, hideMenu = false }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -21,48 +21,52 @@ export default function Navbar({ showLogin = true }) {
         </div>
 
         {/* Right — desktop links */}
-        <div className="navbar-links">
-          <button
-            className={`navbar-link ${isAbout ? 'active' : ''}`}
-            onClick={() => navigate('/about')}
-          >
-            About
-          </button>
-          <button
-            className={`navbar-link ${isTerms ? 'active' : ''}`}
-            onClick={() => navigate('/terms')}
-          >
-            Terms
-          </button>
-          <button
-            className={`navbar-link ${isPrivacy ? 'active' : ''}`}
-            onClick={() => navigate('/privacy')}
-          >
-            Privacy
-          </button>
-
-          {showLogin && (
-            <button className="navbar-login" onClick={() => navigate('/admin')}>
-              Admin Login
+        {!hideMenu && (
+          <div className="navbar-links">
+            <button
+              className={`navbar-link ${isAbout ? 'active' : ''}`}
+              onClick={() => navigate('/about')}
+            >
+              About
             </button>
-          )}
-        </div>
+            <button
+              className={`navbar-link ${isTerms ? 'active' : ''}`}
+              onClick={() => navigate('/terms')}
+            >
+              Terms
+            </button>
+            <button
+              className={`navbar-link ${isPrivacy ? 'active' : ''}`}
+              onClick={() => navigate('/privacy')}
+            >
+              Privacy
+            </button>
+
+            {showLogin && (
+              <button className="navbar-login" onClick={() => navigate('/admin')}>
+                Admin Login
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Mobile hamburger */}
-        <button
-          className={`navbar-hamburger${menuOpen ? ' is-open' : ''}`}
-          onClick={() => setMenuOpen((o) => !o)}
-          aria-label="Toggle menu"
-          aria-expanded={menuOpen}
-        >
-          <span className="ham-line" />
-          <span className="ham-line" />
-          <span className="ham-line" />
-        </button>
+        {!hideMenu && (
+          <button
+            className={`navbar-hamburger${menuOpen ? ' is-open' : ''}`}
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label="Toggle menu"
+            aria-expanded={menuOpen}
+          >
+            <span className="ham-line" />
+            <span className="ham-line" />
+            <span className="ham-line" />
+          </button>
+        )}
       </div>
 
       {/* Mobile dropdown */}
-      {menuOpen && (
+      {!hideMenu && menuOpen && (
         <div className="navbar-mobile-menu">
           <button
             className="navbar-mobile-link"

@@ -6,6 +6,18 @@ const sharp = require('sharp')
 const JSZip = require('jszip')
 const path = require('path')
 const PDFDocument = require('pdfkit')
+const {
+  Document,
+  Packer,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  ImageRun,
+} = require('docx')
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { enqueueImport } = require('../queue')
@@ -964,6 +976,198 @@ router.get('/export/photoshoot', requireAdmin, async (req, res) => {
   }
 
   doc.end()
+})
+
+// ── ADMIN: export card-design roster as Word (.docx) ──
+// Lists, per student, the dynamic front-facing and back-facing card details
+// so the design team can lay out the student ID card.
+router.get('/export/card-design', requireAdmin, async (req, res) => {
+  try {
+    const { data: students, error } = await supabase
+      .from('students')
+      .select('*')
+      .order('year_level')
+      .order('full_name')
+    if (error) return res.status(500).json({ error: error.message })
+    if (!students?.length) return res.status(404).json({ error: 'No students found.' })
+
+    // Field-enabled flags (so the roster reflects the live card design)
+    const [{ data: cardFieldsRow }, { data: qrFieldsRow }] = await Promise.all([
+      supabase.from('portal_settings').select('value').eq('key', 'card_fields').maybeSingle(),
+      supabase.from('portal_settings').select('value').eq('key', 'qr_fields').maybeSingle(),
+    ])
+    const cardFields = cardFieldsRow?.value || {}
+    const qrFields = qrFieldsRow?.value || {}
+
+    const yearOrder = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
+    const grouped = {}
+    for (const s of students) (grouped[s.year_level] ||= []).push(s)
+
+    // Front-facing details. Photo & signature are intentionally excluded — the
+    // design team only needs the textual layout, and embedding images was the
+    // cause of docx packing failures (unsupported formats like webp/heic).
+    const fieldsFront = [
+      { key: 'full_name', label: 'Full Name' },
+      { key: 'student_id', label: 'Student ID' },
+      { key: 'year_level', label: 'Year Level' },
+      { key: 'position', label: 'Position', enabled: cardFields.position?.enabled },
+    ]
+    const fieldsBack = [
+      { key: 'qr', label: 'QR Code', image: true },
+      { key: 'blood_type', label: 'Blood Type', enabled: qrFields.blood_type?.enabled },
+      { key: 'emergency_contact_phone', label: 'Emergency Contact Phone', enabled: qrFields.emergency_contact_phone?.enabled },
+      { key: 'date_of_birth', label: 'Date of Birth', enabled: qrFields.date_of_birth?.enabled },
+      { key: 'nationality', label: 'Nationality', enabled: qrFields.nationality?.enabled },
+      { key: 'county_of_origin', label: 'County of Origin', enabled: qrFields.county_of_origin?.enabled },
+      { key: 'current_address', label: 'Current Address', enabled: qrFields.current_address?.enabled },
+      { key: 'student_email', label: 'Student Email', enabled: qrFields.student_email?.enabled },
+      { key: 'emergency_contact_name', label: 'Emergency Contact Name', enabled: qrFields.emergency_contact_name?.enabled },
+      { key: 'programme', label: 'Programme', enabled: qrFields.programme?.enabled },
+      { key: 'issue_date', label: 'Issue Date' },
+      { key: 'valid_until', label: 'Valid Until' },
+    ]
+
+    async function fetchImage(url) {
+      if (!url) return null
+      try {
+        // data: URLs (e.g. generated QR codes) — embed directly
+        const dataMatch = /^data:(image\/[a-zA-Z+]+);base64,(.+)$/.exec(String(url))
+        if (dataMatch) {
+          const mime = dataMatch[1]
+          const data = Buffer.from(dataMatch[2], 'base64')
+          const type = mime.includes('png') ? 'png' : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : null
+          return type ? { data, type } : null
+        }
+        const ctrl = new AbortController()
+        const t = setTimeout(() => ctrl.abort(), 8000)
+        const r = await fetch(url, { signal: ctrl.signal })
+        clearTimeout(t)
+        if (!r.ok) return null
+        const ct = r.headers.get('content-type') || ''
+        if (!ct.includes('image/')) return null
+        const data = Buffer.from(await r.arrayBuffer())
+        // Detect by magic bytes — content-type alone is unreliable (webp/heic etc.)
+        let type = null
+        if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) type = 'png'
+        else if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) type = 'jpg'
+        return type ? { data, type } : null
+      } catch {
+        return null
+      }
+    }
+
+    async function fieldParagraphs(fields, student, skipImages) {
+      const paras = []
+      for (const f of fields) {
+        if (f.image) {
+          if (skipImages) {
+            paras.push(new Paragraph({ children: [new TextRun(`${f.label}: (image omitted)`)] }))
+            continue
+          }
+          const img = await fetchImage(student[f.key])
+          if (img) {
+            paras.push(
+              new Paragraph({ children: [new TextRun({ text: `${f.label}: `, bold: true })] }),
+              new Paragraph({
+                children: [new ImageRun({ data: img.data, type: img.type, transformation: { width: 90, height: 90 } })],
+              }),
+            )
+          } else {
+            paras.push(
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `${f.label}: `, bold: true }),
+                  new TextRun(student[f.key] ? '(image unavailable)' : '—'),
+                ],
+              }),
+            )
+          }
+          continue
+        }
+        const val = student[f.key]
+        const mark = f.enabled === false ? ' (disabled)' : ''
+        paras.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: `${f.label}: `, bold: true }),
+              new TextRun(String(val || '—') + mark),
+            ],
+          }),
+        )
+      }
+      return paras
+    }
+
+    async function buildChildren(skipImages) {
+      const children = [
+        new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun('LMSA ID Card — Design Roster')] }),
+        new Paragraph({
+          children: [
+            new TextRun(
+              `Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
+            ),
+          ],
+        }),
+        new Paragraph({ text: '' }),
+      ]
+      for (const year of yearOrder) {
+        const list = grouped[year]
+        if (!list?.length) continue
+        children.push(
+          new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(`${year} — ${list.length} student(s)`)] }),
+        )
+        for (const s of list) {
+          const frontParas = await fieldParagraphs(fieldsFront, s, skipImages)
+          const backParas = await fieldParagraphs(fieldsBack, s, skipImages)
+          children.push(
+            new Paragraph({ children: [new TextRun({ text: `${s.full_name} — ${s.student_id} — ${s.year_level || ''}`, bold: true })] }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({ shading: { fill: 'D9E2F3' }, children: [new Paragraph({ children: [new TextRun({ text: 'FRONT OF CARD', bold: false })] })] }),
+                    new TableCell({ shading: { fill: 'FCE4D6' }, children: [new Paragraph({ children: [new TextRun({ text: 'BACK OF CARD', bold: false })] })] }),
+                  ],
+                }),
+                new TableRow({
+                  children: [new TableCell({ children: frontParas }), new TableCell({ children: backParas })],
+                }),
+              ],
+            }),
+            new Paragraph({ text: '' }),
+          )
+        }
+      }
+      return children
+    }
+
+    const sendDoc = (buffer) => {
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      )
+      res.setHeader('Content-Disposition', 'attachment; filename="LMSA_Card_Design_Roster.docx"')
+      res.send(buffer)
+    }
+
+    try {
+      const children = await buildChildren(false)
+      sendDoc(await Packer.toBuffer(new Document({ sections: [{ children }] })))
+    } catch (packErr) {
+      logger.error({ packErr }, 'card-design pack failed with images; retrying without')
+      try {
+        const children = await buildChildren(true)
+        sendDoc(await Packer.toBuffer(new Document({ sections: [{ children }] })))
+      } catch (err) {
+        logger.error({ err }, 'Card design export failed')
+        res.status(500).json({ error: 'Failed to generate card design roster.', detail: String(err?.message || err) })
+      }
+    }
+  } catch (err) {
+    logger.error({ err }, 'Card design export failed')
+    res.status(500).json({ error: 'Failed to generate card design roster.', detail: String(err?.message || err) })
+  }
 })
 
 // Card expiry / renewal

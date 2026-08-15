@@ -2724,6 +2724,43 @@ export default function AdminDashboard() {
             </div>
 
             <div
+              style={{
+                background: 'var(--bg)',
+                border: '0.5px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                padding: '12px',
+                marginBottom: '14px',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: 'var(--text)',
+                  marginBottom: '8px',
+                }}
+              >
+                🎨 Card Design Roster
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                Export a Word document with each student's front- and back-facing card
+                details (QR included) for the design team.
+              </div>
+              <button
+                className="btn-outline"
+                onClick={() =>
+                  handleDownload('/api/students/export/card-design', 'LMSA_Card_Design_Roster.docx')
+                }
+                disabled={downloading['/api/students/export/card-design']}
+                style={{ fontSize: '12px', padding: '7px 14px' }}
+              >
+                {downloading['/api/students/export/card-design']
+                  ? 'Exporting...'
+                  : '⬇ Export Card Design Roster (DOCX)'}
+              </button>
+            </div>
+
+            <div
               style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}
             >
               <input
@@ -2844,7 +2881,7 @@ export default function AdminDashboard() {
                                 onClick={async () => {
                                   try {
                                     const res = await fetch(
-                                      `${import.meta.env.VITE_API_URL || ''}/api/students/preview-url/${encodeURIComponent(s.student_id)}`,
+                                      `/api/students/preview-url/${encodeURIComponent(s.student_id)}`,
                                       {
                                         headers: {
                                           Authorization: `Bearer ${session.access_token}`,
@@ -2874,7 +2911,7 @@ export default function AdminDashboard() {
                                 onClick={async () => {
                                   try {
                                     const res = await fetch(
-                                      `${import.meta.env.VITE_API_URL || ''}/api/qr/verification-url/${encodeURIComponent(s.student_id)}`,
+                                      `/api/qr/verification-url/${encodeURIComponent(s.student_id)}`,
                                       {
                                         headers: {
                                           Authorization: `Bearer ${session.access_token}`,

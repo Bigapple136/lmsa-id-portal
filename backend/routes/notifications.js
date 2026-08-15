@@ -9,13 +9,18 @@ const PAGE_SIZE = 50
 // Admin: list notifications (newest first, paginated) — WITH per-admin read status
 router.get('/', requireAdmin, async (req, res) => {
   try {
+    const adminId = req.user.id
     const limit = Math.min(parseInt(req.query.limit) || PAGE_SIZE, 100)
     const offset = parseInt(req.query.offset) || 0
     const filterType = req.query.type // optional: 'submission' | 'self_correction' | 'photo_issue'
 
-    // Use the view that includes per-admin read status
+    // NOTE: the backend connects with the SERVICE-ROLE key, so auth.uid() is
+    // always NULL inside the admin_notifications view. We therefore cannot rely
+    // on the view to compute per-admin read state — it would mark every
+    // notification as unread for everyone. Instead we load notifications directly
+    // and join this admin's read records explicitly via notification_reads.
     let query = supabase
-      .from('admin_notifications')
+      .from('notifications')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
@@ -25,42 +30,33 @@ router.get('/', requireAdmin, async (req, res) => {
     }
 
     const { data, error, count } = await query
+    if (error) return res.status(500).json({ error: 'Failed to load notifications.' })
 
-    if (error) {
-      // Fallback if view doesn't exist (migrations not applied)
-      if (error.message?.includes('does not exist') || error.code === '42P01') {
-        // Legacy query without per-admin read
-        const { data: legacy, error: legacyErr } = await supabase
-          .from('notifications')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .range(offset, offset + limit - 1)
-        if (legacyErr) return res.status(500).json({ error: 'Failed to load notifications.' })
+    // Fetch this admin's read records (absent if the table isn't migrated yet).
+    const { data: reads, error: readsErr } = await supabase
+      .from('notification_reads')
+      .select('notification_id, read_at')
+      .eq('admin_id', adminId)
 
-        const { count: total } = await supabase
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-        const { count: unread } = await supabase
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_read', false)
-
-        return res.json({
-          notifications: (legacy || []).map(n => ({ ...n, is_read_by_me: n.is_read })),
-          total: total || 0,
-          unread: unread || 0,
-        })
-      }
-      return res.status(500).json({ error: 'Failed to load notifications.' })
+    const readMap = new Map()
+    if (!readsErr && reads) {
+      for (const r of reads) readMap.set(r.notification_id, r.read_at)
     }
 
-    // Unread count for this admin (using the view)
-    const { count: unread } = await supabase
-      .from('admin_notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_read_by_me', false)
+    const notifications = (data || []).map((n) => ({
+      ...n,
+      is_read_by_me: readMap.has(n.id),
+      read_at: readMap.get(n.id) || null,
+    }))
 
-    res.json({ notifications: data || [], total: count || 0, unread: unread || 0 })
+    // Global unread count for THIS admin (ignores the active type filter).
+    const { count: totalAll, error: totalErr } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+
+    const unread = !totalErr && totalAll !== null ? Math.max(0, totalAll - readMap.size) : 0
+
+    res.json({ notifications, total: count || 0, unread })
   } catch (err) {
     logger.error({ err }, 'Notifications GET error')
     res.status(500).json({ error: 'Failed to load notifications.' })
@@ -158,6 +154,48 @@ router.patch('/:id/read', requireAdmin, async (req, res) => {
   } catch (err) {
     logger.error({ err }, 'Notifications PATCH /:id/read error')
     res.status(500).json({ error: 'Failed to mark notification.' })
+  }
+})
+
+// Admin: delete a SINGLE notification (clears it from the feed entirely —
+// notifications are ephemeral alerts, not a permanent system log).
+router.delete('/:id', requireAdmin, async (req, res) => {
+  try {
+    const notificationId = req.params.id
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(notificationId)) {
+      return res.status(400).json({ error: 'Invalid notification ID.' })
+    }
+
+    const { error } = await supabase.from('notifications').delete().eq('id', notificationId)
+    if (error) return res.status(500).json({ error: 'Failed to delete notification.' })
+
+    res.json({ message: 'Notification deleted.' })
+  } catch (err) {
+    logger.error({ err }, 'Notifications DELETE /:id error')
+    res.status(500).json({ error: 'Failed to delete notification.' })
+  }
+})
+
+// Admin: clear ALL notifications (deletes every notification record).
+router.delete('/', requireAdmin, async (req, res) => {
+  try {
+    // Gather ids first so we issue a scoped delete (avoids an unbounded
+    // delete-all that the client would otherwise reject).
+    const { data: all, error: listErr } = await supabase.from('notifications').select('id')
+    if (listErr) return res.status(500).json({ error: 'Failed to clear notifications.' })
+
+    const ids = (all || []).map((r) => r.id)
+    if (ids.length) {
+      const { error } = await supabase.from('notifications').delete().in('id', ids)
+      if (error) return res.status(500).json({ error: 'Failed to clear notifications.' })
+    }
+
+    res.json({ message: 'All notifications cleared.' })
+  } catch (err) {
+    logger.error({ err }, 'Notifications DELETE / error')
+    res.status(500).json({ error: 'Failed to clear notifications.' })
   }
 })
 

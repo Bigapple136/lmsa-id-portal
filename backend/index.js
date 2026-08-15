@@ -90,6 +90,23 @@ if (process.env.NODE_ENV === 'production') {
   app.use(morgan('dev'))
 }
 
+// Public form-load reads. Many students sit behind ONE campus NAT IP, so a
+// tight per-IP limit on these cheap GETs was blocking the whole form for an
+// entire school once the shared IP hit the cap. Give them a generous ceiling
+// instead of the tight general limit.
+const PUBLIC_READ_PATHS = [
+  '/api/submissions/status',
+  '/api/settings/fields',
+  '/api/settings/qr-fields',
+]
+const publicReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 3000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+})
+
 // Rate limiters — per-IP tracking via express-rate-limit (requires trust proxy)
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -97,6 +114,8 @@ const generalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests.' },
+  // Don't double-limit the public form-load reads handled above.
+  skip: (req) => req.method === 'GET' && PUBLIC_READ_PATHS.includes(req.path),
 })
 const lookupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -127,6 +146,12 @@ const qrBulkLimiter = rateLimit({
   message: { error: 'Too many QR bulk operations. Please try again later.' },
 })
 
+// Generous limiter for the public form-load reads (applied before the tight
+// general limiter, which skips these same paths so they aren't double-counted).
+app.use(
+  ['/api/submissions/status', '/api/settings/fields', '/api/settings/qr-fields'],
+  publicReadLimiter,
+)
 app.use('/api', generalLimiter)
 app.use('/api/students/lookup', lookupLimiter)
 app.use('/api/confirmations', confirmLimiter)

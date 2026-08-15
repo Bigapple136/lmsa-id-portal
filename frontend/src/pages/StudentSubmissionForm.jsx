@@ -27,6 +27,7 @@ export default function StudentSubmissionForm() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [errorDetail, setErrorDetail] = useState('')
   const [fieldsConfig, setFieldsConfig] = useState(null)
   const [qrFieldsConfig, setQrFieldsConfig] = useState(null)
   const [form, setForm] = useState({
@@ -41,19 +42,60 @@ export default function StudentSubmissionForm() {
       try {
         setLoading(true)
         setStatusError(false)
-        const [statusRes, fieldsRes, qrFieldsRes] = await Promise.all([
-          apiFetch('/api/submissions/status'),
-          apiFetch('/api/settings/fields'),
-          apiFetch('/api/settings/qr-fields'),
+        setErrorDetail('')
+
+        // 1) Submission status — critical, but retry transient failures
+        //    (backend cold start, 5xx, network/timeout).
+        let statusRes
+        try {
+          statusRes = await apiFetch('/api/submissions/status', { retries: 2 })
+        } catch (err) {
+          console.error('[StudentSubmissionForm] status request failed', err)
+          if (window.Sentry) {
+            try { window.Sentry.captureException(err, { tags: { stage: 'load-status' } }) } catch {}
+          }
+          const timedOut = err && err.name === 'AbortError'
+          setErrorDetail(
+            timedOut
+              ? 'The server took too long to respond. This can happen if it was asleep — please retry.'
+              : "We couldn't reach the server. Check your connection and retry.",
+          )
+          setStatusError(true)
+          return
+        }
+
+        const statusData = await statusRes.json().catch(() => ({}))
+        if (!statusRes.ok) {
+          console.error('[StudentSubmissionForm] status responded', statusRes.status, statusData)
+          setErrorDetail(
+            statusRes.status === 429
+              ? 'Too many requests right now. Please wait a moment and retry.'
+              : 'The form service is temporarily unavailable. Please retry shortly.',
+          )
+          setStatusError(true)
+          return
+        }
+        if (typeof statusData.enabled !== 'boolean') {
+          // Missing/invalid setting → treat as closed rather than blocking the UI.
+          setEnabled(false)
+        } else {
+          setEnabled(statusData.enabled)
+        }
+
+        // 2) Field configuration — non-critical. Degrade to defaults if either
+        //    request fails so the form still loads.
+        const [fieldsSettled, qrSettled] = await Promise.allSettled([
+          apiFetch('/api/settings/fields').then((r) => r.json()),
+          apiFetch('/api/settings/qr-fields').then((r) => r.json()),
         ])
-        const [statusData, fieldsData, qrFieldsData] = await Promise.all([
-          statusRes.json(), fieldsRes.json(), qrFieldsRes.json(),
-        ])
-        if (!statusRes.ok || typeof statusData.enabled !== 'boolean') throw new Error('invalid status')
-        setEnabled(statusData.enabled)
-        setFieldsConfig(fieldsData)
-        setQrFieldsConfig(qrFieldsData)
-      } catch {
+        setFieldsConfig(fieldsSettled.status === 'fulfilled' ? fieldsSettled.value : null)
+        setQrFieldsConfig(qrSettled.status === 'fulfilled' ? qrSettled.value : null)
+      } catch (err) {
+        console.error('[StudentSubmissionForm] init failed', err)
+        if (window.Sentry) {
+          try { window.Sentry.captureException(err, { tags: { stage: 'load-init' } }) } catch {}
+        }
+        setErrorDetail('Something went wrong while loading the form. Please retry.')
         setStatusError(true)
       } finally {
         setLoading(false)
@@ -123,7 +165,7 @@ export default function StudentSubmissionForm() {
             Unable to load the form
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>
-            We could not reach the server. Please check your connection and try again.
+            {errorDetail || 'We could not reach the server. Please check your connection and try again.'}
           </p>
           <button className="btn-gold" style={{ padding: '10px 24px' }} onClick={() => setRetry((n) => n + 1)}>
             Retry

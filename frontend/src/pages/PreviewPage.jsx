@@ -320,7 +320,7 @@ export default function PreviewPage() {
   if (loading)
     return (
       <div className="page-outer">
-        <Navbar showLogin={false} />
+        <Navbar showLogin={false} hideMenu />
         <div className="page-center">
           <div className="preview-card">
             <div className="preview-topbar">
@@ -342,7 +342,7 @@ export default function PreviewPage() {
   if (error)
     return (
       <div className="page-outer">
-        <Navbar showLogin={false} />
+        <Navbar showLogin={false} hideMenu />
         <div className="page-center">
           <div className="landing-card">
             <div className="landing-form">
@@ -360,7 +360,7 @@ export default function PreviewPage() {
 
   return (
     <div className="page-outer">
-      <Navbar showLogin={false} />
+      <Navbar showLogin={false} hideMenu />
       <div className="page-center">
         <div className="preview-card">
           {/* Expiry warning banner for preview links (v2 tokens only) */}
@@ -413,8 +413,8 @@ export default function PreviewPage() {
           </div>
 
           {useDisplayCanvas ? (
-            <div style={{ padding: '16px 16px 0' }}>
-              <CardCanvas
+              <div style={{ padding: '16px 16px 44px' }}>
+                <CardCanvas
                 student={student}
                 templateUrlFront={templateUrlFront}
                 templateUrlBack={templateUrlBack}
