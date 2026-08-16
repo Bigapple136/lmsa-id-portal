@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { detectZonesFromImage } from '../lib/detectZones'
 import CardCanvas from './CardCanvas'
+import Panel from './Panel'
 import {
   CALIBRATED_LAYOUT_FRONT,
   CALIBRATED_LAYOUT_BACK,
@@ -205,6 +206,12 @@ export default function LayoutMapper({
   const [revertingId, setRevertingId] = useState(null)
   const containerRef = useRef(null)
 
+  // Editing aids
+  const [showGrid, setShowGrid] = useState(false)
+  const [snapGrid, setSnapGrid] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const GRID_STEP = 0.05
+
   const templateUrl = side === 'front' ? templateUrlFront : templateUrlBack
   const layout = side === 'front' ? frontLayout : backLayout
   const setLayout = side === 'front' ? setFrontLayout : setBackLayout
@@ -320,12 +327,18 @@ export default function LayoutMapper({
       if (!dragging) return
       const dx = (e.clientX - dragging.startX) / dragging.cW
       const dy = (e.clientY - dragging.startY) / dragging.cH
+      let nx = dragging.origX + dx
+      let ny = dragging.origY + dy
+      if (snapGrid) {
+        nx = Math.round(nx / GRID_STEP) * GRID_STEP
+        ny = Math.round(ny / GRID_STEP) * GRID_STEP
+      }
       setLayout((prev) => ({
         ...prev,
         [dragging.field]: {
           ...prev[dragging.field],
-          x: Math.max(0, Math.min(0.92, dragging.origX + dx)),
-          y: Math.max(0, Math.min(0.95, dragging.origY + dy)),
+          x: Math.max(0, Math.min(0.92, nx)),
+          y: Math.max(0, Math.min(0.95, ny)),
         },
       }))
     },
@@ -346,6 +359,22 @@ export default function LayoutMapper({
   // ── Field property update ──
   function set(field, key, value) {
     setLayout((prev) => ({ ...prev, [field]: { ...prev[field], [key]: value } }))
+  }
+
+  // ── Nudge a field by a small step (snaps to grid when enabled) ──
+  function nudge(field, dx, dy) {
+    const step = snapGrid ? GRID_STEP : 0.01
+    setLayout((prev) => {
+      const cur = prev[field] || {}
+      return {
+        ...prev,
+        [field]: {
+          ...cur,
+          x: Math.max(0, Math.min(0.92, (cur.x ?? 0) + dx * step)),
+          y: Math.max(0, Math.min(0.95, (cur.y ?? 0) + dy * step)),
+        },
+      }
+    })
   }
 
   // ── Save ──
@@ -512,40 +541,30 @@ export default function LayoutMapper({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* ── Top bar ── */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: '8px', flex: '1 1 220px' }}>
+      {/* ── Toolbar ── */}
+      <div className="layout-toolbar">
+        <div className="layout-side-toggle">
           <button
             className={`mode-btn ${side === 'front' ? 'active' : ''}`}
             onClick={() => switchSide('front')}
-            style={{ flex: 1 }}
           >
             🎨 Front
           </button>
           <button
             className={`mode-btn ${side === 'back' ? 'active' : ''}`}
             onClick={() => switchSide('back')}
-            style={{ flex: 1 }}
           >
             🔙 Back
           </button>
         </div>
         <span
-          style={{
-            fontSize: '12px',
-            color: 'var(--muted)',
-            flex: '1 1 160px',
-            textAlign: 'center',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
+          className="layout-template-name"
           title={side === 'front' ? templateNameFront : templateNameBack}
         >
           {side === 'front' ? templateNameFront || 'Front template' : templateNameBack || 'Back template'}
         </span>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn-outline" onClick={openAutoMap} style={{ fontSize: '12px' }}>
+        <div className="layout-actions">
+          <button className="btn-outline" onClick={openAutoMap}>
             ✨ Auto-Map
           </button>
           <button
@@ -554,21 +573,59 @@ export default function LayoutMapper({
               setLayout({ ...defaultLayout })
               setSelected(null)
             }}
-            style={{ fontSize: '12px' }}
           >
             Reset
           </button>
-          <button className="btn-gold" onClick={handleSave} disabled={saving} style={{ fontSize: '12px' }}>
-            {saving ? 'Saving...' : 'Save'}
+          <button className="btn-gold" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      {msg && (
+        <div className={msg.ok ? 'success-box' : 'error-box'} style={{ fontSize: '12px' }}>
+          {msg.text}
+        </div>
+      )}
+
+      <div className="layout-columns">
         {/* ── Left: template editor + its property panel ── */}
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap', flex: '1 1 480px' }}>
+        <div className="layout-editor" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap', flex: '1 1 480px' }}>
         {/* ── Card preview ── */}
-        <div style={{ flexShrink: 0 }}>
+        <div className="layout-canvas-col" style={{ flexShrink: 0 }}>
+          <div className="layout-canvas-controls">
+            <label className="layout-ctrl">
+              <input
+                type="checkbox"
+                checked={showGrid}
+                onChange={(e) => setShowGrid(e.target.checked)}
+                style={{ accentColor: 'var(--gold)' }}
+              />
+              Grid
+            </label>
+            <label className="layout-ctrl">
+              <input
+                type="checkbox"
+                checked={snapGrid}
+                onChange={(e) => setSnapGrid(e.target.checked)}
+                style={{ accentColor: 'var(--gold)' }}
+              />
+              Snap
+            </label>
+            <label className="layout-ctrl layout-ctrl--zoom">
+              Zoom
+              <input
+                type="range"
+                min="0.6"
+                max="1.5"
+                step="0.1"
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                style={{ accentColor: 'var(--gold)' }}
+              />
+              <span className="layout-zoom-val">{Math.round(zoom * 100)}%</span>
+            </label>
+          </div>
           <p
             style={{
               fontSize: '11px',
@@ -602,9 +659,10 @@ export default function LayoutMapper({
 
           <div
             ref={containerRef}
+            className="layout-canvas"
             style={{
-              width: `${DISPLAY_W}px`,
-              height: `${displayH}px`,
+              width: `${DISPLAY_W * zoom}px`,
+              height: `${displayH * zoom}px`,
               position: 'relative',
               border: '0.5px solid var(--border)',
               borderRadius: '8px',
@@ -614,6 +672,15 @@ export default function LayoutMapper({
               touchAction: 'none',
             }}
           >
+            {showGrid && (
+              <div
+                className="layout-grid-overlay"
+                aria-hidden="true"
+                style={{
+                  backgroundSize: `${GRID_STEP * 100}% ${GRID_STEP * 100}%`,
+                }}
+              />
+            )}
             {templateUrl ? (
               <img
                 src={templateUrl}
@@ -745,47 +812,15 @@ export default function LayoutMapper({
         </div>
 
         {/* ── Right panel ── */}
-        <div style={{ flex: 1, minWidth: '200px' }}>
+        <div className="layout-panel-col" style={{ flex: 1, minWidth: '200px' }}>
           {/* Field-side assignment */}
-          <div
-            style={{
-              background: 'var(--bg)',
-              border: '0.5px solid var(--border)',
-              borderRadius: '8px',
-              padding: '12px',
-              marginBottom: '12px',
-            }}
+          <Panel
+            icon="🧩"
+            title="Field sides"
+            collapsible
+            open={fieldSidesOpen}
+            onToggle={() => setFieldSidesOpen((v) => !v)}
           >
-            <button
-              type="button"
-              onClick={() => setFieldSidesOpen((v) => !v)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                width: '100%',
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: 'var(--text)',
-                marginBottom: fieldSidesOpen ? '4px' : 0,
-              }}
-            >
-              Field sides
-              <span
-                style={{
-                  fontSize: '10px',
-                  color: 'var(--muted)',
-                  transform: fieldSidesOpen ? 'rotate(180deg)' : 'none',
-                  transition: 'transform 0.15s ease',
-                }}
-              >
-                ▾
-              </span>
-            </button>
             {fieldSidesOpen && (
               <>
                 <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', lineHeight: '1.5' }}>
@@ -824,49 +859,17 @@ export default function LayoutMapper({
                 </div>
               </>
             )}
-          </div>
+          </Panel>
 
           {/* Version history */}
           {onLoadLayoutHistory && (
-            <div
-              style={{
-                background: 'var(--bg)',
-                border: '0.5px solid var(--border)',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '12px',
-              }}
+            <Panel
+              icon="🕑"
+              title="Version history"
+              collapsible
+              open={historyOpen}
+              onToggle={() => setHistoryOpen((v) => !v)}
             >
-              <button
-                type="button"
-                onClick={() => setHistoryOpen((v) => !v)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: 'var(--text)',
-                  marginBottom: historyOpen ? '4px' : 0,
-                }}
-              >
-                Version history
-                <span
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--muted)',
-                    transform: historyOpen ? 'rotate(180deg)' : 'none',
-                    transition: 'transform 0.15s ease',
-                  }}
-                >
-                  ▾
-                </span>
-              </button>
               {historyOpen && (
                 <>
                   <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', lineHeight: '1.5' }}>
@@ -915,19 +918,11 @@ export default function LayoutMapper({
                   )}
                 </>
               )}
-            </div>
+            </Panel>
           )}
 
           {activeZone !== null && zones[activeZone] && (
-            <div
-              style={{
-                background: 'var(--bg)',
-                border: '0.5px solid var(--border)',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '12px',
-              }}
-            >
+            <Panel icon="📐" title={`Snap to template box #${activeZone + 1}`}>
               <div
                 style={{
                   fontSize: '12px',
@@ -961,24 +956,15 @@ export default function LayoutMapper({
               >
                 Cancel
               </button>
-            </div>
+            </Panel>
           )}
 
           {sel && selMeta ? (
-            <div
-              style={{
-                background: 'var(--bg)',
-                border: '0.5px solid var(--border)',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '12px',
-              }}
-            >
+            <Panel icon="⚙️" title={selMeta.label}>
               <div
                 style={{
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  color: 'var(--text)',
+                  fontSize: '11px',
+                  color: 'var(--muted)',
                   marginBottom: '10px',
                   display: 'flex',
                   alignItems: 'center',
@@ -994,7 +980,14 @@ export default function LayoutMapper({
                     flexShrink: 0,
                   }}
                 />
-                {selMeta.label} ({side})
+                {side} side
+              </div>
+              <div className="layout-nudge">
+                <span className="layout-nudge-label">Nudge</span>
+                <button type="button" className="nudge-btn" onClick={() => nudge(selected, 0, -1)} aria-label="Nudge up">↑</button>
+                <button type="button" className="nudge-btn" onClick={() => nudge(selected, -1, 0)} aria-label="Nudge left">←</button>
+                <button type="button" className="nudge-btn" onClick={() => nudge(selected, 1, 0)} aria-label="Nudge right">→</button>
+                <button type="button" className="nudge-btn" onClick={() => nudge(selected, 0, 1)} aria-label="Nudge down">↓</button>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -1153,29 +1146,14 @@ export default function LayoutMapper({
                   </>
                 )}
               </div>
-            </div>
+            </Panel>
           ) : (
-            <div
-              style={{
-                fontSize: '12px',
-                color: 'var(--hint)',
-                padding: '12px',
-                background: 'var(--bg)',
-                border: '0.5px solid var(--border)',
-                borderRadius: '8px',
-                marginBottom: '12px',
-                lineHeight: '1.6',
-              }}
-            >
-              Click a colored box on the card to select it, then adjust its position, size, and text
-              style here. Use the Front/Back tabs above to edit each side.
-            </div>
-          )}
-
-          {msg && (
-            <div className={msg.ok ? 'success-box' : 'error-box'} style={{ fontSize: '12px' }}>
-              {msg.text}
-            </div>
+            <Panel icon="👆" title="No field selected">
+              <div style={{ fontSize: '12px', color: 'var(--hint)', lineHeight: '1.6' }}>
+                Click a colored box on the card to select it, then adjust its position, size, and text
+                style here. Use the Front/Back tabs above to edit each side.
+              </div>
+            </Panel>
           )}
         </div>
         </div>
@@ -1183,7 +1161,7 @@ export default function LayoutMapper({
         {/* ── Right: live preview — exactly what CardCanvas renders for
             students, fed straight from this component's own live state
             so it can never drift from what Save actually persists. ── */}
-        <div style={{ flexShrink: 0 }}>
+        <div className="layout-live" style={{ flexShrink: 0 }}>
           <p
             style={{
               fontSize: '11px',
