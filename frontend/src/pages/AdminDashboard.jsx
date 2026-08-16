@@ -8,6 +8,8 @@ import { useToast } from '../components/Toast'
 import NotificationCenter from '../components/NotificationCenter'
 import StatusBadge from '../components/StatusBadge'
 import EmptyState from '../components/EmptyState'
+import SettingsCard from '../components/SettingsCard'
+import FieldToggleGroup from '../components/FieldToggleGroup'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
 import { Doughnut, Bar } from 'react-chartjs-2'
 
@@ -225,6 +227,7 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState('overview')
+  const [settingsActive, setSettingsActive] = useState('fields')
   const [uploadMode, setUploadMode] = useState('csv')
 
   const [students, setStudents] = useState([])
@@ -373,6 +376,22 @@ export default function AdminDashboard() {
     // No session — the login form is rendered inline below (line ~657).
     // No navigation needed; /admin/login does not exist as a route.
   }, [session])
+
+  useEffect(() => {
+    if (activeTab !== 'settings') return
+    const cards = Array.from(document.querySelectorAll('.settings-card[id]'))
+    if (!cards.length) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) setSettingsActive(e.target.id)
+        })
+      },
+      { rootMargin: '-150px 0px -55% 0px', threshold: 0 }
+    )
+    cards.forEach((c) => obs.observe(c))
+    return () => obs.disconnect()
+  }, [activeTab])
 
   useEffect(() => {
     if (!session) return
@@ -2374,209 +2393,234 @@ export default function AdminDashboard() {
 
         {/* ── SETTINGS ── */}
         {activeTab === 'settings' && (
-          <div>
-            {/* Card field toggles */}
-            <div className="section-title">
-              Card field settings <span className="new-badge">Template config</span>
-            </div>
-            <p className="section-desc">
-              Toggle which fields appear on the ID card. This also controls the columns in the
-              downloadable Excel template and the structure of the image folder.
-            </p>
-            {fields ? (
-              <div className="field-toggle-panel">
-                {Object.entries(FIELD_META).map(([key, meta]) => (
-                  <div
-                    key={key}
-                    className={`field-toggle-row ${fields[key]?.enabled ? 'on' : ''} ${meta.locked ? 'locked' : ''}`}
-                    onClick={() => toggleField(key)}
-                  >
-                    <div className="field-toggle-check">{fields[key]?.enabled ? '✓' : ''}</div>
-                    <div className="field-toggle-label">{meta.label}</div>
-                    {meta.locked && <span className="field-toggle-badge">Always on</span>}
-                  </div>
-                ))}
-                <div
-                  style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}
-                >
-                  <button
-                    className="btn-gold"
-                    onClick={saveFields}
-                    disabled={fieldsSaving}
-                    style={{ padding: '7px 16px', fontSize: '13px' }}
-                  >
-                    {fieldsSaving ? 'Saving...' : 'Save field settings'}
-                  </button>
-                  {fieldsMsg && (
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        color: fieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)',
-                      }}
+          <div className="settings-view">
+            {(() => {
+              const sections = [
+                { id: 'fields', label: 'Card Fields' },
+                { id: 'qr', label: 'QR Code' },
+                { id: 'form', label: 'Form' },
+                ...(userRole === 'admin'
+                  ? [
+                      { id: 'lifecycle', label: 'Lifecycle' },
+                      { id: 'activity', label: 'Activity' },
+                      { id: 'system', label: 'System' },
+                    ]
+                  : []),
+              ]
+              const go = (id) => {
+                const el = document.getElementById(id)
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }
+              return (
+                <div className="settings-nav">
+                  {sections.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className={`settings-nav-pill${settingsActive === s.id ? ' active' : ''}`}
+                      onClick={() => go(s.id)}
                     >
-                      {fieldsMsg.text}
-                    </span>
-                  )}
+                      {s.label}
+                    </button>
+                  ))}
                 </div>
-              </div>
-            ) : (
-              <div className="skeleton skeleton-card" />
-            )}
+              )
+            })()}
 
-            {/* QR field toggles */}
-            <div className="section-title" style={{ marginTop: '18px' }}>
-              QR code fields <span className="new-badge">QR</span>
-            </div>
-            <p className="section-desc">
-              Toggle which extra fields are encoded into the QR code. Enabled fields are included in
-              the QR payload and appear on the QR verification page.
-            </p>
-            {qrFields ? (
-              <div className="field-toggle-panel">
-                {Object.entries(qrFields).map(([key, meta]) => (
-                  <div
-                    key={key}
-                    className={`field-toggle-row ${meta.enabled ? 'on' : ''}`}
-                    onClick={() => toggleQrField(key)}
-                  >
-                    <div className="field-toggle-check">{meta.enabled ? '✓' : ''}</div>
-                    <div className="field-toggle-label">{meta.label}</div>
-                  </div>
-                ))}
-                <div
-                  style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}
-                >
-                  <button
-                    className="btn-gold"
-                    onClick={saveQrFields}
-                    disabled={qrFieldsSaving}
-                    style={{ padding: '7px 16px', fontSize: '13px' }}
-                  >
-                    {qrFieldsSaving ? 'Saving...' : 'Save QR fields'}
-                  </button>
-                  {qrFieldsMsg && (
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        color: qrFieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)',
-                      }}
-                    >
-                      {qrFieldsMsg.text}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="skeleton skeleton-card" />
-            )}
+            <SettingsCard
+              id="fields"
+              icon="🗂️"
+              title="Card field settings"
+              badge="Template config"
+              desc="Toggle which fields appear on the ID card. This also controls the columns in the downloadable Excel template and the structure of the image folder."
+            >
+              {fields ? (
+                <FieldToggleGroup
+                  items={Object.entries(FIELD_META).map(([key, meta]) => ({
+                    key,
+                    label: meta.label,
+                    enabled: !!fields[key]?.enabled,
+                    locked: meta.locked,
+                  }))}
+                  onToggle={toggleField}
+                  footer={
+                    <>
+                      <button
+                        className="btn-gold"
+                        onClick={saveFields}
+                        disabled={fieldsSaving}
+                        style={{ padding: '7px 16px', fontSize: '13px' }}
+                      >
+                        {fieldsSaving ? 'Saving...' : 'Save field settings'}
+                      </button>
+                      {fieldsMsg && (
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            color: fieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)',
+                          }}
+                        >
+                          {fieldsMsg.text}
+                        </span>
+                      )}
+                    </>
+                  }
+                />
+              ) : (
+                <div className="skeleton skeleton-card" />
+              )}
+            </SettingsCard>
 
-            <div className="divider" />
+            <SettingsCard
+              id="qr"
+              icon="🔳"
+              title="QR code fields"
+              badge="QR"
+              desc="Toggle which extra fields are encoded into the QR code. Enabled fields are included in the QR payload and appear on the QR verification page."
+            >
+              {qrFields ? (
+                <FieldToggleGroup
+                  items={Object.entries(qrFields).map(([key, meta]) => ({
+                    key,
+                    label: meta.label,
+                    enabled: !!meta.enabled,
+                  }))}
+                  onToggle={toggleQrField}
+                  footer={
+                    <>
+                      <button
+                        className="btn-gold"
+                        onClick={saveQrFields}
+                        disabled={qrFieldsSaving}
+                        style={{ padding: '7px 16px', fontSize: '13px' }}
+                      >
+                        {qrFieldsSaving ? 'Saving...' : 'Save QR fields'}
+                      </button>
+                      {qrFieldsMsg && (
+                        <span
+                          style={{
+                            fontSize: '12px',
+                            color: qrFieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)',
+                          }}
+                        >
+                          {qrFieldsMsg.text}
+                        </span>
+                      )}
+                    </>
+                  }
+                />
+              ) : (
+                <div className="skeleton skeleton-card" />
+              )}
+            </SettingsCard>
 
-            {/* Submission form status */}
-            <div className="section-title">Submission form status</div>
-            <div
-              style={{
-                background: 'var(--white)',
-                border: '0.5px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                padding: '14px',
-              }}
+            <SettingsCard
+              id="form"
+              icon="📝"
+              title="Submission form status"
+              desc="Control whether students can submit their details through the public form."
             >
               <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '10px',
+                  background: 'var(--white)',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: 'var(--radius)',
+                  padding: '14px',
                 }}
               >
-                <div>
-                  <div style={{ fontSize: '13px', fontWeight: '500' }}>Form Status</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-                    {submissionFormEnabled
-                      ? 'Students can submit their details'
-                      : 'Form is closed to submissions'}
-                  </div>
-                </div>
-                <button
-                  className={`btn-${submissionFormEnabled ? 'outline' : 'gold'}`}
-                  onClick={handleToggleSubmissionForm}
-                  style={{ fontSize: '12px', padding: '7px 14px' }}
-                >
-                  {submissionFormEnabled ? 'Disable Form' : 'Enable Form'}
-                </button>
-              </div>
-              {submissionFormEnabled && (
                 <div
                   style={{
-                    background: 'var(--bg)',
-                    borderRadius: 'var(--radius)',
-                    padding: '10px 12px',
-                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '10px',
                   }}
                 >
-                  <div style={{ color: 'var(--muted)', marginBottom: '4px' }}>
-                    Share this link with students:
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: '500' }}>Form Status</div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                      {submissionFormEnabled
+                        ? 'Students can submit their details'
+                        : 'Form is closed to submissions'}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <code
-                      style={{
-                        flex: 1,
-                        padding: '6px 10px',
-                        background: 'var(--white)',
-                        border: '0.5px solid var(--border)',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        wordBreak: 'break-all',
-                      }}
-                    >
-                      {window.location.origin}/submit
-                    </code>
-                    <button
-                      className="btn-gold"
-                      style={{ fontSize: '11px', padding: '5px 10px', whiteSpace: 'nowrap' }}
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/submit`)
-                        setSubmissionMsg({ ok: true, text: 'Link copied!' })
-                        setTimeout(() => setSubmissionMsg(null), 2000)
-                      }}
-                    >
-                      Copy
-                    </button>
-                  </div>
+                  <button
+                    className={`btn-${submissionFormEnabled ? 'outline' : 'gold'}`}
+                    onClick={handleToggleSubmissionForm}
+                    style={{ fontSize: '12px', padding: '7px 14px' }}
+                  >
+                    {submissionFormEnabled ? 'Disable Form' : 'Enable Form'}
+                  </button>
                 </div>
-              )}
-            </div>
+                {submissionFormEnabled && (
+                  <div
+                    style={{
+                      background: 'var(--bg)',
+                      borderRadius: 'var(--radius)',
+                      padding: '10px 12px',
+                      fontSize: '12px',
+                    }}
+                  >
+                    <div style={{ color: 'var(--muted)', marginBottom: '4px' }}>
+                      Share this link with students:
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <code
+                        style={{
+                          flex: 1,
+                          padding: '6px 10px',
+                          background: 'var(--white)',
+                          border: '0.5px solid var(--border)',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {window.location.origin}/submit
+                      </code>
+                      <button
+                        className="btn-gold"
+                        style={{ fontSize: '11px', padding: '5px 10px', whiteSpace: 'nowrap' }}
+                        onClick={() => {
+                          navigator.clipboard.writeText(`${window.location.origin}/submit`)
+                          setSubmissionMsg({ ok: true, text: 'Link copied!' })
+                          setTimeout(() => setSubmissionMsg(null), 2000)
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </SettingsCard>
 
-            <div className="divider" />
-
-            {/* Card expiry / renewal */}
             {userRole === 'admin' && (
-              <>
-                <div className="section-title">Card expiry / renewal</div>
-                <p className="section-desc">
-                  Renew all cards for a given year level by setting a new expiry date. Confirmation
-                  status is left untouched; students still confirm their own card individually.
-                </p>
+              <SettingsCard
+                id="lifecycle"
+                icon="🔄"
+                title="Card expiry / renewal"
+                admin
+                desc="Renew all cards for a given year level by setting a new expiry date. Confirmation status is left untouched; students still confirm their own card individually."
+              >
                 <RenewCohortSection userRole={userRole} />
-              </>
+              </SettingsCard>
             )}
 
-            <div className="divider" />
-
-            {/* Recent admin activity */}
-            {userRole === 'admin' && <ActivityLogSection />}
-
-            <div className="divider" />
-
-            {/* Backup */}
             {userRole === 'admin' && (
-              <>
-                <div className="section-title">System backup</div>
-                <p className="section-desc">
-                  Download a full backup of all database records and uploaded files (photos,
-                  signatures, QR codes, templates). The backup is delivered as a ZIP file.
-                </p>
+              <SettingsCard id="activity" icon="📊" title="Recent admin activity" admin>
+                <ActivityLogSection />
+              </SettingsCard>
+            )}
+
+            {userRole === 'admin' && (
+              <SettingsCard
+                id="system"
+                icon="💾"
+                title="System backup"
+                admin
+                desc="Download a full backup of all database records and uploaded files (photos, signatures, QR codes, templates). The backup is delivered as a ZIP file."
+              >
                 <button
                   className="btn-gold"
                   onClick={async () => {
@@ -2611,7 +2655,7 @@ export default function AdminDashboard() {
                 >
                   {downloading.backup ? 'Generating backup...' : '📦 Download Full Backup'}
                 </button>
-              </>
+              </SettingsCard>
             )}
           </div>
         )}
