@@ -42,7 +42,7 @@ export default function LandingPage() {
       <div className="split-landing">
         <div className="split-brand">
           <div className="split-emblem">
-            <img src="/lmsa-logo.png" alt="LMSA Logo" width="72" height="72" style={{ objectFit: 'contain' }} />
+            <img src="/lmsa-logo.png" alt="LMSA Logo" width="120" height="120" style={{ objectFit: 'contain' }} />
           </div>
           <h1 className="split-title">Liberia Medical Students' Association</h1>
           <p className="split-sub">A.M. Dogliotti College of Medicine</p>
