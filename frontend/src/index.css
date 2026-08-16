@@ -4323,7 +4323,9 @@ textarea:focus-visible {
   align-items: flex-start;
   flex-wrap: wrap;
 }
-.layout-editor { flex: 1 1 480px; }
+.layout-columns > * { min-width: 0; }
+.layout-editor { flex: 1 1 480px; min-width: 0; }
+.layout-canvas-col { min-width: 0; }
 .layout-panel-col {
   flex: 1;
   min-width: 220px;
@@ -4331,7 +4333,7 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 12px;
 }
-.layout-live { flex-shrink: 0; }
+.layout-live { flex-shrink: 0; min-width: 0; }
 
 .layout-canvas-controls {
   display: flex;

@@ -592,7 +592,10 @@ export default function LayoutMapper({
         {/* ── Left: template editor + its property panel ── */}
         <div className="layout-editor" style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap', flex: '1 1 480px' }}>
         {/* ── Card preview ── */}
-        <div className="layout-canvas-col" style={{ flexShrink: 0 }}>
+        <div
+          className="layout-canvas-col"
+          style={{ flexShrink: 0, minWidth: 0, maxWidth: `${DISPLAY_W * zoom + 80}px` }}
+        >
           <div className="layout-canvas-controls">
             <label className="layout-ctrl">
               <input
@@ -632,6 +635,9 @@ export default function LayoutMapper({
               color: 'var(--muted)',
               marginBottom: '8px',
               lineHeight: '1.5',
+              width: '100%',
+              maxWidth: `${DISPLAY_W * zoom}px`,
+              overflowWrap: 'break-word',
             }}
           >
             Drag each field into its spot on the card — text centers itself on the point where you drop it.
@@ -648,6 +654,9 @@ export default function LayoutMapper({
                 : zones.length > 0
                   ? 'var(--gold)'
                   : '#B45309',
+              width: '100%',
+              maxWidth: `${DISPLAY_W * zoom}px`,
+              overflowWrap: 'break-word',
             }}
           >
             {zonesLoading
