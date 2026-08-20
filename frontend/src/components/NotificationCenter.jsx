@@ -25,7 +25,7 @@ function timeAgo(dateStr) {
   return `${days}d ago`
 }
 
-export default function NotificationCenter() {
+export default function NotificationCenter({ onNavigateStudent }) {
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [unread, setUnread] = useState(0)
@@ -316,6 +316,26 @@ export default function NotificationCenter() {
                   <div className="nc-item-time">{timeAgo(n.created_at)}</div>
                 </div>
                 <div className="nc-item-actions">
+                  {n.student_id && (n.type === 'photo_issue' || n.type === 'self_correction') && onNavigateStudent && (
+                    <button
+                      className="nc-view-btn"
+                      onClick={() => onNavigateStudent(n.student_id, n.type)}
+                      aria-label="View student"
+                      title="View student"
+                      style={{
+                        fontSize: '10px',
+                        color: 'var(--gold)',
+                        background: 'transparent',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--gold)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      View student
+                    </button>
+                  )}
                   {!n.is_read_by_me && (
                     <button
                       className="nc-read-btn"

@@ -274,6 +274,7 @@ export default function AdminDashboard() {
   const [editMsg, setEditMsg] = useState(null)
   const [issueNotes, setIssueNotes] = useState({})
   const [yearFilter, setYearFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   // Field toggle state
   const [fields, setFields] = useState(null)
@@ -1039,6 +1040,8 @@ export default function AdminDashboard() {
   const filtered = students.filter(
     (s) =>
       (yearFilter === 'all' || s.year_level === yearFilter) &&
+      (statusFilter === 'all' ||
+        (statusFilter === 'issues' ? ['issue', 'photo_issue'].includes(s.status) : s.status === statusFilter)) &&
       (s.full_name.toLowerCase().includes(search.toLowerCase()) ||
         s.student_id.toLowerCase().includes(search.toLowerCase())),
   )
@@ -1366,7 +1369,15 @@ export default function AdminDashboard() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <NotificationCenter />
+          <NotificationCenter
+            onNavigateStudent={(studentId, type) => {
+              setStatusFilter('issues')
+              setActiveTab('students')
+              // Find the student and open edit modal
+              const student = students.find((s) => s.student_id === studentId)
+              if (student) openEdit(student)
+            }}
+          />
           <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
             Sign out
           </button>
@@ -1465,7 +1476,16 @@ export default function AdminDashboard() {
                       <div className="stat-num pending">{stats.pending}</div>
                       <div className="stat-lbl">Pending</div>
                     </div>
-                    <div className="stat-box">
+                    <div
+                      className="stat-box"
+                      style={{ cursor: stats.issues > 0 ? 'pointer' : 'default' }}
+                      onClick={() => {
+                        if (stats.issues > 0) {
+                          setStatusFilter('issues')
+                          setActiveTab('students')
+                        }
+                      }}
+                    >
                       <div className="stat-num issue">{stats.issues}</div>
                       <div className="stat-lbl">Issues</div>
                     </div>
@@ -1473,7 +1493,16 @@ export default function AdminDashboard() {
                       <div className="stat-num issue">{analyticsData?.corrections_by_field?.name || 0}</div>
                       <div className="stat-lbl">Name Corrections</div>
                     </div>
-                    <div className="stat-box">
+                    <div
+                      className="stat-box"
+                      style={{ cursor: analyticsData?.photo_issues > 0 ? 'pointer' : 'default' }}
+                      onClick={() => {
+                        if (analyticsData?.photo_issues > 0) {
+                          setStatusFilter('issues')
+                          setActiveTab('students')
+                        }
+                      }}
+                    >
                       <div className="stat-num issue">{analyticsData?.photo_issues || 0}</div>
                       <div className="stat-lbl">Photo Issues</div>
                     </div>
@@ -2832,6 +2861,20 @@ export default function AdminDashboard() {
                     {y}
                   </option>
                 ))}
+              </select>
+              <select
+                className="field-input"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value)
+                  setCurrentPage(1)
+                }}
+                style={{ width: 'auto', minWidth: '120px', fontSize: '13px' }}
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="issues">Issues</option>
               </select>
               <button
                 className="btn-gold"
