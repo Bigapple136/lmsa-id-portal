@@ -1,21 +1,47 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import * as Sentry from '@sentry/react'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ToastProvider } from './components/Toast'
 import LandingPage from './pages/LandingPage'
-import PreviewPage from './pages/PreviewPage'
-import AdminDashboard from './pages/AdminDashboard'
-import AdminManagementPage from './pages/AdminManagementPage'
-import QrKeyManagement from './pages/QrKeyManagement'
-import AboutPage from './pages/AboutPage'
-import TermsPage from './pages/TermsPage'
-import PrivacyPage from './pages/PrivacyPage'
-import QrViewPage from './pages/QrViewPage'
-import StudentSubmissionForm from './pages/StudentSubmissionForm'
-import StudentStatusPage from './pages/StudentStatusPage'
-import StudentStatusCheck from './pages/StudentStatusCheck'
+
+// Lazy-loaded: every route past the landing page. Students visiting a
+// /preview/:token link and admins visiting /admin share none of this code
+// today — they're bundled together into one 640KB+ chunk regardless of
+// which one a visitor actually needs. Splitting per-route means a student
+// on a preview link only downloads PreviewPage's code, never the Layout
+// Mapper, chart.js, or hCaptcha that only /admin needs, and vice versa.
+const PreviewPage = lazy(() => import('./pages/PreviewPage'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const AdminManagementPage = lazy(() => import('./pages/AdminManagementPage'))
+const QrKeyManagement = lazy(() => import('./pages/QrKeyManagement'))
+const AboutPage = lazy(() => import('./pages/AboutPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
+const QrViewPage = lazy(() => import('./pages/QrViewPage'))
+const StudentSubmissionForm = lazy(() => import('./pages/StudentSubmissionForm'))
+const StudentStatusPage = lazy(() => import('./pages/StudentStatusPage'))
+const StudentStatusCheck = lazy(() => import('./pages/StudentStatusCheck'))
 
 const SentryErrorBoundary = Sentry.ErrorBoundary || ErrorBoundary
+
+function RouteLoadingFallback() {
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'Inter, Arial, sans-serif',
+        color: '#666',
+        fontSize: 14,
+      }}
+    >
+      Loading…
+    </div>
+  )
+}
 
 function NotFoundPage() {
   return (
@@ -62,6 +88,7 @@ export default function App() {
     <ErrorBoundary>
       <ToastProvider>
         <BrowserRouter>
+        <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/preview/:token" element={<PreviewPage />} />
@@ -98,6 +125,7 @@ export default function App() {
           <Route path="/check-status" element={<StudentStatusCheck />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
       </ToastProvider>
     </ErrorBoundary>
