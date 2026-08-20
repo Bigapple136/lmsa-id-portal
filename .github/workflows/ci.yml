@@ -1,0 +1,72 @@
+name: CI
+
+# Runs on every push and pull request targeting main. This is the gate that
+# was missing when a hard-crashing bug (undefined variable reference) shipped
+# straight to the student-facing preview page — nothing ran lint or tests
+# before Render/Vercel auto-deployed it. This workflow doesn't deploy
+# anything itself; Render and Vercel still auto-deploy independently on push
+# to main. Its job is to fail loudly, fast, and in a visible GitHub check
+# before that happens — a red check here is a signal to fix it before
+# merging, not an automatic block (branch protection, if enabled later on
+# this repo, would be what actually makes it a hard gate).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+        env:
+          # Test-only placeholder values so env.js's startup validation
+          # passes — these are never used against a real database. See
+          # backend/tests/env.test.js and backend/tests/health.test.js,
+          # which are the only tests that actually read these.
+          SUPABASE_URL: https://ci-placeholder.supabase.co
+          SUPABASE_SERVICE_KEY: ci-placeholder-service-key
+          QR_SIGNING_SECRET: ci-placeholder-signing-secret-at-least-32-chars
+          FRONTEND_URL: https://ci-placeholder.vercel.app
+          BACKEND_URL: https://ci-placeholder.onrender.com
+          NODE_ENV: test
+
+  frontend:
+    name: Frontend (lint + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          # Placeholder values so the Vite build succeeds — these get
+          # baked into the CI build artifact only, which this workflow
+          # doesn't publish or deploy anywhere. The real production build
+          # is a separate one Vercel runs itself, using its own configured
+          # environment variables.
+          VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
