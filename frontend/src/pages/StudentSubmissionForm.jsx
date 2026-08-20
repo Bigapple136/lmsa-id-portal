@@ -229,12 +229,12 @@ export default function StudentSubmissionForm() {
     { label: 'Year / Level', value: form.year_level },
     showPosition && form.position && { label: 'Position', value: form.position },
     showProgramme && form.programme && { label: 'Programme', value: form.programme },
-    showBloodType && form.blood_type && { label: 'Blood Type', value: form.blood_type },
     showStudentEmail && form.student_email && { label: 'Email', value: form.student_email },
     showDateOfBirth && form.date_of_birth && { label: 'Date of Birth', value: form.date_of_birth },
     showNationality && form.nationality && { label: 'Nationality', value: form.nationality },
     showCountyOfOrigin && form.county_of_origin && { label: 'County of Origin', value: form.county_of_origin },
     showCurrentAddress && form.current_address && { label: 'Address', value: form.current_address },
+    showBloodType && form.blood_type && { label: 'Blood Type', value: form.blood_type },
     showEmergencyContactName && form.emergency_contact_name && { label: 'Emergency Contact', value: form.emergency_contact_name },
     showEmergencyContactPhone && form.emergency_contact_phone && { label: 'Emergency Phone', value: form.emergency_contact_phone },
   ].filter(Boolean)
@@ -298,6 +298,13 @@ export default function StudentSubmissionForm() {
                       {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
+                  {showPosition && (
+                    <div className="field-group">
+                      <label className="field-label">Position</label>
+                      <input className="field-input" placeholder="Your position in LMSA"
+                        value={form.position} onChange={update('position')} />
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -316,22 +323,6 @@ export default function StudentSubmissionForm() {
                       <label className="field-label">Programme <span className="required">*</span></label>
                       <input className="field-input" placeholder="Enter your programme"
                         value={form.programme} onChange={update('programme')} />
-                    </div>
-                  )}
-                  {showBloodType && (
-                    <div className="field-group">
-                      <label className="field-label">Blood Type <span className="required">*</span></label>
-                      <select className="field-input" value={form.blood_type} onChange={update('blood_type')}>
-                        <option value="">Select blood type</option>
-                        {BLOOD_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  {showPosition && (
-                    <div className="field-group">
-                      <label className="field-label">Position</label>
-                      <input className="field-input" placeholder="Enter your position"
-                        value={form.position} onChange={update('position')} />
                     </div>
                   )}
                 </div>
@@ -384,6 +375,15 @@ export default function StudentSubmissionForm() {
                       <textarea className="field-input" placeholder="Enter your full address" rows={3}
                         value={form.current_address} onChange={update('current_address')}
                         style={{ resize: 'vertical', minHeight: '60px' }} />
+                    </div>
+                  )}
+                  {showBloodType && (
+                    <div className="field-group">
+                      <label className="field-label">Blood Type <span className="required">*</span></label>
+                      <select className="field-input" value={form.blood_type} onChange={update('blood_type')}>
+                        <option value="">Select blood type</option>
+                        {BLOOD_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
                     </div>
                   )}
                   {showEmergencyContactName && (
