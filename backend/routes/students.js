@@ -523,11 +523,10 @@ router.post(
     enqueueImport(async () => {
       const rows = []
       for (const r of deduped) {
-        let photo_url = null,
-          signature_url = null
+        const row = { ...r }
         if (photoMap[r.student_id]) {
           try {
-            photo_url = await uploadPhoto(
+            row.photo_url = await uploadPhoto(
               photoMap[r.student_id].buffer,
               photoMap[r.student_id].mimeType,
               r.student_id,
@@ -535,16 +534,18 @@ router.post(
             )
           } catch (err) {
             logger.warn({ studentId: r.student_id, err: err.message }, 'Bulk photo upload failed')
+            // Omit photo_url so existing DB value is preserved on upsert
           }
         }
         if (signatureMap[r.student_id]) {
           try {
-            signature_url = await uploadSignature(signatureMap[r.student_id], r.student_id, r.year_level)
+            row.signature_url = await uploadSignature(signatureMap[r.student_id], r.student_id, r.year_level)
           } catch (err) {
             logger.warn({ studentId: r.student_id, err: err.message }, 'Bulk signature upload failed')
+            // Omit signature_url so existing DB value is preserved on upsert
           }
         }
-        rows.push({ ...r, photo_url, signature_url })
+        rows.push(row)
       }
 
       const { data, error } = await supabase
