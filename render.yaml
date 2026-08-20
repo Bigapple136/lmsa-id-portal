@@ -19,7 +19,15 @@ services:
         sync: false
       - key: SUPABASE_JWT_SECRET
         sync: false
+      - key: QR_SIGNING_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
       - key: QR_BASE_URL
         sync: false
       - key: DOCC_QR_CODE
+        sync: false
+      - key: SENTRY_DSN
         sync: false

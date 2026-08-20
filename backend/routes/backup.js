@@ -13,6 +13,11 @@ const TABLES = [
   'templates',
   'confirmations',
   'student_submissions',
+  'admin_actions',
+  'layout_history',
+  'notifications',
+  'notification_reads',
+  'qr_audit',
 ]
 
 const STORAGE_BUCKETS = [
