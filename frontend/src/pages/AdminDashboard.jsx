@@ -274,6 +274,7 @@ export default function AdminDashboard() {
   const [editMsg, setEditMsg] = useState(null)
   const [issueNotes, setIssueNotes] = useState({})
   const [yearFilter, setYearFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
 
   // Field toggle state
   const [fields, setFields] = useState(null)
@@ -1039,6 +1040,8 @@ export default function AdminDashboard() {
   const filtered = students.filter(
     (s) =>
       (yearFilter === 'all' || s.year_level === yearFilter) &&
+      (statusFilter === 'all' ||
+        (statusFilter === 'issues' ? ['issue', 'photo_issue'].includes(s.status) : s.status === statusFilter)) &&
       (s.full_name.toLowerCase().includes(search.toLowerCase()) ||
         s.student_id.toLowerCase().includes(search.toLowerCase())),
   )
@@ -1366,7 +1369,15 @@ export default function AdminDashboard() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <NotificationCenter />
+          <NotificationCenter
+            onNavigateStudent={(studentId, type) => {
+              setStatusFilter('issues')
+              setActiveTab('students')
+              // Find the student and open edit modal
+              const student = students.find((s) => s.student_id === studentId)
+              if (student) openEdit(student)
+            }}
+          />
           <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
             Sign out
           </button>
@@ -1465,7 +1476,16 @@ export default function AdminDashboard() {
                       <div className="stat-num pending">{stats.pending}</div>
                       <div className="stat-lbl">Pending</div>
                     </div>
-                    <div className="stat-box">
+                    <div
+                      className="stat-box"
+                      style={{ cursor: stats.issues > 0 ? 'pointer' : 'default' }}
+                      onClick={() => {
+                        if (stats.issues > 0) {
+                          setStatusFilter('issues')
+                          setActiveTab('students')
+                        }
+                      }}
+                    >
                       <div className="stat-num issue">{stats.issues}</div>
                       <div className="stat-lbl">Issues</div>
                     </div>
@@ -1473,7 +1493,16 @@ export default function AdminDashboard() {
                       <div className="stat-num issue">{analyticsData?.corrections_by_field?.name || 0}</div>
                       <div className="stat-lbl">Name Corrections</div>
                     </div>
-                    <div className="stat-box">
+                    <div
+                      className="stat-box"
+                      style={{ cursor: analyticsData?.photo_issues > 0 ? 'pointer' : 'default' }}
+                      onClick={() => {
+                        if (analyticsData?.photo_issues > 0) {
+                          setStatusFilter('issues')
+                          setActiveTab('students')
+                        }
+                      }}
+                    >
                       <div className="stat-num issue">{analyticsData?.photo_issues || 0}</div>
                       <div className="stat-lbl">Photo Issues</div>
                     </div>
@@ -1729,165 +1758,201 @@ export default function AdminDashboard() {
 
         {/* ── UPLOAD ── */}
         {activeTab === 'upload' && (
-          <div>
-            {/* Downloads */}
-            <div className="section-title">Download templates</div>
-            <p className="section-desc">
-              Download the pre-configured Excel file to fill in student data, and the pre-built
-              image folder to organise your photos before uploading.
-            </p>
-            <div className="download-row">
-              <button
-                className="download-btn"
-                onClick={() => handleDownload('download-excel', 'LMSA_Student_Template.xlsx')}
-                disabled={downloading['download-excel']}
-              >
-                <div className="download-icon">📊</div>
-                <div>
-                  <div className="download-title">
-                    {downloading['download-excel'] ? 'Downloading...' : 'Student data template'}
-                  </div>
-                  <div className="download-sub">Excel · pre-formatted columns</div>
-                </div>
-              </button>
-              <button
-                className="download-btn"
-                onClick={() =>
-                  handleDownload('download-image-folder', 'LMSA_Image_Upload_Folder.zip')
-                }
-                disabled={downloading['download-image-folder']}
-              >
-                <div className="download-icon">📁</div>
-                <div>
-                  <div className="download-title">
-                    {downloading['download-image-folder']
-                      ? 'Downloading...'
-                      : 'Image folder package'}
-                  </div>
-                  <div className="download-sub">ZIP · year subfolders + README</div>
-                </div>
-              </button>
-            </div>
-
-            <div className="divider" />
-
-            {/* Template upload - Front & Back */}
-            <div className="section-title">
-              ID Card Templates <span className="new-badge">Front & Back</span>
-            </div>
-            <p className="section-desc">
-              Upload separate background images for the front and back of the ID card. Each side can have its own design.
-            </p>
-
-            {/* Front Template */}
-            <div style={{ marginBottom: '24px' }}>
-              <div className="section-title" style={{ fontSize: '14px', marginBottom: '8px' }}>
-                🎨 Front Template
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* ── Card: Downloads ── */}
+            <div className="chart-card">
+              <div className="chart-card-title">📥 Downloads</div>
+              <div className="chart-card-sub">
+                Get the pre-configured Excel file to fill in student data, and the pre-built
+                image folder to organise your photos before uploading.
               </div>
-              {activeTemplateFront && (
-                <div className="template-row" style={{ marginBottom: '10px' }}>
-                  <div className="template-icon">🎨</div>
-                  <div className="template-info">
-                    <div className="template-name">{activeTemplateFront.file_name}</div>
-                    <div className="template-meta">Currently active · CR-80</div>
+              <div className="download-row">
+                <button
+                  className="download-btn"
+                  onClick={() => handleDownload('download-excel', 'LMSA_Student_Template.xlsx')}
+                  disabled={downloading['download-excel']}
+                >
+                  <div className="download-icon">📊</div>
+                  <div>
+                    <div className="download-title">
+                      {downloading['download-excel'] ? 'Downloading...' : 'Student data template'}
+                    </div>
+                    <div className="download-sub">Excel · pre-formatted columns</div>
                   </div>
-                  <span className="pill pill-green">Active</span>
-                </div>
-              )}
-              <div
-                className="upload-zone"
-                onClick={() => document.getElementById('template-input-front').click()}
-              >
-                <input
-                  id="template-input-front"
-                  type="file"
-                  accept=".png,.jpg,.jpeg"
-                  hidden
-                  onChange={(e) => {
-                    setTemplateFileFront(e.target.files[0])
-                    setUploadMsg(null)
-                  }}
-                />
-                {templateFileFront ? (
-                  <p className="upload-selected">📄 {templateFileFront.name}</p>
-                ) : (
-                  <>
-                    <p className="upload-icon">⬆</p>
-                    <p className="upload-text">
-                      Drop front template or <span className="upload-link">browse</span>
-                    </p>
-                    <p className="upload-hint">PNG or JPG · 1012 × 638 px (CR-80 at 300 DPI)</p>
-                  </>
-                )}
-              </div>
-              {templateFileFront && (
-                <button className="btn-gold-full" onClick={() => handleTemplateUpload('front')} disabled={uploading} style={{ marginTop: '8px', width: '100%' }}>
-                  {uploading ? 'Uploading...' : 'Upload Front Template'}
                 </button>
-              )}
+                <button
+                  className="download-btn"
+                  onClick={() =>
+                    handleDownload('download-image-folder', 'LMSA_Image_Upload_Folder.zip')
+                  }
+                  disabled={downloading['download-image-folder']}
+                >
+                  <div className="download-icon">📁</div>
+                  <div>
+                    <div className="download-title">
+                      {downloading['download-image-folder']
+                        ? 'Downloading...'
+                        : 'Image folder package'}
+                    </div>
+                    <div className="download-sub">ZIP · year subfolders + README</div>
+                  </div>
+                </button>
+              </div>
             </div>
 
-            {/* Back Template */}
-            <div>
-              <div className="section-title" style={{ fontSize: '14px', marginBottom: '8px' }}>
-                🔙 Back Template
+            {/* ── Card: Card Templates ── */}
+            <div className="chart-card">
+              <div className="chart-card-title">🎨 ID Card Templates <span className="new-badge">Front & Back</span></div>
+              <div className="chart-card-sub">
+                Upload separate background images for the front and back of the ID card. Each side can have its own design.
               </div>
-              {activeTemplateBack && (
-                <div className="template-row" style={{ marginBottom: '10px' }}>
-                  <div className="template-icon">🎨</div>
-                  <div className="template-info">
-                    <div className="template-name">{activeTemplateBack.file_name}</div>
-                    <div className="template-meta">Currently active · CR-80</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                {/* Front Template */}
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                    Front Template
                   </div>
-                  <span className="pill pill-green">Active</span>
+                  {activeTemplateFront ? (
+                    <div style={{ marginBottom: '10px' }}>
+                      <img
+                        src={activeTemplateFront.file_url}
+                        alt="Front template"
+                        style={{
+                          width: '100%',
+                          height: '120px',
+                          objectFit: 'cover',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border)',
+                          marginBottom: '8px',
+                        }}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>{activeTemplateFront.file_name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--muted)' }}>CR-80 · {new Date(activeTemplateFront.uploaded_at).toLocaleDateString()}</div>
+                        </div>
+                        <span className="pill pill-green">Active</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>No template uploaded</div>
+                  )}
+                  <div
+                    className="upload-zone"
+                    style={{ padding: '12px' }}
+                    onClick={() => document.getElementById('template-input-front').click()}
+                  >
+                    <input
+                      id="template-input-front"
+                      type="file"
+                      accept=".png,.jpg,.jpeg"
+                      hidden
+                      onChange={(e) => {
+                        setTemplateFileFront(e.target.files[0])
+                        setUploadMsg(null)
+                      }}
+                    />
+                    {templateFileFront ? (
+                      <p className="upload-selected" style={{ fontSize: '12px' }}>📄 {templateFileFront.name}</p>
+                    ) : (
+                      <>
+                        <p className="upload-icon" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
+                        <p className="upload-text" style={{ fontSize: '12px' }}>
+                          Drop or <span className="upload-link">browse</span>
+                        </p>
+                        <p className="upload-hint" style={{ fontSize: '10px' }}>PNG/JPG · 1012×638 px</p>
+                      </>
+                    )}
+                  </div>
+                  {templateFileFront && (
+                    <button className="btn-gold-full" onClick={() => handleTemplateUpload('front')} disabled={uploading} style={{ marginTop: '8px', width: '100%', fontSize: '12px', padding: '8px' }}>
+                      {uploading ? 'Uploading...' : 'Upload Front'}
+                    </button>
+                  )}
+                </div>
+
+                {/* Back Template */}
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                    Back Template
+                  </div>
+                  {activeTemplateBack ? (
+                    <div style={{ marginBottom: '10px' }}>
+                      <img
+                        src={activeTemplateBack.file_url}
+                        alt="Back template"
+                        style={{
+                          width: '100%',
+                          height: '120px',
+                          objectFit: 'cover',
+                          borderRadius: '8px',
+                          border: '1px solid var(--border)',
+                          marginBottom: '8px',
+                        }}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>{activeTemplateBack.file_name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--muted)' }}>CR-80 · {new Date(activeTemplateBack.uploaded_at).toLocaleDateString()}</div>
+                        </div>
+                        <span className="pill pill-green">Active</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>No template uploaded</div>
+                  )}
+                  <div
+                    className="upload-zone"
+                    style={{ padding: '12px' }}
+                    onClick={() => document.getElementById('template-input-back').click()}
+                  >
+                    <input
+                      id="template-input-back"
+                      type="file"
+                      accept=".png,.jpg,.jpeg"
+                      hidden
+                      onChange={(e) => {
+                        setTemplateFileBack(e.target.files[0])
+                        setUploadMsg(null)
+                      }}
+                    />
+                    {templateFileBack ? (
+                      <p className="upload-selected" style={{ fontSize: '12px' }}>📄 {templateFileBack.name}</p>
+                    ) : (
+                      <>
+                        <p className="upload-icon" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
+                        <p className="upload-text" style={{ fontSize: '12px' }}>
+                          Drop or <span className="upload-link">browse</span>
+                        </p>
+                        <p className="upload-hint" style={{ fontSize: '10px' }}>PNG/JPG · 1012×638 px</p>
+                      </>
+                    )}
+                  </div>
+                  {templateFileBack && (
+                    <button className="btn-gold-full" onClick={() => handleTemplateUpload('back')} disabled={uploading} style={{ marginTop: '8px', width: '100%', fontSize: '12px', padding: '8px' }}>
+                      {uploading ? 'Uploading...' : 'Upload Back'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {uploadMsg && (
+                <div
+                  className={uploadMsg.ok ? 'success-box' : 'error-box'}
+                  style={{ marginTop: '12px' }}
+                >
+                  {uploadMsg.text}
                 </div>
               )}
-              <div
-                className="upload-zone"
-                onClick={() => document.getElementById('template-input-back').click()}
-              >
-                <input
-                  id="template-input-back"
-                  type="file"
-                  accept=".png,.jpg,.jpeg"
-                  hidden
-                  onChange={(e) => {
-                    setTemplateFileBack(e.target.files[0])
-                    setUploadMsg(null)
-                  }}
-                />
-                {templateFileBack ? (
-                  <p className="upload-selected">📄 {templateFileBack.name}</p>
-                ) : (
-                  <>
-                    <p className="upload-icon">⬆</p>
-                    <p className="upload-text">
-                      Drop back template or <span className="upload-link">browse</span>
-                    </p>
-                    <p className="upload-hint">PNG or JPG · 1012 × 638 px (CR-80 at 300 DPI)</p>
-                  </>
-                )}
-              </div>
-              {templateFileBack && (
-                <button className="btn-gold-full" onClick={() => handleTemplateUpload('back')} disabled={uploading} style={{ marginTop: '8px', width: '100%' }}>
-                  {uploading ? 'Uploading...' : 'Upload Back Template'}
-                </button>
-              )}
             </div>
 
-            {uploadMsg && (
-              <div
-                className={uploadMsg.ok ? 'success-box' : 'error-box'}
-                style={{ marginTop: '10px' }}
-              >
-                {uploadMsg.text}
+            {/* ── Card: Add Students ── */}
+            <div className="chart-card">
+              <div className="chart-card-title">👤 Add Students</div>
+              <div className="chart-card-sub">
+                Upload a CSV batch or add students one at a time.
               </div>
-            )}
-
-            <div className="divider" />
-
-            {/* Student data upload */}
-            <div className="section-title">Add students</div>
             <div className="mode-toggle">
               <button
                 className={`mode-btn ${uploadMode === 'csv' ? 'active' : ''}`}
@@ -2246,6 +2311,7 @@ export default function AdminDashboard() {
                 )}
               </form>
             )}
+            </div>
           </div>
         )}
 
@@ -2832,6 +2898,20 @@ export default function AdminDashboard() {
                     {y}
                   </option>
                 ))}
+              </select>
+              <select
+                className="field-input"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value)
+                  setCurrentPage(1)
+                }}
+                style={{ width: 'auto', minWidth: '120px', fontSize: '13px' }}
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="issues">Issues</option>
               </select>
               <button
                 className="btn-gold"
