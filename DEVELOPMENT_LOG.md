@@ -729,6 +729,150 @@ test suite (31/31). Frontend: eslint (0 errors), production build.
 
 ---
 
+## 14. Production Readiness: RLS, CI, Migration Consolidation, Dependency Fixes, Code Splitting (commits `cb8c811`, `c7c33c0`, `1459379`, `2f9a943`, `65f47c4`, `0e05d6a`, `65feb9f`)
+
+### Motivation
+A full production-readiness review turned up several gaps that don't
+block the app from running today but would matter at real scale or in
+an incident. Fixed the ones that were safely fixable without live
+database or dashboard access; documented the rest as needing manual
+action (see Operational Notes).
+
+### 1. RLS on the six core tables (`cb8c811`, `sql/013`)
+`students`, `confirmations`, `student_submissions`, `admins`,
+`templates`, and `portal_settings` had no Row Level Security enabled
+anywhere in the schema. The backend exclusively uses the service role
+key (bypasses RLS regardless of policy) and the frontend's anon-key
+client is only ever used for `supabase.auth.*`, never direct table
+queries — so this app's own behavior is unaffected either way. But
+Supabase auto-exposes every table via a public REST API by default,
+and the anon key is necessarily embedded in the shipped frontend
+bundle; without RLS, anyone who extracts it could query student PII
+directly, bypassing the backend's auth, rate limiting, and audit log
+entirely. `sql/013` enables RLS with zero policies on all six —
+matching the existing convention in this repo (`qr_audit`, `qr_keys`,
+`admin_actions`, `layout_history`) — which denies anon/authenticated
+access by default without touching a single existing row.
+
+### 2. CI workflow (`c7c33c0`, `.github/workflows/ci.yml`)
+Directly motivated by item 11: a hard-crashing bug shipped straight to
+the student preview page because nothing ran lint or tests before
+Render/Vercel auto-deployed it. New GitHub Actions workflow runs
+backend lint + test and frontend lint + test + build on every push and
+PR to `main`, using placeholder env vars so `env.js`'s startup
+validation passes without needing real secrets in CI. Doesn't deploy
+anything — Render/Vercel still auto-deploy independently — it just
+produces a visible pass/fail check. Verified by simulating the exact
+CI environment locally (same env vars, same commands) before writing
+it, not just written and assumed correct.
+
+### 3. Migration consolidation (`1459379`, `sql/014`)
+This repo had two disconnected migration locations: the numbered
+`sql/` folder everything else is tracked from, and a separate
+untracked `supabase/migrations/20260812_add_template_zones_and_layout.sql`
+(the Supabase CLI's default folder) that had drifted out of sync with
+it. Folded its content into `sql/014` and removed `supabase/`
+entirely. Confirmed safe to fold in as-is — both statements are
+idempotent (`ADD COLUMN IF NOT EXISTS`, `ON CONFLICT DO NOTHING`), and
+the columns it adds are already actively selected/inserted by
+`backend/routes/templates.js` in production today, confirming it had
+already been applied by some other means despite never being tracked.
+
+### 4. Backup table list + render.yaml (`2f9a943`)
+`backend/routes/backup.js`'s `TABLES` list was missing five tables
+added to the schema after it was written: `admin_actions`,
+`layout_history`, `notifications`, `notification_reads`, `qr_audit` —
+silently excluded from every backup since. Added all five.
+Deliberately did **not** add `qr_keys` — it holds QR signing secrets in
+plaintext, and including it in a downloadable backup zip would be a
+real secret-leakage risk; left out on purpose.
+
+`render.yaml` was missing three env vars that `backend/env.js` treats
+as required (`process.exit(1)` on boot if missing): `QR_SIGNING_SECRET`,
+`FRONTEND_URL`, `BACKEND_URL`. Since the app runs today, these must
+already be set by hand in Render's dashboard, invisible to version
+control — a from-scratch redeploy would fail to boot until someone
+remembered to add them. Added as `sync: false` placeholders, matching
+every other secret's existing pattern. Also added `SENTRY_DSN` as an
+optional placeholder, since Sentry is wired into the code but nothing
+in the dashboard exists to configure it yet.
+
+### 5. Dependency vulnerabilities (`65f47c4`)
+16 known vulnerabilities (12 backend, 4 frontend) down to 4 via
+non-breaking `npm audit fix` (no `--force`), reverified with a full
+fresh install + lint + test (+ build for frontend) after, not just
+trusted npm's success message. The remaining 4 are deliberate,
+documented deferrals:
+- **uuid** (moderate, backend) — transitive dependency of
+  `exceljs@4.4.0`, already the latest stable release; the suggested
+  fix downgrades exceljs three major versions. The CVE needs an
+  unusual explicit `buf` argument exceljs is unlikely to use
+  internally — low practical risk, not worth losing three majors of
+  bug fixes over.
+- **xlsx** (high, backend) — no fix available upstream at all. Checked
+  actual exposure: used in exactly one place
+  (`backend/scripts/generate_template.js`, a standalone script not
+  wired into any route) and only ever *writes* a static template — no
+  `XLSX.read`/`readFile` anywhere. Both CVEs need *parsing* an
+  untrusted file to exploit, which this app's real usage never does.
+- **react-router / react-router-dom** (moderate ×2, frontend) — fix is
+  a v6→v7 major jump with known breaking changes, against zero
+  navigation-level test coverage. Confirmed no SSR anywhere in this
+  app (rules out one CVE entirely); the other (open-redirect via
+  backslash in `Link`/`useNavigate`) is real, but forcing a blind
+  major router upgrade with nothing to catch a broken nav flow before
+  real users hit it is a worse risk than the bug itself.
+
+### 6. Route-based code splitting (`0e05d6a`)
+Every visitor downloaded one 649KB (184.66KB gzipped) bundle regardless
+of which page they hit — chart.js, the Layout Mapper, and hCaptcha
+included even for a student opening a bare preview link on mobile
+data. Lazy-loaded every route except `LandingPage` (kept eager as the
+primary entry point) via `React.lazy` + a single `Suspense` boundary.
+Verified by inspecting the actual build output, not assuming: a
+student hitting `/preview/:token` now downloads roughly 410KB
+(~122KB gzipped) total, about a third smaller, with zero admin-only
+code included. `AdminDashboard` (278KB) now ships only to `/admin`.
+
+### 7. Repo cleanup (`65feb9f`)
+Removed `backend/temp_check.xml` and `backend/temp_s1.xml` — stray
+debug output from inspecting `generate_template.js`'s Excel output at
+some point, not referenced anywhere in the codebase.
+
+### Operational Notes — still need manual action
+- `sql/012`, `sql/013`, and `sql/014` all still need to be run in the
+  Supabase SQL Editor. Nothing in items 13, 14.1, or 14.3 above takes
+  effect until they are.
+- A staging environment (deploy previews before production, rather
+  than every push going straight to real student data) was flagged in
+  the readiness review but is an infra/process decision, not something
+  fixable in a commit — still open.
+
+### Verification
+Backend: full fresh install + lint (0 errors) + test suite (31/31).
+Frontend: full fresh install + lint (0 errors) + test suite (13/13) +
+production build, with build output inspected directly to confirm the
+code-split actually took effect. Re-verified again after merging in
+four commits pushed directly to `origin/main` while this work was in
+progress (`backend/routes/students.js`, `NotificationCenter.jsx`,
+`AdminDashboard.jsx`, `StudentSubmissionForm.jsx`) — clean merge, no
+conflicts, but re-ran the entire verification suite against the merged
+result anyway rather than trusting a clean merge to mean a correct one.
+
+### Files Changed
+- `sql/013_enable_rls_core_tables.sql`
+- `sql/014_template_zones_and_field_sides.sql`
+- `supabase/migrations/20260812_add_template_zones_and_layout.sql` (removed)
+- `.github/workflows/ci.yml`
+- `backend/routes/backup.js`
+- `render.yaml`
+- `backend/package.json`, `backend/package-lock.json`
+- `frontend/package.json`, `frontend/package-lock.json`
+- `frontend/src/App.jsx`
+- `backend/temp_check.xml`, `backend/temp_s1.xml` (removed)
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -744,8 +888,15 @@ test suite (31/31). Frontend: eslint (0 errors), production build.
 | `15d954e` | Fix crash on student preview from leftover useCustomLayout reference; enable no-undef lint | Pushed |
 | `e98be23` | Fix GET /layout double-unwrap — back was unconditionally null on every read | Pushed |
 | `90bcb22` | Fix notification per-admin read state (service-role `auth.uid()` bug); add clear/delete endpoints + UI | Pushed |
-| `28b97a4` | Admin action audit log + layout version history (backend) | Not pushed |
-| `f4a7425` | Admin action audit log + layout version history (frontend) | Not pushed |
+| `28b97a4` | Admin action audit log + layout version history (backend) | Pushed |
+| `f4a7425` | Admin action audit log + layout version history (frontend) | Pushed |
+| `cb8c811` | Track RLS-enablement migration for the six core tables | Pushed |
+| `c7c33c0` | Add GitHub Actions CI — lint/test/build on every push/PR | Pushed |
+| `1459379` | Consolidate orphaned supabase/migrations file into sql/ | Pushed |
+| `2f9a943` | Fix backup route missing 5 tables; render.yaml missing 3 required env vars | Pushed |
+| `65f47c4` | Apply non-breaking dependency vulnerability fixes (16 → 4) | Pushed |
+| `0e05d6a` | Route-based code splitting — 649KB single chunk → per-route chunks | Pushed |
+| `65feb9f` | Remove stray debug output files | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
