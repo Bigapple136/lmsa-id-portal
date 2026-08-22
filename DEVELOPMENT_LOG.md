@@ -873,6 +873,79 @@ result anyway rather than trusting a clean merge to mean a correct one.
 
 ---
 
+## 15. Feature: Sub-Percent Layout Precision, mm Readouts, Rounded Corners for Image Fields (commit `0f6b513`)
+
+### Problem
+Two related reports about mapping image fields (photo/signature) to a
+printed template:
+1. X pos, Y pos, Width, and Height for image fields could only be set
+   to the nearest whole percent — the number inputs had `step="1"` and
+   displayed `Math.round(val * 100)`, so even though the underlying
+   stored value is full-precision (confirmed real saved layouts have
+   values like `0.2978167255108173`), the input boundary rounded it
+   away. On an 85.6mm-wide CR-80 card, a whole-percent step is close
+   to a millimeter — enough to visibly miss a precisely designed photo
+   frame.
+2. Image fields always clip to a hard rectangle. Templates commonly
+   have a rounded top corner on the photo frame; with no way to round
+   the field to match, the printed photo's square corner sits on top
+   of the template's rounded one.
+
+### Solution
+- **Precision**: `step="1"` → `step="0.1"` and display rounding
+  changed from `Math.round(val * 100)` to `Math.round(val * 1000) / 10`
+  (one decimal place), matching the pattern already used for font
+  size, on X pos, Y pos, Width, and Height.
+- **Physical measurement**: added `CARD_WIDTH_MM` (85.6) and
+  `CARD_HEIGHT_MM` (54) to `lib/layoutConstants.js` — these were
+  already hardcoded as magic numbers in two other files, now
+  centralized — and a live read-only mm readout under each input
+  (e.g. "8.5 mm from left"), so an admin with a measurement from the
+  template's design file or a ruler can dial the percentage in while
+  watching it converge on the target, instead of doing the conversion
+  by hand.
+- **Rounded corners**: new "Corner radius (%)" input for image fields,
+  stored as `borderRadius` (fraction of card width, consistent with
+  the existing x/width unit). `0` — the default, and what every layout
+  saved before this has — means square corners, exactly matching
+  behavior before this change. `CardCanvas.jsx`'s photo clip now
+  traces a rounded-rect path (native `ctx.roundRect`, with a manual
+  arc-based fallback for older browsers) instead of always using a
+  plain rectangle; signature got the same optional clip, applied only
+  when `borderRadius` is actually set, so its existing stretch-fit
+  behavior is unchanged by default. QR is deliberately discouraged
+  (a caption warns that rounding can hurt scan reliability) but not
+  blocked, in case there's a real design reason to. The drag-editor's
+  box overlay approximates the real radius while dragging too, so
+  editing doesn't look misleadingly square-cornered — the Live Preview
+  panel next to it remains the exact-pixel authority.
+
+No backend changes needed — `checkLayoutConfig` only validates
+`type`/`x`/`y` on each layout item, so the new `borderRadius`
+sub-property passes through untouched.
+
+### Mistake caught during review (fixed before commit)
+Renamed the signature block's destination-coordinate variables from
+`sx/sy/sw/sh` to `dx/dy/dw/dh`, since the photo block just above it
+uses `sx/sy/sw/sh` for something completely different (the *source*
+crop rectangle) — confusing to read even though it's not a functional
+bug (separate block scopes). The rename itself introduced a real bug:
+one branch still referenced the old names. Caught by reading the diff
+before running lint, though confirmed the `no-undef` rule added in
+item 11 would have caught it regardless.
+
+### Verification
+eslint (0 errors, same 14 pre-existing prop-types warnings), production
+build (chunk sizes unchanged from item 14's code-splitting work,
+confirming no regression there), full test suite (13/13).
+
+### Files Changed
+- `frontend/src/lib/layoutConstants.js`
+- `frontend/src/components/CardCanvas.jsx`
+- `frontend/src/components/LayoutMapper.jsx`
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -897,6 +970,7 @@ result anyway rather than trusting a clean merge to mean a correct one.
 | `65f47c4` | Apply non-breaking dependency vulnerability fixes (16 → 4) | Pushed |
 | `0e05d6a` | Route-based code splitting — 649KB single chunk → per-route chunks | Pushed |
 | `65feb9f` | Remove stray debug output files | Pushed |
+| `0f6b513` | Sub-percent layout precision + mm readouts + rounded corners for image fields | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
