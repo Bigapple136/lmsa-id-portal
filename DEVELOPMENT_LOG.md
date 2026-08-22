@@ -946,6 +946,70 @@ confirming no regression there), full test suite (13/13).
 
 ---
 
+## 16. Fix: "Name Corrections" Stat Counted New Registrations and Unrelated Self-Corrections (commit `f92f793`)
+
+### Problem
+Reported: the Overview "Name Corrections" stat showed a nonzero count
+with no student having ever submitted a name correction.
+
+### Root Cause
+Two independent bugs in `GET /api/analytics`, both unconditionally
+wrong (not just wrong under some conditions):
+
+1. Every `approved` row in `student_submissions` incremented
+   `corrections_by_field.name`, regardless of what the submission was
+   about. `student_submissions` is the self-service *new student*
+   registration form — `submissions.js`'s `/approve` route explicitly
+   rejects (409) any submission whose `student_id` already exists, so
+   every approved submission is, by construction, a brand new student
+   being added. There's no sense in which that's ever a "name
+   correction."
+2. Every `notifications` row with `type = 'self_correction'` also
+   incremented the same counter — but that notification is generic
+   ("Detail correction") and fires for *any* combination of fields the
+   self-correct route accepts (name, year, position, or any of 9
+   QR-payload fields like blood type or emergency contact). A student
+   correcting only their blood type, with no name change at all, was
+   counted as a name correction.
+
+### Solution
+Stopped counting `student_submissions` approvals toward corrections at
+all. Replaced the notification-based count with one sourced from
+`confirmations` where `action = 'self_corrected'`, matching each row's
+`note` text against the fixed per-field prefixes `students.js`'s
+self-correct route already writes (`"Name corrected to:"`,
+`"Year corrected to:"`) to attribute each correction to the field that
+actually changed. This is coupled to that route's exact note wording —
+flagged in a code comment, since there's no structured field-list to
+read instead. As a side effect this also fixes
+`corrections_by_field.year`, which was dead code before this (defined,
+never incremented) — `AdminDashboard.jsx` was already reading it for a
+chart dataset, silently always rendering zero.
+
+Also moved `photo_issues` off the same fragile `notifications`-type
+count onto `confirmations` where `action = 'photo_issue'` — more
+reliable, since that insert is `await`ed in `students.js` while the
+matching notification insert is fire-and-forget with errors only
+logged, so the two could silently drift apart.
+
+No frontend changes needed — the "Name Corrections" stat card and
+chart dataset were already reading the correct response shape; only
+the backend computation was wrong.
+
+### Verification
+Syntax check, eslint (0 errors), full test suite (31/31). Confirmed
+`confirmations.note` is an unbounded `TEXT` column with no DB-level
+truncation risk, and that `MAX_NOTE_LENGTH` (1000 chars) is generous
+enough in practice that the `"Name corrected to:"` prefix — always
+first in the note, since `full_name` is pushed to the notes array
+before `year_level`/`position`/QR fields — is never at risk of
+truncation.
+
+### Files Changed
+- `backend/routes/analytics.js`
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -971,6 +1035,7 @@ confirming no regression there), full test suite (13/13).
 | `0e05d6a` | Route-based code splitting — 649KB single chunk → per-route chunks | Pushed |
 | `65feb9f` | Remove stray debug output files | Pushed |
 | `0f6b513` | Sub-percent layout precision + mm readouts + rounded corners for image fields | Pushed |
+| `f92f793` | Fix Name Corrections stat — was counting new registrations + unrelated corrections | Pushed |
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
