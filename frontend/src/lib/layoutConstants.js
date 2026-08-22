@@ -2,6 +2,13 @@
 // All values are fractional (0–1) relative to card width/height.
 // Pixel-calibrated for LMSA portrait template (590×1004 px).
 
+// CR-80 standard card dimensions (mm) — used to show admins a physical
+// measurement alongside the fractional x/y/width/height values, since a
+// template's real photo-frame dimensions are usually known in mm (from
+// the design file or a ruler), not as a percentage of card width.
+export const CARD_WIDTH_MM = 85.6
+export const CARD_HEIGHT_MM = 54
+
 export const CALIBRATED_LAYOUT_FRONT = {
   photo: { x: 0.1271, y: 0.1673, width: 0.7458, height: 0.3287, type: 'image' },
   full_name: {

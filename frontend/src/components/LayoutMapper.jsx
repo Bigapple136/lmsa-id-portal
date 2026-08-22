@@ -7,6 +7,8 @@ import {
   CALIBRATED_LAYOUT_BACK,
   EST_CHARS,
   VALID_LAYOUT_FIELDS,
+  CARD_WIDTH_MM,
+  CARD_HEIGHT_MM,
 } from '../lib/layoutConstants'
 
 const DISPLAY_W = 260
@@ -772,7 +774,9 @@ export default function LayoutMapper({
                     minWidth: isImg ? undefined : '34px',
                     background: bg + 'CC',
                     border: `${isSel ? 2 : 1}px ${isSel ? 'solid' : 'dashed'} ${color}`,
-                    borderRadius: '3px',
+                    borderRadius: isImg
+                      ? `${Math.min((pos.borderRadius || 0) / Math.min(pos.width, pos.height), 0.5) * 100}%`
+                      : '3px',
                     cursor: 'grab',
                     display: 'flex',
                     alignItems: 'center',
@@ -1008,10 +1012,13 @@ export default function LayoutMapper({
                     style={{ fontSize: '12px', padding: '5px 8px' }}
                     min="0"
                     max="95"
-                    step="1"
-                    value={Math.round(sel.x * 100)}
+                    step="0.1"
+                    value={Math.round(sel.x * 1000) / 10}
                     onChange={(e) => set(selected, 'x', parseFloat(e.target.value) / 100)}
                   />
+                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
+                    {(sel.x * CARD_WIDTH_MM).toFixed(1)} mm from left
+                  </div>
                 </div>
 
                 <div className="field-group">
@@ -1022,10 +1029,13 @@ export default function LayoutMapper({
                     style={{ fontSize: '12px', padding: '5px 8px' }}
                     min="0"
                     max="95"
-                    step="1"
-                    value={Math.round(sel.y * 100)}
+                    step="0.1"
+                    value={Math.round(sel.y * 1000) / 10}
                     onChange={(e) => set(selected, 'y', parseFloat(e.target.value) / 100)}
                   />
+                  <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
+                    {(sel.y * CARD_HEIGHT_MM).toFixed(1)} mm from top
+                  </div>
                 </div>
 
                 {sel.type === 'image' && (
@@ -1038,10 +1048,13 @@ export default function LayoutMapper({
                         style={{ fontSize: '12px', padding: '5px 8px' }}
                         min="5"
                         max="95"
-                        step="1"
-                        value={Math.round(sel.width * 100)}
+                        step="0.1"
+                        value={Math.round(sel.width * 1000) / 10}
                         onChange={(e) => set(selected, 'width', parseFloat(e.target.value) / 100)}
                       />
+                      <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
+                        {(sel.width * CARD_WIDTH_MM).toFixed(1)} mm wide
+                      </div>
                     </div>
                     <div className="field-group">
                       <label className="field-label">Height (%)</label>
@@ -1051,10 +1064,31 @@ export default function LayoutMapper({
                         style={{ fontSize: '12px', padding: '5px 8px' }}
                         min="5"
                         max="95"
-                        step="1"
-                        value={Math.round(sel.height * 100)}
+                        step="0.1"
+                        value={Math.round(sel.height * 1000) / 10}
                         onChange={(e) => set(selected, 'height', parseFloat(e.target.value) / 100)}
                       />
+                      <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
+                        {(sel.height * CARD_HEIGHT_MM).toFixed(1)} mm tall
+                      </div>
+                    </div>
+                    <div className="field-group" style={{ gridColumn: '1 / -1' }}>
+                      <label className="field-label">Corner radius (%)</label>
+                      <input
+                        type="number"
+                        className="field-input"
+                        style={{ fontSize: '12px', padding: '5px 8px' }}
+                        min="0"
+                        max="50"
+                        step="0.1"
+                        value={Math.round((sel.borderRadius || 0) * 1000) / 10}
+                        onChange={(e) => set(selected, 'borderRadius', parseFloat(e.target.value) / 100)}
+                      />
+                      <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
+                        {selected === 'qr'
+                          ? 'Rounds the photo/image corners to match a rounded template frame. Keep this at 0 for QR — rounding the corners can reduce scan reliability.'
+                          : "Rounds the image's corners to match a rounded template frame — 0 keeps square corners, higher values round more."}
+                      </div>
                     </div>
                   </>
                 )}

@@ -19,6 +19,31 @@ function loadImg(src) {
   })
 }
 
+// Traces a rounded-rectangle path for clipping an image field to match a
+// template's rounded photo/signature frame — without this, image fields
+// only ever clip to a hard-edged rectangle, so a rounded template corner
+// gets covered by the image's square corner. Radius is clamped to half
+// the box's shorter side so it can never exceed a "pill" shape. Uses the
+// native Canvas roundRect where available (Chrome/Firefox/Safari/Edge all
+// have supported it since 2022), with a manual arc-based fallback for
+// anything older.
+function tracePath(ctx, x, y, w, h, radius) {
+  const r = Math.max(0, Math.min(radius, Math.min(w, h) / 2))
+  if (r === 0) {
+    ctx.rect(x, y, w, h)
+    return
+  }
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, w, h, r)
+    return
+  }
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+}
+
 function formatClass(value) {
   const mdMap = {
     '1st Year': 'Year 1 . MD1',
@@ -141,10 +166,13 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
               const py = pos.y * H
               const pw = pos.width * W
               const ph = pos.height * H
-              // Clip to photo zone to prevent overflow
+              // Clip to photo zone to prevent overflow. Rounded when the
+              // field has a borderRadius set (e.g. to match a template's
+              // rounded photo frame) — plain rectangle otherwise, exactly
+              // matching prior behavior for every layout saved before this.
               ctx.save()
               ctx.beginPath()
-              ctx.rect(px, py, pw, ph)
+              tracePath(ctx, px, py, pw, ph, (pos.borderRadius || 0) * W)
               ctx.clip()
               const imgRatio = img.naturalWidth / img.naturalHeight
               const fieldRatio = pw / ph
@@ -170,7 +198,20 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
             try {
               const img = await loadImg(student.signature_url)
               if (cancelled) return
-              ctx.drawImage(img, pos.x * W, pos.y * H, pos.width * W, pos.height * H)
+              const dx = pos.x * W
+              const dy = pos.y * H
+              const dw = pos.width * W
+              const dh = pos.height * H
+              if (pos.borderRadius) {
+                ctx.save()
+                ctx.beginPath()
+                tracePath(ctx, dx, dy, dw, dh, pos.borderRadius * W)
+                ctx.clip()
+                ctx.drawImage(img, dx, dy, dw, dh)
+                ctx.restore()
+              } else {
+                ctx.drawImage(img, dx, dy, dw, dh)
+              }
             } catch {
               /* signature not available */
             }
