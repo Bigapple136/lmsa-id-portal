@@ -1,62 +1,51 @@
+/* eslint-disable react/prop-types */
+import { Link, NavLink } from 'react-router-dom'
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
 
 export default function Navbar({ showLogin = true, hideMenu = false }) {
-  const navigate = useNavigate()
-  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const isAbout = location.pathname === '/about'
-  const isTerms = location.pathname === '/terms'
-  const isPrivacy = location.pathname === '/privacy'
+  const closeMenu = () => setMenuOpen(false)
+  const navClass = ({ isActive }) => `navbar-link${isActive ? ' active' : ''}`
 
   return (
-    <nav className="navbar">
+    <nav className="navbar" aria-label="Public navigation">
       <div className="navbar-inner">
-        {/* Left — LMSA identity */}
-        <div className="navbar-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+        <Link className="navbar-brand" to="/" aria-label="LMSA ID Card Portal home">
           <img src="/lmsa-logo.png" alt="LMSA" className="navbar-brand-logo" />
-          <div className="navbar-brand-name">LMSA</div>
-          <div className="navbar-brand-sub">ID Card Portal</div>
-        </div>
+          <div className="navbar-brand-text">
+            <div className="navbar-brand-name">LMSA</div>
+            <div className="navbar-brand-sub">ID Card Portal</div>
+          </div>
+        </Link>
 
-        {/* Right — desktop links */}
         {!hideMenu && (
           <div className="navbar-links">
-            <button
-              className={`navbar-link ${isAbout ? 'active' : ''}`}
-              onClick={() => navigate('/about')}
-            >
+            <NavLink className={navClass} to="/about">
               About
-            </button>
-            <button
-              className={`navbar-link ${isTerms ? 'active' : ''}`}
-              onClick={() => navigate('/terms')}
-            >
+            </NavLink>
+            <NavLink className={navClass} to="/terms">
               Terms
-            </button>
-            <button
-              className={`navbar-link ${isPrivacy ? 'active' : ''}`}
-              onClick={() => navigate('/privacy')}
-            >
+            </NavLink>
+            <NavLink className={navClass} to="/privacy">
               Privacy
-            </button>
+            </NavLink>
 
             {showLogin && (
-              <button className="navbar-login" onClick={() => navigate('/admin')}>
+              <Link className="navbar-login" to="/admin">
                 Admin Login
-              </button>
+              </Link>
             )}
           </div>
         )}
 
-        {/* Mobile hamburger */}
         {!hideMenu && (
           <button
             className={`navbar-hamburger${menuOpen ? ' is-open' : ''}`}
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-label="Toggle menu"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label="Toggle public navigation menu"
             aria-expanded={menuOpen}
+            aria-controls="public-mobile-menu"
           >
             <span className="ham-line" />
             <span className="ham-line" />
@@ -65,46 +54,21 @@ export default function Navbar({ showLogin = true, hideMenu = false }) {
         )}
       </div>
 
-      {/* Mobile dropdown */}
       {!hideMenu && menuOpen && (
-        <div className="navbar-mobile-menu">
-          <button
-            className="navbar-mobile-link"
-            onClick={() => {
-              navigate('/about')
-              setMenuOpen(false)
-            }}
-          >
+        <div className="navbar-mobile-menu" id="public-mobile-menu">
+          <NavLink className="navbar-mobile-link" to="/about" onClick={closeMenu}>
             About
-          </button>
-          <button
-            className="navbar-mobile-link"
-            onClick={() => {
-              navigate('/terms')
-              setMenuOpen(false)
-            }}
-          >
+          </NavLink>
+          <NavLink className="navbar-mobile-link" to="/terms" onClick={closeMenu}>
             Terms
-          </button>
-          <button
-            className="navbar-mobile-link"
-            onClick={() => {
-              navigate('/privacy')
-              setMenuOpen(false)
-            }}
-          >
+          </NavLink>
+          <NavLink className="navbar-mobile-link" to="/privacy" onClick={closeMenu}>
             Privacy
-          </button>
+          </NavLink>
           {showLogin && (
-            <button
-              className="navbar-mobile-login"
-              onClick={() => {
-                navigate('/admin')
-                setMenuOpen(false)
-              }}
-            >
+            <Link className="navbar-mobile-login" to="/admin" onClick={closeMenu}>
               Admin Login
-            </button>
+            </Link>
           )}
         </div>
       )}

@@ -1,8 +1,10 @@
 import Footer from '../components/Footer'
+import Navbar from '../components/Navbar'
 
 export default function TermsPage() {
   return (
     <div className="legal-page">
+      <Navbar showLogin={false} />
       <div className="legal-container">
         <div className="legal-brand">
           LMSA ID Portal — Operated by GoldWay Creative Design &amp; Production Services

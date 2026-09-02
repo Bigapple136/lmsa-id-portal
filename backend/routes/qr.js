@@ -40,8 +40,8 @@ function escapeHtml(str) {
 }
 
 // signStudentToken and verifyStudentToken are imported from ../qr-keys.
-// Phase 1: signing still emits v1 (see qr-keys.js); verify accepts v1 (shim)
-// and v2. Issuer flip to v2 is the deliberate separate Phase 2 change.
+// Current issuance emits v2 rotatable tokens; verification still accepts v1
+// legacy printed-card tokens through the compatibility shim.
 
 async function buildPayload(student) {
   const token = await signStudentToken(student.student_id)
@@ -97,6 +97,61 @@ async function generateForStudent(student) {
   await saveQRUrl(student.student_id, url)
   return url
 }
+
+function buildPublicVerificationStudent(student, qrFields) {
+  const record = {
+    full_name: student.full_name,
+    student_id: student.student_id,
+    year_level: student.year_level,
+    photo_url: student.photo_url || null,
+  }
+
+  const publicQrFields = [
+    'blood_type',
+    'programme',
+    'student_email',
+    'emergency_contact_name',
+    'emergency_contact_phone',
+    'date_of_birth',
+    'nationality',
+    'county_of_origin',
+    'current_address',
+  ]
+
+  for (const field of publicQrFields) {
+    if (qrFields[field]?.enabled && student[field]) record[field] = student[field]
+  }
+
+  return record
+}
+
+// Public signed-token verifier for the React `/qr/:token` surface. It never
+// accepts raw student IDs, so the route cannot become a public data lookup.
+router.get('/verify/:token', async (req, res) => {
+  const tokenErr = maxLength(req.params.token, 1000, 'token')
+  if (tokenErr) return res.status(400).json({ error: tokenErr })
+
+  const studentId = await verifyStudentToken(req.params.token)
+  if (!studentId) return res.status(403).json({ error: 'Invalid or expired credential.' })
+
+  try {
+    const { data: student, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('student_id', studentId)
+      .maybeSingle()
+
+    if (error) return res.status(500).json({ error: 'Failed to verify credential.' })
+    if (!student) return res.status(404).json({ error: 'Student not found.' })
+
+    const qrFields = await getQRFields()
+    res.setHeader('Cache-Control', 'no-store')
+    res.json({ verified: true, student: buildPublicVerificationStudent(student, qrFields) })
+  } catch (err) {
+    logger.error({ err }, 'Public QR verification failed')
+    res.status(500).json({ error: 'Failed to verify credential.' })
+  }
+})
 
 router.post('/generate/:studentId', requireAdmin, requireFullAdmin, async (req, res) => {
   const sidErr = maxLength(req.params.studentId, 50, 'studentId')
@@ -768,7 +823,7 @@ router.get('/inspect/:token', requireAdmin, async (req, res) => {
     const records = await getAllKeyRecords()
 
     if (version === 'v2' && decoded.kid) {
-      const key = records.find(r => r.kid === decoded.kid)
+      const key = records.find((r) => r.kid === decoded.kid)
       if (key) {
         keyStatus = key.status
         keyInfo = { kid: key.kid, status: key.status }
@@ -776,7 +831,7 @@ router.get('/inspect/:token', requireAdmin, async (req, res) => {
         keyInfo = { kid: decoded.kid, status: 'not_found' }
       }
     } else if (version === 'v1') {
-      const legacyKey = records.find(r => r.kid === LEGACY_KID)
+      const legacyKey = records.find((r) => r.kid === LEGACY_KID)
       if (legacyKey) {
         keyStatus = legacyKey.status
         keyInfo = { kid: LEGACY_KID, status: legacyKey.status }
@@ -824,6 +879,6 @@ module.exports.generateForStudent = generateForStudent
 module.exports.deleteQRFile = deleteQRFile
 module.exports.signStudentToken = signStudentToken
 module.exports.verifyStudentToken = verifyStudentToken
-// v2 surface re-exported for tests and the future Phase 2 issuer / Phase 3
-// rotation endpoints. Issuance still emits v1 in this PR — see qr-keys.js.
+module.exports.buildPublicVerificationStudent = buildPublicVerificationStudent
+// v2 surface re-exported for tests and future QR-key operations.
 module.exports.signV2 = signV2
