@@ -1,0 +1,609 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-02T15:24:50Z",
+  "title": "Design System: LIMSA ID Card Portal",
+  "extensions": {
+    "colorMeta": {
+      "dogliotti-navy": {
+        "role": "primary",
+        "displayName": "Dogliotti Navy",
+        "canonical": "#071b3a",
+        "tonalRamp": [
+          "#020812",
+          "#06152e",
+          "#071b3a",
+          "#12345d",
+          "#1b4b7d",
+          "#426c9d",
+          "#87a8ca",
+          "#d7e4f2"
+        ]
+      },
+      "navy-mid": {
+        "role": "primary",
+        "displayName": "Navy Mid",
+        "canonical": "#12345d",
+        "tonalRamp": [
+          "#030a13",
+          "#07172b",
+          "#12345d",
+          "#1b4b7d",
+          "#2c659d",
+          "#5c8dbc",
+          "#a5bfd8",
+          "#e1ebf5"
+        ]
+      },
+      "navy-light": {
+        "role": "primary",
+        "displayName": "Navy Light",
+        "canonical": "#1b4b7d",
+        "tonalRamp": [
+          "#06101b",
+          "#0d2641",
+          "#1b4b7d",
+          "#2d6aa8",
+          "#4f8bcc",
+          "#8fb5db",
+          "#c7d9eb",
+          "#edf4fb"
+        ]
+      },
+      "student-gold": {
+        "role": "secondary",
+        "displayName": "Student Gold",
+        "canonical": "#d5a83d",
+        "tonalRamp": [
+          "#1b1304",
+          "#4c3509",
+          "#7d5a13",
+          "#a97f22",
+          "#d5a83d",
+          "#e7c66e",
+          "#f4d483",
+          "#fff4c8"
+        ]
+      },
+      "gold-light": {
+        "role": "secondary",
+        "displayName": "Soft Student Gold",
+        "canonical": "#f4d483",
+        "tonalRamp": [
+          "#251a06",
+          "#5a400e",
+          "#8e681f",
+          "#bf9439",
+          "#d5a83d",
+          "#f4d483",
+          "#fae7b0",
+          "#fff7dc"
+        ]
+      },
+      "help-desk-teal": {
+        "role": "tertiary",
+        "displayName": "Help Desk Teal",
+        "canonical": "#087f8c",
+        "tonalRamp": [
+          "#021113",
+          "#043138",
+          "#06636f",
+          "#087f8c",
+          "#0b91a0",
+          "#43b9c4",
+          "#93dbe2",
+          "#d9f4f6"
+        ]
+      },
+      "teal-dark": {
+        "role": "tertiary",
+        "displayName": "Deep Teal",
+        "canonical": "#06636f",
+        "tonalRamp": [
+          "#020c0e",
+          "#03242a",
+          "#04454e",
+          "#06636f",
+          "#087f8c",
+          "#39aeba",
+          "#91d6dd",
+          "#d7f0f3"
+        ]
+      },
+      "registry-ink": {
+        "role": "neutral",
+        "displayName": "Registry Ink",
+        "canonical": "#10213f",
+        "tonalRamp": [
+          "#03060b",
+          "#081225",
+          "#10213f",
+          "#243a5c",
+          "#506581",
+          "#8a9ab1",
+          "#c5d0dd",
+          "#eef3f8"
+        ]
+      },
+      "record-gray": {
+        "role": "neutral",
+        "displayName": "Record Gray",
+        "canonical": "#61708b",
+        "tonalRamp": [
+          "#11151c",
+          "#252c38",
+          "#3c4658",
+          "#61708b",
+          "#8290a6",
+          "#aab5c5",
+          "#d2dae4",
+          "#f3f6fa"
+        ]
+      },
+      "hint-gray": {
+        "role": "neutral",
+        "displayName": "Hint Gray",
+        "canonical": "#8b98ad",
+        "tonalRamp": [
+          "#171a20",
+          "#323947",
+          "#566173",
+          "#8b98ad",
+          "#a6b1c2",
+          "#c5ceda",
+          "#e1e6ee",
+          "#f7f9fc"
+        ]
+      },
+      "rule-border": {
+        "role": "neutral",
+        "displayName": "Rule Border",
+        "canonical": "#dfe5ed",
+        "tonalRamp": [
+          "#1d242d",
+          "#3f4854",
+          "#697483",
+          "#9aa7b8",
+          "#c0cad8",
+          "#dfe5ed",
+          "#edf1f6",
+          "#fbfcfe"
+        ]
+      },
+      "campus-mist": {
+        "role": "neutral",
+        "displayName": "Campus Mist",
+        "canonical": "#f5f7fb",
+        "tonalRamp": [
+          "#20242b",
+          "#4b5260",
+          "#7d8797",
+          "#b1bdca",
+          "#d7e0eb",
+          "#f5f7fb",
+          "#fafbfe",
+          "#ffffff"
+        ]
+      },
+      "field-paper": {
+        "role": "neutral",
+        "displayName": "Field Paper",
+        "canonical": "#fbfcfe",
+        "tonalRamp": [
+          "#22262d",
+          "#505765",
+          "#828c9c",
+          "#b6c1cf",
+          "#dde5ee",
+          "#f1f5f9",
+          "#fbfcfe",
+          "#ffffff"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#222222",
+          "#555555",
+          "#888888",
+          "#bbbbbb",
+          "#dddddd",
+          "#eeeeee",
+          "#f8f8f8",
+          "#ffffff"
+        ]
+      },
+      "success-bg": {
+        "role": "state",
+        "displayName": "Confirmed Green Background",
+        "canonical": "#E6F4EC",
+        "tonalRamp": [
+          "#07130c",
+          "#163a22",
+          "#1A5C30",
+          "#2A7A42",
+          "#5ca875",
+          "#9bcdae",
+          "#E6F4EC",
+          "#f7fcf9"
+        ]
+      },
+      "success-text": {
+        "role": "state",
+        "displayName": "Confirmed Green Text",
+        "canonical": "#1A5C30",
+        "tonalRamp": [
+          "#061108",
+          "#0f2b18",
+          "#1A5C30",
+          "#2A7A42",
+          "#58a16e",
+          "#99caaa",
+          "#d7ecdf",
+          "#f4fbf6"
+        ]
+      },
+      "error-bg": {
+        "role": "state",
+        "displayName": "Issue Red Background",
+        "canonical": "#FCEBEB",
+        "tonalRamp": [
+          "#1b0707",
+          "#4c1515",
+          "#7A1A1A",
+          "#a93131",
+          "#E24B4A",
+          "#f09494",
+          "#FCEBEB",
+          "#fff7f7"
+        ]
+      },
+      "error-text": {
+        "role": "state",
+        "displayName": "Issue Red Text",
+        "canonical": "#7A1A1A",
+        "tonalRamp": [
+          "#160404",
+          "#3a0d0d",
+          "#7A1A1A",
+          "#a93131",
+          "#d65555",
+          "#ee9999",
+          "#f8dada",
+          "#fff6f6"
+        ]
+      },
+      "warn-bg": {
+        "role": "state",
+        "displayName": "Pending Amber Background",
+        "canonical": "#FEF6E4",
+        "tonalRamp": [
+          "#1b1102",
+          "#4a3006",
+          "#8A5C0A",
+          "#aa7610",
+          "#d09a2b",
+          "#eecb79",
+          "#FEF6E4",
+          "#fffaf0"
+        ]
+      },
+      "warn-text": {
+        "role": "state",
+        "displayName": "Pending Amber Text",
+        "canonical": "#8A5C0A",
+        "tonalRamp": [
+          "#170f02",
+          "#382505",
+          "#634207",
+          "#8A5C0A",
+          "#aa7610",
+          "#d09a2b",
+          "#f0d59a",
+          "#fff7e5"
+        ]
+      },
+      "info-bg": {
+        "role": "state",
+        "displayName": "Information Blue Background",
+        "canonical": "#DBEAFE",
+        "tonalRamp": [
+          "#071225",
+          "#102a5c",
+          "#1E40AF",
+          "#1D4ED8",
+          "#5b8def",
+          "#9fc2ff",
+          "#DBEAFE",
+          "#f3f8ff"
+        ]
+      },
+      "info-text": {
+        "role": "state",
+        "displayName": "Information Blue Text",
+        "canonical": "#1E40AF",
+        "tonalRamp": [
+          "#061027",
+          "#10245c",
+          "#1E40AF",
+          "#1D4ED8",
+          "#4f7bed",
+          "#9dbbff",
+          "#dbeafe",
+          "#f3f7ff"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Ceremonial Display",
+        "purpose": "Landing-page institution name and rare brand ceremony."
+      },
+      "headline": {
+        "displayName": "Workflow Headline",
+        "purpose": "Form sections, split-card titles, and major student workflow headings."
+      },
+      "title": {
+        "displayName": "Operational Title",
+        "purpose": "Cards, charts, topbars, settings panels, and admin section titles."
+      },
+      "body": {
+        "displayName": "Service Body",
+        "purpose": "Readable copy, metadata, form help, row details, and student instructions."
+      },
+      "label": {
+        "displayName": "Ledger Label",
+        "purpose": "Fields, pills, navigation, metadata labels, and compact admin controls."
+      }
+    },
+    "shadows": [
+      {
+        "name": "subtle-panel",
+        "value": "0 2px 8px rgba(7, 27, 58, 0.06)",
+        "purpose": "Default lift for cards, charts, settings panels, stat boxes, and list containers."
+      },
+      {
+        "name": "raised-workflow",
+        "value": "0 14px 36px rgba(7, 27, 58, 0.1)",
+        "purpose": "Major workflow cards, modals, submission wizard, and split landing form."
+      },
+      {
+        "name": "navy-chrome",
+        "value": "0 4px 18px rgba(7, 27, 58, 0.12)",
+        "purpose": "Fixed nav bars and sticky institutional chrome."
+      },
+      {
+        "name": "action-lift",
+        "value": "0 7px 16px rgba(8, 127, 140, 0.16)",
+        "purpose": "Primary teal submit, continue, save, and verification controls."
+      },
+      {
+        "name": "seal-emblem",
+        "value": "0 12px 30px rgba(0, 0, 0, 0.2)",
+        "purpose": "Round logo/emblem treatments on ceremonial navy surfaces."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "0.15s ease",
+        "purpose": "Default hover/background/border/color transitions for controls and rows."
+      },
+      {
+        "name": "field-focus",
+        "value": "0.18s ease",
+        "purpose": "Input border, shadow, and background transition."
+      },
+      {
+        "name": "hamburger-transform",
+        "value": "0.22s ease",
+        "purpose": "Mobile hamburger line transform."
+      },
+      {
+        "name": "spinner",
+        "value": "0.7s linear infinite",
+        "purpose": "Loading spinner rotation."
+      },
+      {
+        "name": "skeleton-shimmer",
+        "value": "1.5s ease-in-out infinite",
+        "purpose": "Loading skeleton shimmer."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-dashboard",
+        "value": "1100px"
+      },
+      {
+        "name": "tablet-split",
+        "value": "900px"
+      },
+      {
+        "name": "mobile-admin-touch",
+        "value": "768px"
+      },
+      {
+        "name": "wizard-stack",
+        "value": "700px"
+      },
+      {
+        "name": "mobile-nav",
+        "value": "600px"
+      },
+      {
+        "name": "phone-card",
+        "value": "480px"
+      },
+      {
+        "name": "narrow-wizard-actions",
+        "value": "440px"
+      },
+      {
+        "name": "compact-downloads",
+        "value": "420px"
+      },
+      {
+        "name": "very-small-phone",
+        "value": "380px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Teal Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Forward action for submit, continue, save, and verification flows.",
+      "html": "<button class=\"ds-btn-primary\">Continue</button>",
+      "css": ".ds-btn-primary { min-height: 46px; padding: 11px 18px; border: none; border-radius: 9px; background: linear-gradient(135deg, var(--teal, #087f8c), #0b91a0); color: #fff; font: 700 14px/1.2 Inter, system-ui, sans-serif; letter-spacing: 0.02em; box-shadow: 0 7px 16px rgba(8,127,140,.2); cursor: pointer; transition: filter .15s ease, transform .15s ease, box-shadow .15s ease; } .ds-btn-primary:hover { filter: brightness(.95); transform: translateY(-1px); } .ds-btn-primary:focus-visible { outline: 3px solid rgba(8,127,140,.25); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }"
+    },
+    {
+      "name": "Gold Official Button",
+      "kind": "button",
+      "refersTo": "button-gold",
+      "description": "Institutional secondary action and official emphasis control.",
+      "html": "<button class=\"ds-btn-gold\">Upload Front</button>",
+      "css": ".ds-btn-gold { padding: 9px 18px; border: none; border-radius: 8px; background: var(--gold, #d5a83d); color: var(--navy, #071b3a); font: 700 13px/1.2 Inter, system-ui, sans-serif; cursor: pointer; transition: opacity .15s ease, transform .15s ease; } .ds-btn-gold:hover { opacity: .88; transform: translateY(-1px); } .ds-btn-gold:focus-visible { outline: 3px solid rgba(8,127,140,.25); outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary or cancel action with low visual pressure.",
+      "html": "<button class=\"ds-btn-outline\">Cancel</button>",
+      "css": ".ds-btn-outline { padding: 9px 18px; border: 1px solid var(--border, #dfe5ed); border-radius: 8px; background: #fff; color: var(--muted, #61708b); font: 500 13px/1.2 Inter, system-ui, sans-serif; cursor: pointer; transition: background .15s ease, border-color .15s ease, color .15s ease; } .ds-btn-outline:hover { background: var(--bg, #f5f7fb); border-color: var(--gold, #d5a83d); color: var(--text, #10213f); } .ds-btn-outline:focus-visible { outline: 3px solid rgba(8,127,140,.25); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "Standard record lookup, filter, and form entry field.",
+      "html": "<label class=\"ds-field\"><span>Student ID</span><input placeholder=\"AMD-2024-0001\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font-family: Inter, system-ui, sans-serif; color: var(--text, #10213f); } .ds-field span { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; } .ds-field input { min-height: 46px; padding: 11px 13px; border: 1px solid var(--border, #dfe5ed); border-radius: 9px; background: #fbfcfe; color: var(--text, #10213f); font: 400 15px/1.4 Inter, system-ui, sans-serif; transition: border-color .18s ease, box-shadow .18s ease, background .18s ease; } .ds-field input:hover { border-color: #b6c2d3; } .ds-field input:focus { outline: none; border-color: var(--teal, #087f8c); background: #fff; box-shadow: 0 0 0 4px rgba(8,127,140,.1); }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "Default white document surface for forms, charts, settings, and dashboard panels.",
+      "html": "<article class=\"ds-card\"><h3>Card field settings</h3><p>Toggle which fields appear on the ID card.</p></article>",
+      "css": ".ds-card { background: #fff; border: 1px solid var(--border, #dfe5ed); border-radius: 18px; box-shadow: 0 2px 8px rgba(7,27,58,.06); padding: 22px; font-family: Inter, system-ui, sans-serif; color: var(--text, #10213f); } .ds-card h3 { margin: 0 0 6px; font-size: 15px; line-height: 1.3; font-weight: 700; } .ds-card p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted, #61708b); }"
+    },
+    {
+      "name": "Navy Navigation Link",
+      "kind": "nav",
+      "refersTo": "nav-shell",
+      "description": "Public navigation item inside the navy institutional bar.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-nav-brand\">LMSA</span><a class=\"ds-nav-link\" href=\"#\">Verify ID</a><a class=\"ds-nav-link is-active\" href=\"#\">Submit</a></nav>",
+      "css": ".ds-nav { display: flex; align-items: center; gap: 8px; min-height: 64px; padding: 0 16px; background: rgba(7,27,58,.97); border-bottom: 1px solid rgba(244,212,131,.18); box-shadow: 0 4px 18px rgba(7,27,58,.12); font-family: Inter, system-ui, sans-serif; } .ds-nav-brand { color: var(--gold-light, #f4d483); font-weight: 700; letter-spacing: .08em; margin-right: 10px; } .ds-nav-link { color: #c1cde0; text-decoration: none; border-radius: 8px; padding: 8px 12px; font-size: 13px; transition: background .15s ease, color .15s ease; } .ds-nav-link:hover, .ds-nav-link.is-active { color: #fff; background: rgba(255,255,255,.08); } .ds-nav-link:focus-visible { outline: 3px solid rgba(8,127,140,.25); outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Compact semantic badge for confirmed, pending, issue, and neutral states.",
+      "html": "<span class=\"ds-pill ds-pill-confirmed\">Confirmed</span> <span class=\"ds-pill ds-pill-pending\">Pending</span> <span class=\"ds-pill ds-pill-issue\">Issue</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 20px; font: 600 11px/1 Inter, system-ui, sans-serif; } .ds-pill-confirmed { background: var(--success-bg, #E6F4EC); color: var(--success-text, #1A5C30); } .ds-pill-pending { background: var(--warn-bg, #FEF6E4); color: var(--warn-text, #8A5C0A); } .ds-pill-issue { background: var(--error-bg, #FCEBEB); color: var(--error-text, #7A1A1A); }"
+    },
+    {
+      "name": "Admin Stat Card",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "Metric tile used in the admin dashboard overview.",
+      "html": "<div class=\"ds-stat\"><div class=\"ds-stat-num\">128</div><div class=\"ds-stat-label\">Total Students</div></div>",
+      "css": ".ds-stat { position: relative; min-height: 112px; overflow: hidden; padding: 20px; background: #fff; border: 1px solid var(--border, #dfe5ed); border-radius: 14px; box-shadow: 0 2px 8px rgba(7,27,58,.06); font-family: Inter, system-ui, sans-serif; } .ds-stat::after { content: ''; position: absolute; width: 82px; height: 82px; right: -24px; bottom: -28px; border-radius: 50%; background: rgba(8,127,140,.07); } .ds-stat-num { position: relative; z-index: 1; font-size: 31px; font-weight: 700; letter-spacing: -.04em; color: var(--text, #10213f); } .ds-stat-label { position: relative; z-index: 1; margin-top: 5px; font-size: 12px; color: var(--muted, #61708b); }"
+    },
+    {
+      "name": "Wizard Step Indicator",
+      "kind": "custom",
+      "refersTo": "status-pill",
+      "description": "Student submission progress rail with teal current step and gold completed step.",
+      "html": "<div class=\"ds-steps\"><div class=\"ds-step is-done\">✓</div><div class=\"ds-line is-done\"></div><div class=\"ds-step is-active\">2</div><div class=\"ds-line\"></div><div class=\"ds-step\">3</div></div>",
+      "css": ".ds-steps { display: flex; align-items: center; gap: 8px; padding: 16px; background: #fbfcfe; border: 1px solid var(--border, #dfe5ed); border-radius: 18px; font-family: Inter, system-ui, sans-serif; } .ds-step { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border, #dfe5ed); display: grid; place-items: center; color: var(--muted, #61708b); font-weight: 700; font-size: 13px; background: #fff; } .ds-step.is-active { background: var(--teal, #087f8c); border-color: var(--teal, #087f8c); color: #fff; box-shadow: 0 0 0 5px rgba(8,127,140,.1); } .ds-step.is-done { background: var(--gold, #d5a83d); border-color: var(--gold, #d5a83d); color: var(--navy, #071b3a); } .ds-line { flex: 1; height: 2px; border-radius: 1px; background: #dce3ec; min-width: 32px; } .ds-line.is-done { background: var(--gold, #d5a83d); }"
+    },
+    {
+      "name": "Credential Preview Miniature",
+      "kind": "custom",
+      "refersTo": "surface-card",
+      "description": "Navy student ID card preview language with photo, name, ID, and QR placeholders.",
+      "html": "<div class=\"ds-id-card\"><div class=\"ds-id-header\">Liberia Medical Students Association</div><div class=\"ds-id-body\"><div class=\"ds-photo\">PHOTO</div><div><div class=\"ds-name\">Josephine K. Freeman</div><div class=\"ds-year\">3rd Year</div><div class=\"ds-code\">AMD-2024-0001</div></div></div><div class=\"ds-id-footer\"><span>VALID STUDENT CARD</span><div class=\"ds-qr\"></div></div></div>",
+      "css": ".ds-id-card { width: 300px; max-width: 100%; padding: 14px; border-radius: 8px; background: var(--navy, #071b3a); color: #8BAACC; font-family: Inter, system-ui, sans-serif; } .ds-id-header { margin-bottom: 10px; text-align: center; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: #8899AA; } .ds-id-body { display: flex; gap: 12px; align-items: flex-start; } .ds-photo { width: 60px; height: 72px; border-radius: 4px; border: 1px solid var(--navy-light, #1b4b7d); background: var(--navy-mid, #12345d); display: grid; place-items: center; font-size: 9px; color: #4A6A8A; flex-shrink: 0; } .ds-name { margin-bottom: 3px; color: var(--gold-light, #f4d483); font-size: 14px; font-weight: 700; } .ds-year { margin-bottom: 8px; color: #8BAACC; font-size: 11px; } .ds-code { color: var(--gold, #d5a83d); font: 11px/1.2 'Courier New', monospace; } .ds-id-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--navy-mid, #12345d); font-size: 8px; color: #4A6A8A; } .ds-qr { width: 24px; height: 24px; border-radius: 3px; background: var(--navy-mid, #12345d); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Registrar's Seal",
+    "overview": "The LIMSA ID Card Portal looks and behaves like an official student-services desk backed by a registrar's seal: verified, orderly, and accountable, but not cold. The incumbent system uses deep navy as the institutional field, credential gold as a restrained mark of authority, and teal as the clearest signal for progress, verification, and action. White cards, cool form-paper backgrounds, and visible borders make operational state legible for admins while keeping student-facing forms calm on phones.\n\nThe system is warm and student-first in its tone: forms explain what is happening, errors are direct, and student flows avoid ornamental complexity. The formal navy-and-gold frame carries trust; the teal action layer carries reassurance and momentum. Components should feel restrained and confident: crisp, readable, durable, and easy to scan under real campus conditions.",
+    "keyCharacteristics": [
+      "Official institutional frame: navy chrome, gold identity marks, and real LMSA/A.M. Dogliotti content.",
+      "Student-service clarity: generous form targets, plain-language status messages, and mobile-safe layouts.",
+      "Operational density without clutter: dashboard cards, tables, tabs, filters, and export actions sit in structured white panels.",
+      "Soft credential depth: cards layer like official documents, using borders first and quiet shadows second.",
+      "Verification accents: teal marks forward action; green, amber, red, and blue remain reserved for status semantics."
+    ],
+    "rules": [
+      {
+        "name": "The Seal Accent Rule",
+        "body": "Gold is an institutional mark, not a fill color for every action. Use it for brand, completed state, official emphasis, and secondary actions; let navy and teal do most of the work.",
+        "section": "colors"
+      },
+      {
+        "name": "The Verification Action Rule",
+        "body": "Teal owns the forward path: continue, submit, save, verify, and selected progress. Do not make critical student actions compete with gold, red, or generic blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status Color Rule",
+        "body": "Green, amber, red, and blue are semantic. Do not reuse them for decorative cards or marketing blocks where users might read operational meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ceremony Is Rare Rule",
+        "body": "Serif display type belongs to brand ceremony, not routine controls. Admin dashboards, forms, settings, and tables stay in Inter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Label Ledger Rule",
+        "body": "Labels should be short, sturdy, and scan-friendly. Use uppercase for compact record fields; switch to sentence case when the label is part of a friendly student form.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Workflow Surface Rule",
+        "body": "Every screen should expose the current workflow state first: where the user is, what record or submission is being handled, what action is next, and what status is safe or unsafe.",
+        "section": "layout"
+      },
+      {
+        "name": "The Official Stack Rule",
+        "body": "Start with background tone, border, and spacing; add shadows only when a surface must read as a separate document, modal, nav layer, or committed action.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No Floating Dashboard Rule",
+        "body": "Dashboard panels can lift softly, but they must still feel anchored to the work surface. Avoid oversized blurred shadows or glassmorphism.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Rounded Credential Rule",
+        "body": "Use rounded corners to make workflows approachable, but keep radii disciplined. Pills and circles are state/identity shapes; routine cards should not become bubbly.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do preserve the LMSA/A.M. Dogliotti identity, real logo asset, and navy + gold institutional frame.",
+      "Do use teal for primary forward actions and verification progress.",
+      "Do keep student-facing forms mobile-safe, plain-spoken, and tolerant of long names, IDs, addresses, and campus-network delays.",
+      "Do build admin surfaces from white cards, cool backgrounds, visible dividers, compact metadata, and semantic status colors.",
+      "Do keep focus-visible states strong and consistent across buttons, links, inputs, selects, and textareas.",
+      "Do keep QR, photo, signature, emergency-contact, and student-record details visibly controlled and privacy-aware."
+    ],
+    "donts": [
+      "Don't strip the interface down to anonymous gray admin tables; every major surface should still carry LMSA institutional identity.",
+      "Don't replace confirmed product/institution names with placeholders or invent testimonials, metrics, enrollment totals, pricing, or production URLs.",
+      "Don't use gold as the default CTA color across the app; it should remain a credential accent and secondary action color.",
+      "Don't introduce unrelated bright palettes, playful consumer SaaS gradients, decorative confetti, or novelty animations that weaken official trust.",
+      "Don't blur status semantics by using green, amber, red, or blue as decoration.",
+      "Don't remove loading, empty, error, disabled, rejected, pending, issue, confirmed, or expired states while making visual changes."
+    ]
+  }
+}

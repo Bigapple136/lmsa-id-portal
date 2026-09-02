@@ -1,152 +1,223 @@
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
+/* eslint-disable react/prop-types */
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { adminFetch } from '../lib/api'
+import { apiFetch } from '../lib/api'
+
+const DETAIL_FIELDS = [
+  { key: 'full_name', mark: 'NM', label: 'Full Name', highlight: true },
+  { key: 'student_id', mark: 'ID', label: 'Student ID', accent: true },
+  { key: 'year_level', mark: 'YR', label: 'Level' },
+  { key: 'position', mark: 'RL', label: 'Position' },
+  { key: 'programme', mark: 'PR', label: 'Programme' },
+  { key: 'blood_type', mark: 'BT', label: 'Blood Type', badge: true },
+  { key: 'student_email', mark: 'EM', label: 'Email' },
+  { key: 'emergency_contact_name', mark: 'EC', label: 'Emergency Contact' },
+  { key: 'emergency_contact_phone', mark: 'PH', label: 'Emergency Phone' },
+  { key: 'date_of_birth', mark: 'DB', label: 'Date of Birth' },
+  { key: 'nationality', mark: 'NT', label: 'Nationality' },
+  { key: 'county_of_origin', mark: 'CO', label: 'County of Origin' },
+  { key: 'current_address', mark: 'AD', label: 'Current Address' },
+]
+
+function getInitials(name = '') {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+}
+
+function QrSeal({ tone = 'gold' }) {
+  return (
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <path
+        d="M24 5.5l16.25 9.25v18.5L24 42.5 7.75 33.25v-18.5L24 5.5z"
+        stroke={tone === 'error' ? '#E24B4A' : '#C9A84C'}
+        strokeWidth="2"
+      />
+      <path
+        d="M16.5 24.5l5 5 10.5-11"
+        stroke={tone === 'error' ? '#E24B4A' : '#C9A84C'}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function QrStateShell({ title, message, tone = 'gold', children, live = 'polite' }) {
+  return (
+    <div className="qr-page">
+      <Navbar showLogin={false} />
+      <main className="qr-state-container" aria-live={live}>
+        <div className={`qr-state-card qr-state-card--${tone}`}>
+          <div className="qr-state-seal">
+            <QrSeal tone={tone} />
+          </div>
+          <h1 className="qr-state-title">{title}</h1>
+          <p className="qr-state-message">{message}</p>
+          {children}
+        </div>
+      </main>
+    </div>
+  )
+}
 
 export default function QrViewPage() {
-  const { studentId } = useParams()
+  const { token } = useParams()
   const [student, setStudent] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState('')
   const [isVerified, setIsVerified] = useState(false)
-  const [animateRef] = useAutoAnimate()
 
   useEffect(() => {
-    (async () => {
+    let cancelled = false
+
+    async function verifyCredential() {
+      setLoading(true)
+      setError('')
+      setStudent(null)
+      setIsVerified(false)
+
       try {
-        const r = await adminFetch(`/api/students/${encodeURIComponent(studentId)}`)
-        const data = await r.json()
-        if (data.error) {
-          setError(data.error)
-          setLoading(false)
+        const response = await apiFetch(`/api/qr/verify/${encodeURIComponent(token || '')}`, {
+          retries: 1,
+        })
+        const data = await response.json().catch(() => ({}))
+
+        if (!response.ok || !data.verified || !data.student) {
+          if (!cancelled) {
+            setError(data.error || 'This QR credential could not be verified.')
+          }
           return
         }
-        setStudent(data)
-        setLoading(false)
-        setTimeout(() => setIsVerified(true), 600)
+
+        if (!cancelled) {
+          setStudent(data.student)
+          window.setTimeout(() => {
+            if (!cancelled) setIsVerified(true)
+          }, 300)
+        }
       } catch {
-        setError('Failed to load student data.')
-        setLoading(false)
+        if (!cancelled) {
+          setError(
+            'We could not reach the verification service. Check your connection and try again.',
+          )
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-    })()
-  }, [studentId])
+    }
 
-  if (loading)
+    verifyCredential()
+
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  const detailRows = useMemo(() => DETAIL_FIELDS.filter((row) => student?.[row.key]), [student])
+
+  if (loading) {
     return (
-      <div className="qr-loading">
-        <div className="qr-loading-spinner">
+      <QrStateShell
+        title="Verifying credential"
+        message="Checking the signed LMSA QR record. This should only take a moment."
+      >
+        <div className="qr-loading-spinner" aria-hidden="true">
           <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" stroke="#1a2942" strokeWidth="3" fill="none" />
-            <path d="M20 2a18 18 0 0 1 18 18" stroke="#C9A84C" strokeWidth="3" strokeLinecap="round" fill="none" />
+            <circle cx="20" cy="20" r="18" stroke="#1a2942" strokeWidth="3" />
+            <path
+              d="M20 2a18 18 0 0 1 18 18"
+              stroke="#C9A84C"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
           </svg>
         </div>
-        <p className="qr-loading-text">Verifying credentials...</p>
-      </div>
+      </QrStateShell>
     )
+  }
 
-  if (error || !student)
+  if (error || !student) {
     return (
-      <div className="qr-error">
-        <div className="qr-error-icon">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <circle cx="24" cy="24" r="22" stroke="#CC0000" strokeWidth="3" fill="none" />
-            <path d="M16 16l16 16M32 16l-16 16" stroke="#CC0000" strokeWidth="3" strokeLinecap="round" />
-          </svg>
+      <QrStateShell
+        title="Credential not verified"
+        message={
+          error ||
+          'This QR link is missing, expired, or no longer matches an active student record.'
+        }
+        tone="error"
+        live="assertive"
+      >
+        <div className="qr-recovery-actions" aria-label="QR verification recovery options">
+          <Link className="btn-primary" to="/check-status">
+            Check card status
+          </Link>
+          <Link className="btn-outline" to="/">
+            Back to student portal
+          </Link>
         </div>
-        <p className="qr-error-text">{error || 'Student not found.'}</p>
-        <p className="qr-error-subtext">Invalid or expired credential</p>
-      </div>
+        <p className="qr-state-help">
+          If this came from a printed card, ask LMSA or the faculty office to reissue the QR code.
+        </p>
+      </QrStateShell>
     )
-
-  const detailRows = [
-    { icon: '\u{1F464}', label: 'Full Name', value: student.full_name, highlight: true },
-    { icon: '\u{1F393}', label: 'Student ID', value: student.student_id, accent: true },
-    { icon: '\u{1F4DA}', label: 'Level', value: student.year_level },
-    { icon: '\u{1F4BC}', label: 'Position', value: student.position },
-    { icon: '\u{1F3DB}\uFE0F', label: 'Programme', value: student.programme },
-    { icon: '\u{1FA78}', label: 'Blood Type', value: student.blood_type, badge: true },
-    { icon: '\u2709\uFE0F', label: 'Email', value: student.student_email },
-    { icon: '\u{1F198}', label: 'Emergency Contact', value: student.emergency_contact_name },
-    { icon: '\u{1F4DE}', label: 'Emergency Phone', value: student.emergency_contact_phone },
-    { icon: '\u{1F382}', label: 'Date of Birth', value: student.date_of_birth },
-    { icon: '\u{1F30D}', label: 'Nationality', value: student.nationality },
-    { icon: '\u{1F4CD}', label: 'County of Origin', value: student.county_of_origin },
-    { icon: '\u{1F3E0}', label: 'Current Address', value: student.current_address },
-  ].filter((r) => r.value)
+  }
 
   return (
     <div className="qr-page">
-      <Navbar />
+      <Navbar showLogin={false} />
 
-      <div className="qr-container">
+      <main className="qr-container" aria-label="Verified LMSA student credential">
         {isVerified && (
-          <div className="qr-badge">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="7" fill="#00C853" />
-              <path d="M5 8l2 2 4-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Verified Credential
+          <div className="qr-badge" role="status">
+            <QrSeal />
+            Credential verified
           </div>
         )}
 
-        <div className="qr-card">
+        <section className="qr-card">
           <div className="qr-card-header">
             <div className="qr-header-gradient" />
             <div className="qr-header-content">
-              <div className="qr-logo-emblem">
+              <div className="qr-logo-emblem" aria-hidden="true">
                 <div className="qr-emblem-inner">
-                  <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
-                    <path d="M20 4l16 10v12L20 36 4 26V14L20 4z" stroke="#C9A84C" strokeWidth="2" fill="none" />
-                    <text x="20" y="24" textAnchor="middle" fill="#C9A84C" fontSize="11" fontWeight="900" fontFamily="serif">LM</text>
-                  </svg>
+                  <img src="/lmsa-logo.png" alt="" width="42" height="42" />
                 </div>
               </div>
               <div className="qr-header-titles">
                 <h1 className="qr-header-school">A.M. Dogliotti College of Medicine</h1>
-                <p className="qr-header-subtitle">Student Identification &bull; Official Record</p>
+                <p className="qr-header-subtitle">LMSA Student Identification Record</p>
                 <div className="qr-header-accent" />
               </div>
             </div>
           </div>
 
-          <div className="qr-section">
-            {student.qr_url ? (
-              <div className="qr-wrapper">
-                <img
-                  src={student.qr_url}
-                  alt="QR Code"
-                  className="qr-image"
-                />
-                <div className="qr-glow" />
-              </div>
+          <div className="qr-profile-section">
+            {student.photo_url ? (
+              <img
+                className="qr-profile-photo"
+                src={student.photo_url}
+                alt={`${student.full_name} student portrait`}
+              />
             ) : (
-              <div className="qr-placeholder">
-                <div className="qr-placeholder-icon">
-                  <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-                    <rect x="8" y="8" width="20" height="20" rx="3" stroke="#C9A84C" strokeWidth="2" fill="none" />
-                    <rect x="36" y="8" width="20" height="20" rx="3" stroke="#C9A84C" strokeWidth="2" fill="none" />
-                    <rect x="8" y="36" width="20" height="20" rx="3" stroke="#C9A84C" strokeWidth="2" fill="none" />
-                    <rect x="36" y="36" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                    <rect x="44" y="36" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                    <rect x="52" y="36" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                    <rect x="36" y="44" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                    <rect x="44" y="44" width="4" height="4" fill="#C9A84C" />
-                    <rect x="52" y="44" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                    <rect x="36" y="52" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                    <rect x="44" y="52" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                    <rect x="52" y="52" width="4" height="4" fill="#C9A84C" opacity="0.5" />
-                  </svg>
-                </div>
-                <p className="qr-placeholder-text">QR code pending generation</p>
+              <div
+                className="qr-profile-photo qr-profile-photo--placeholder"
+                aria-label="No student photo on file"
+              >
+                {getInitials(student.full_name || student.student_id)}
               </div>
             )}
-            <p className="qr-instructions">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }}>
-                <path d="M7 1v3M7 10v3M1 7h3M10 7h3" stroke="#8a9ab5" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              Scan to verify identity
-            </p>
+            <div className="qr-profile-summary">
+              <p className="qr-profile-label">Signed student record</p>
+              <h2>{student.full_name}</h2>
+              <p>{student.year_level || 'A.M. Dogliotti College of Medicine'}</p>
+            </div>
           </div>
 
           <div className="qr-divider">
@@ -155,55 +226,64 @@ export default function QrViewPage() {
             <div className="qr-divider-line" />
           </div>
 
-          <div className="qr-details" ref={animateRef}>
+          <div className="qr-details">
             {detailRows.map((row) => (
               <div
-                key={row.label}
+                key={row.key}
                 className={`qr-detail-row${row.highlight ? ' qr-detail-row--highlight' : ''}`}
               >
                 <div className="qr-detail-left">
-                  <span className="qr-detail-icon">{row.icon}</span>
+                  <span className="qr-detail-icon" aria-hidden="true">
+                    {row.mark}
+                  </span>
                   <span className="qr-detail-label">{row.label}</span>
                 </div>
                 <span
                   className={`qr-detail-value${row.accent ? ' qr-detail-value--accent' : ''}${row.badge ? ' qr-detail-value--badge' : ''}`}
                 >
-                  {row.value}
+                  {student[row.key]}
                 </span>
               </div>
             ))}
           </div>
 
-          {student.qr_url && (
-            <button
-              onClick={async () => {
-                try {
-                  const r = await adminFetch(`/api/qr/verification-url/${encodeURIComponent(studentId)}`)
-                  const data = await r.json()
-                  if (data.url) window.open(data.url, '_blank', 'noopener')
-                } catch {}
-              }}
-              className="qr-verify-btn"
-            >
-              <span>Open Print-Ready Page</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M6 12h8M6 8h8M6 4h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M2 4v.01M2 8v.01M2 12v.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          )}
+          <a
+            href={`/api/qr/html/${encodeURIComponent(token || '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="qr-verify-btn"
+          >
+            <span>Open official verification page</span>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M6 12h8M6 8h8M6 4h4"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <path
+                d="M2 4v.01M2 8v.01M2 12v.01"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </a>
 
           <div className="qr-card-footer">
             <span>LMSA ID Verification</span>
             <span className="qr-footer-sep">&bull;</span>
-            <span>GoldWay</span>
+            <span>A.M. Dogliotti College of Medicine</span>
             <span className="qr-footer-sep">&bull;</span>
             <span>University of Liberia</span>
           </div>
-        </div>
+        </section>
 
-        <div className="qr-watermark" />
-      </div>
+        <p className="qr-privacy-note">
+          This page verifies a signed LMSA QR credential. Only fields approved for QR display are
+          shown.
+        </p>
+      </main>
     </div>
   )
 }

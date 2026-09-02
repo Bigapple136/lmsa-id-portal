@@ -10,6 +10,7 @@ import StatusBadge from '../components/StatusBadge'
 import EmptyState from '../components/EmptyState'
 import SettingsCard from '../components/SettingsCard'
 import FieldToggleGroup from '../components/FieldToggleGroup'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
 import { Doughnut, Bar } from 'react-chartjs-2'
 
@@ -75,8 +76,9 @@ function RenewCohortSection() {
   return (
     <div style={{ display: 'flex', gap: '10px', alignItems: 'end', flexWrap: 'wrap' }}>
       <div className="field-group" style={{ flex: '0 0 auto' }}>
-        <label className="field-label">Year level</label>
+        <label className="field-label" htmlFor="renew-year-level">Year level</label>
         <select
+          id="renew-year-level"
           className="field-input"
           value={yearLevel}
           onChange={(e) => setYearLevel(e.target.value)}
@@ -86,8 +88,9 @@ function RenewCohortSection() {
         </select>
       </div>
       <div className="field-group" style={{ flex: '0 0 auto' }}>
-        <label className="field-label">New expiry date</label>
+        <label className="field-label" htmlFor="renew-new-expiry-date">New expiry date</label>
         <input
+          id="renew-new-expiry-date"
           type="date"
           className="field-input"
           value={newValidUntil}
@@ -298,6 +301,8 @@ export default function AdminDashboard() {
   // QR state
   const [qrGenerating, setQrGenerating] = useState(false)
   const [qrMsg, setQrMsg] = useState(null)
+  const [qrRegenerateModalOpen, setQrRegenerateModalOpen] = useState(false)
+  const [qrRegenerateAcknowledged, setQrRegenerateAcknowledged] = useState(false)
 
   // Submission form state
   const [submissions, setSubmissions] = useState([])
@@ -305,6 +310,11 @@ export default function AdminDashboard() {
   const [submissionFormEnabled, setSubmissionFormEnabled] = useState(false)
   const [submissionsLoading, setSubmissionsLoading] = useState(false)
   const [submissionMsg, setSubmissionMsg] = useState(null)
+  const [pendingRejectSubmission, setPendingRejectSubmission] = useState(null)
+  const [rejectNotes, setRejectNotes] = useState('')
+  const [pendingDeleteSubmission, setPendingDeleteSubmission] = useState(null)
+  const [pendingDeleteStudent, setPendingDeleteStudent] = useState(null)
+  const [dangerSubmitting, setDangerSubmitting] = useState(false)
 
   const DRAFT_KEY = 'admin_dashboard_draft'
 
@@ -687,6 +697,16 @@ export default function AdminDashboard() {
     setFields((prev) => ({ ...prev, [key]: { ...prev[key], enabled: !prev[key].enabled } }))
   }
 
+  function openFileInput(id) {
+    document.getElementById(id)?.click()
+  }
+
+  function handleFileZoneKeyDown(event, id) {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    openFileInput(id)
+  }
+
   async function handleDownload(endpoint, filename) {
     setDownloading((prev) => ({ ...prev, [endpoint]: true }))
     try {
@@ -920,9 +940,12 @@ export default function AdminDashboard() {
     }
   }
 
-  async function handleRegenerateAllQR() {
-    if (!window.confirm('This will clear and regenerate QR codes for ALL students. Continue?'))
-      return
+  function handleRegenerateAllQR() {
+    setQrRegenerateAcknowledged(false)
+    setQrRegenerateModalOpen(true)
+  }
+
+  async function confirmRegenerateAllQR() {
     setQrGenerating(true)
     setQrMsg(null)
     try {
@@ -935,6 +958,7 @@ export default function AdminDashboard() {
         })
       else setQrMsg({ ok: false, text: data.error || 'Regeneration failed.' })
       loadStudents()
+      setQrRegenerateModalOpen(false)
       setTimeout(() => setQrMsg(null), 6000)
     } catch {
       setQrMsg({ ok: false, text: 'Network error. Please try again.' })
@@ -984,34 +1008,49 @@ export default function AdminDashboard() {
     setTimeout(() => setSubmissionMsg(null), 5000)
   }
 
-  async function handleRejectSubmission(id) {
-    const notes = prompt('Reason for rejection (optional):')
-    if (notes === null) return // user cancelled — do not reject
+  function handleRejectSubmission(submission) {
+    setPendingRejectSubmission(submission)
+    setRejectNotes('')
+  }
+
+  async function confirmRejectSubmission() {
+    if (!pendingRejectSubmission) return
+    setDangerSubmitting(true)
     try {
-      const res = await adminJson(`/api/submissions/${id}/reject`, 'PATCH', {
-        admin_notes: notes || '',
+      const res = await adminJson(`/api/submissions/${pendingRejectSubmission.id}/reject`, 'PATCH', {
+        admin_notes: rejectNotes || '',
       })
       const data = await res.json()
       if (res.ok) {
         setSubmissionMsg({ ok: true, text: 'Submission rejected.' })
+        setPendingRejectSubmission(null)
+        setRejectNotes('')
         loadSubmissions()
       } else {
         setSubmissionMsg({ ok: false, text: data.error || 'Rejection failed.' })
       }
     } catch {
       setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
+    } finally {
+      setDangerSubmitting(false)
     }
     setTimeout(() => setSubmissionMsg(null), 3000)
   }
 
-  async function handleDeleteSubmission(id) {
-    if (!window.confirm('Delete this submission? This cannot be undone.')) return
+  function handleDeleteSubmission(submission) {
+    setPendingDeleteSubmission(submission)
+  }
+
+  async function confirmDeleteSubmission() {
+    if (!pendingDeleteSubmission) return
     const prevSubmissions = submissions
-    setSubmissions((prev) => prev.filter((s) => s.id !== id))
+    setDangerSubmitting(true)
+    setSubmissions((prev) => prev.filter((s) => s.id !== pendingDeleteSubmission.id))
     try {
-      const res = await adminFetch(`/api/submissions/${id}`, { method: 'DELETE' })
+      const res = await adminFetch(`/api/submissions/${pendingDeleteSubmission.id}`, { method: 'DELETE' })
       if (res.ok) {
         setSubmissionMsg({ ok: true, text: 'Submission deleted.' })
+        setPendingDeleteSubmission(null)
       } else {
         setSubmissions(prevSubmissions)
         setSubmissionMsg({ ok: false, text: 'Failed to delete submission.' })
@@ -1019,8 +1058,35 @@ export default function AdminDashboard() {
     } catch {
       setSubmissions(prevSubmissions)
       setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
+    } finally {
+      setDangerSubmitting(false)
     }
     setTimeout(() => setSubmissionMsg(null), 3000)
+  }
+
+  function handleDeleteStudent(student) {
+    setPendingDeleteStudent(student)
+  }
+
+  async function confirmDeleteStudent() {
+    if (!pendingDeleteStudent) return
+    setDangerSubmitting(true)
+    try {
+      const res = await adminFetch(
+        `/api/students/${encodeURIComponent(pendingDeleteStudent.student_id)}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        toast.error('Failed to delete student.')
+        return
+      }
+      setPendingDeleteStudent(null)
+      loadStudents()
+    } catch {
+      toast.error('Failed to delete student.')
+    } finally {
+      setDangerSubmitting(false)
+    }
   }
 
   function getInitials(name) {
@@ -1063,8 +1129,9 @@ export default function AdminDashboard() {
           </div>
           <form className="landing-form" onSubmit={login}>
             <div className="field-group">
-              <label className="field-label">Email</label>
+              <label className="field-label" htmlFor="admin-login-email">Email</label>
               <input
+                id="admin-login-email"
                 className="field-input"
                 type="email"
                 value={email}
@@ -1074,8 +1141,9 @@ export default function AdminDashboard() {
               />
             </div>
             <div className="field-group">
-              <label className="field-label">Password</label>
+              <label className="field-label" htmlFor="admin-login-password">Password</label>
               <input
+                id="admin-login-password"
                 className="field-input"
                 type="password"
                 value={password}
@@ -1107,11 +1175,23 @@ export default function AdminDashboard() {
     <div className="admin-wrapper">
       {/* ── EDIT MODAL ── */}
       {editStudent && (
-        <div className="modal-overlay" onClick={() => setEditStudent(null)}>
-          <div className="modal" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-student-dialog-title"
+            style={{ maxWidth: '420px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <span>Edit — {editStudent.student_id}</span>
-              <button className="modal-close" onClick={() => setEditStudent(null)}>
+              <span id="edit-student-dialog-title">Edit — {editStudent.student_id}</span>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setEditStudent(null)}
+                aria-label="Close student editor"
+              >
                 ×
               </button>
             </div>
@@ -1125,8 +1205,9 @@ export default function AdminDashboard() {
               style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
             >
               <div className="field-group">
-                <label className="field-label">Full Name</label>
+                <label className="field-label" htmlFor="edit-full-name">Full Name</label>
                 <input
+                  id="edit-full-name"
                   className="field-input"
                   value={editForm.full_name}
                   onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
@@ -1134,8 +1215,9 @@ export default function AdminDashboard() {
                 />
               </div>
               <div className="field-group">
-                <label className="field-label">Year / Level</label>
+                <label className="field-label" htmlFor="edit-year-level">Year / Level</label>
                 <select
+                  id="edit-year-level"
                   className="field-input"
                   value={editForm.year_level}
                   onChange={(e) => setEditForm({ ...editForm, year_level: e.target.value })}
@@ -1147,8 +1229,9 @@ export default function AdminDashboard() {
               </div>
               {fields?.position?.enabled && (
                 <div className="field-group">
-                  <label className="field-label">Position</label>
+                  <label className="field-label" htmlFor="edit-position">Position</label>
                   <input
+                    id="edit-position"
                     className="field-input"
                     placeholder="e.g. Member"
                     value={editForm.position}
@@ -1170,8 +1253,9 @@ export default function AdminDashboard() {
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div className="field-group">
-                    <label className="field-label">Programme</label>
+                    <label className="field-label" htmlFor="edit-programme">Programme</label>
                     <input
+                      id="edit-programme"
                       className="field-input"
                       placeholder="e.g. MBBS, Pharm.D"
                       value={editForm.programme}
@@ -1179,8 +1263,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Blood Type</label>
+                    <label className="field-label" htmlFor="edit-blood-type">Blood Type</label>
                     <input
+                      id="edit-blood-type"
                       className="field-input"
                       placeholder="e.g. O+"
                       value={editForm.blood_type}
@@ -1188,8 +1273,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Student Email</label>
+                    <label className="field-label" htmlFor="edit-student-email">Student Email</label>
                     <input
+                      id="edit-student-email"
                       className="field-input"
                       type="email"
                       placeholder="student@email.com"
@@ -1198,8 +1284,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Emergency Contact Name</label>
+                    <label className="field-label" htmlFor="edit-emergency-contact-name">Emergency Contact Name</label>
                     <input
+                      id="edit-emergency-contact-name"
                       className="field-input"
                       placeholder="Full name"
                       value={editForm.emergency_contact_name}
@@ -1209,8 +1296,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Emergency Contact Phone</label>
+                    <label className="field-label" htmlFor="edit-emergency-contact-phone">Emergency Contact Phone</label>
                     <input
+                      id="edit-emergency-contact-phone"
                       className="field-input"
                       placeholder="+231 xxx xxxx"
                       value={editForm.emergency_contact_phone}
@@ -1220,8 +1308,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Date of Birth</label>
+                    <label className="field-label" htmlFor="edit-date-of-birth">Date of Birth</label>
                     <input
+                      id="edit-date-of-birth"
                       className="field-input"
                       type="date"
                       value={editForm.date_of_birth}
@@ -1229,8 +1318,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Nationality</label>
+                    <label className="field-label" htmlFor="edit-nationality">Nationality</label>
                     <input
+                      id="edit-nationality"
                       className="field-input"
                       placeholder="Liberian"
                       value={editForm.nationality}
@@ -1238,8 +1328,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">County of Origin</label>
+                    <label className="field-label" htmlFor="edit-county-of-origin">County of Origin</label>
                     <input
+                      id="edit-county-of-origin"
                       className="field-input"
                       list="liberia-counties-edit"
                       placeholder="e.g. Montserrado"
@@ -1255,8 +1346,9 @@ export default function AdminDashboard() {
                     </datalist>
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Current Address</label>
+                    <label className="field-label" htmlFor="edit-current-address">Current Address</label>
                     <input
+                      id="edit-current-address"
                       className="field-input"
                       placeholder="e.g. 123 Broad Street, Monrovia"
                       value={editForm.current_address}
@@ -1268,11 +1360,15 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <div className="field-group">
-                <label className="field-label">Replace Photo (optional)</label>
+                <label className="field-label" htmlFor="edit-photo-input">Replace Photo (optional)</label>
                 <div
                   className="upload-zone"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Choose a replacement student photo"
                   style={{ padding: '12px' }}
-                  onClick={() => document.getElementById('edit-photo-input').click()}
+                  onClick={() => openFileInput('edit-photo-input')}
+                  onKeyDown={(e) => handleFileZoneKeyDown(e, 'edit-photo-input')}
                 >
                   <input
                     id="edit-photo-input"
@@ -1310,11 +1406,15 @@ export default function AdminDashboard() {
               </div>
               {fields?.signature?.enabled && (
                 <div className="field-group">
-                  <label className="field-label">Replace Signature (optional)</label>
+                  <label className="field-label" htmlFor="edit-sig-input">Replace Signature (optional)</label>
                   <div
                     className="upload-zone"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Choose a replacement student signature"
                     style={{ padding: '12px' }}
-                    onClick={() => document.getElementById('edit-sig-input').click()}
+                    onClick={() => openFileInput('edit-sig-input')}
+                    onKeyDown={(e) => handleFileZoneKeyDown(e, 'edit-sig-input')}
                   >
                     <input
                       id="edit-sig-input"
@@ -1361,6 +1461,89 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      <ConfirmDialog
+        open={qrRegenerateModalOpen}
+        title="Regenerate all QR codes?"
+        confirmLabel="Regenerate all QR codes"
+        onCancel={() => setQrRegenerateModalOpen(false)}
+        onConfirm={confirmRegenerateAllQR}
+        confirmDisabled={!qrRegenerateAcknowledged}
+        loading={qrGenerating}
+      >
+        <p>
+          This will replace QR images for <strong>{students.length} student record{students.length === 1 ? '' : 's'}</strong>.
+          Use it only after confirming the active signing key and public scanner path are correct.
+        </p>
+        <label className="qr-field-toggle" style={{ marginTop: '12px' }}>
+          <input
+            type="checkbox"
+            checked={qrRegenerateAcknowledged}
+            onChange={(e) => setQrRegenerateAcknowledged(e.target.checked)}
+          />
+          I understand existing printed cards may need to be reissued if QR images change.
+        </label>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingRejectSubmission)}
+        title="Reject student submission?"
+        confirmLabel="Reject submission"
+        onCancel={() => {
+          setPendingRejectSubmission(null)
+          setRejectNotes('')
+        }}
+        onConfirm={confirmRejectSubmission}
+        loading={dangerSubmitting}
+      >
+        <p>
+          This moves <strong>{pendingRejectSubmission?.full_name || 'this student'}</strong> out of the pending review queue.
+          Add a clear LMSA-facing reason so another admin understands the decision later.
+        </p>
+        <div className="field-group" style={{ marginTop: '12px' }}>
+          <label className="field-label" htmlFor="submission-reject-notes">
+            Rejection note (optional but recommended)
+          </label>
+          <textarea
+            id="submission-reject-notes"
+            className="field-input"
+            rows={3}
+            value={rejectNotes}
+            onChange={(e) => setRejectNotes(e.target.value)}
+            placeholder="e.g. Photo does not meet ID-card requirements."
+            style={{ fontFamily: 'inherit' }}
+          />
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteSubmission)}
+        title="Delete submission?"
+        confirmLabel="Delete submission"
+        onCancel={() => setPendingDeleteSubmission(null)}
+        onConfirm={confirmDeleteSubmission}
+        loading={dangerSubmitting}
+      >
+        <p>
+          This permanently removes the submission for <strong>{pendingDeleteSubmission?.full_name || 'this student'}</strong> from the review queue.
+        </p>
+        <div className="confirm-dialog-note">This cannot be undone. Reject instead if you need to keep a decision trail.</div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteStudent)}
+        title="Delete student record?"
+        confirmLabel="Delete student record"
+        onCancel={() => setPendingDeleteStudent(null)}
+        onConfirm={confirmDeleteStudent}
+        loading={dangerSubmitting}
+      >
+        <p>
+          This permanently deletes <strong>{pendingDeleteStudent?.full_name || 'this student'}</strong>
+          {pendingDeleteStudent?.student_id ? ` (${pendingDeleteStudent.student_id})` : ''} and associated card operations.
+        </p>
+        <div className="confirm-dialog-note">This cannot be undone. Export or back up records first if LMSA needs an audit copy.</div>
+      </ConfirmDialog>
+
       <div className="admin-topbar">
         <div>
           <div className="topbar-logo">LMSA ID Portal</div>
@@ -1370,7 +1553,7 @@ export default function AdminDashboard() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <NotificationCenter
-            onNavigateStudent={(studentId, type) => {
+            onNavigateStudent={(studentId, _type) => {
               setStatusFilter('issues')
               setActiveTab('students')
               // Find the student and open edit modal
@@ -1447,6 +1630,9 @@ export default function AdminDashboard() {
               Admins
             </button>
           )}
+          <button className="admin-tab" onClick={() => navigate('/admin/qr-keys')}>
+            QR Keys
+          </button>
         </div>
 
       <div className="admin-body">
@@ -1719,6 +1905,10 @@ export default function AdminDashboard() {
                       Manage Admins
                     </button>
                   )}
+                  <button className="quick-action-btn" onClick={() => navigate('/admin/qr-keys')}>
+                    <div className="quick-action-icon" style={{ background: '#eefafb', color: 'var(--teal)' }}>🔐</div>
+                    QR Key Security
+                  </button>
                 </div>
               </div>
             </div>
@@ -1840,8 +2030,12 @@ export default function AdminDashboard() {
                   )}
                   <div
                     className="upload-zone"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Choose front card template image"
                     style={{ padding: '12px' }}
-                    onClick={() => document.getElementById('template-input-front').click()}
+                    onClick={() => openFileInput('template-input-front')}
+                    onKeyDown={(e) => handleFileZoneKeyDown(e, 'template-input-front')}
                   >
                     <input
                       id="template-input-front"
@@ -1904,8 +2098,12 @@ export default function AdminDashboard() {
                   )}
                   <div
                     className="upload-zone"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Choose back card template image"
                     style={{ padding: '12px' }}
-                    onClick={() => document.getElementById('template-input-back').click()}
+                    onClick={() => openFileInput('template-input-back')}
+                    onKeyDown={(e) => handleFileZoneKeyDown(e, 'template-input-back')}
                   >
                     <input
                       id="template-input-back"
@@ -1982,8 +2180,12 @@ export default function AdminDashboard() {
                 </p>
                 <div
                   className="upload-zone"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Choose student CSV file"
                   style={{ marginBottom: '8px' }}
-                  onClick={() => document.getElementById('csv-input').click()}
+                  onClick={() => openFileInput('csv-input')}
+                  onKeyDown={(e) => handleFileZoneKeyDown(e, 'csv-input')}
                 >
                   <input
                     id="csv-input"
@@ -2009,8 +2211,12 @@ export default function AdminDashboard() {
                 </div>
                 <div
                   className="upload-zone"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Choose optional photo ZIP file"
                   style={{ marginBottom: '10px', padding: '12px' }}
-                  onClick={() => document.getElementById('zip-input').click()}
+                  onClick={() => openFileInput('zip-input')}
+                  onKeyDown={(e) => handleFileZoneKeyDown(e, 'zip-input')}
                 >
                   <input
                     id="zip-input"
@@ -2051,8 +2257,9 @@ export default function AdminDashboard() {
               <form onSubmit={handleManualAdd}>
                 <div className="manual-form">
                   <div className="field-group">
-                    <label className="field-label">Full Name</label>
+                    <label className="field-label" htmlFor="manual-full-name">Full Name</label>
                     <input
+                      id="manual-full-name"
                       className="field-input"
                       placeholder="e.g. Josephine K. Freeman"
                       value={manualForm.full_name}
@@ -2061,8 +2268,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Student ID Number</label>
+                    <label className="field-label" htmlFor="manual-student-id">Student ID Number</label>
                     <input
+                      id="manual-student-id"
                       className="field-input"
                       placeholder="e.g. 123456"
                       value={manualForm.student_id}
@@ -2071,8 +2279,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Year / Level</label>
+                    <label className="field-label" htmlFor="manual-year-level">Year / Level</label>
                     <select
+                      id="manual-year-level"
                       className="field-input"
                       value={manualForm.year_level}
                       onChange={(e) => setManualForm({ ...manualForm, year_level: e.target.value })}
@@ -2084,8 +2293,9 @@ export default function AdminDashboard() {
                   </div>
                   {fields?.position?.enabled && (
                     <div className="field-group">
-                      <label className="field-label">Position</label>
+                      <label className="field-label" htmlFor="manual-position">Position</label>
                       <input
+                        id="manual-position"
                         className="field-input"
                         placeholder="e.g. Member"
                         value={manualForm.position}
@@ -2094,11 +2304,15 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   <div className="field-group">
-                    <label className="field-label">Student Photo</label>
+                    <label className="field-label" htmlFor="manual-photo-input">Student Photo</label>
                     <div
                       className="upload-zone"
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Choose student photo"
                       style={{ padding: '12px' }}
-                      onClick={() => document.getElementById('manual-photo-input').click()}
+                      onClick={() => openFileInput('manual-photo-input')}
+                      onKeyDown={(e) => handleFileZoneKeyDown(e, 'manual-photo-input')}
                     >
                       <input
                         id="manual-photo-input"
@@ -2120,11 +2334,15 @@ export default function AdminDashboard() {
                   </div>
                   {fields?.signature?.enabled && (
                     <div className="field-group">
-                      <label className="field-label">Student Signature</label>
+                      <label className="field-label" htmlFor="manual-sig-input">Student Signature</label>
                       <div
                         className="upload-zone"
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Choose student signature"
                         style={{ padding: '12px' }}
-                        onClick={() => document.getElementById('manual-sig-input').click()}
+                        onClick={() => openFileInput('manual-sig-input')}
+                        onKeyDown={(e) => handleFileZoneKeyDown(e, 'manual-sig-input')}
                       >
                         <input
                           id="manual-sig-input"
@@ -2158,8 +2376,9 @@ export default function AdminDashboard() {
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div className="field-group">
-                        <label className="field-label">Programme</label>
+                        <label className="field-label" htmlFor="manual-programme">Programme</label>
                         <input
+                          id="manual-programme"
                           className="field-input"
                           placeholder="e.g. MBBS, Pharm.D"
                           value={manualForm.programme}
@@ -2169,8 +2388,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="field-group">
-                        <label className="field-label">Blood Type</label>
+                        <label className="field-label" htmlFor="manual-blood-type">Blood Type</label>
                         <input
+                          id="manual-blood-type"
                           className="field-input"
                           placeholder="e.g. O+"
                           value={manualForm.blood_type}
@@ -2180,8 +2400,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="field-group">
-                        <label className="field-label">Student Email</label>
+                        <label className="field-label" htmlFor="manual-student-email">Student Email</label>
                         <input
+                          id="manual-student-email"
                           className="field-input"
                           type="email"
                           placeholder="student@email.com"
@@ -2192,8 +2413,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="field-group">
-                        <label className="field-label">Emergency Contact Name</label>
+                        <label className="field-label" htmlFor="manual-emergency-contact-name">Emergency Contact Name</label>
                         <input
+                          id="manual-emergency-contact-name"
                           className="field-input"
                           placeholder="Full name"
                           value={manualForm.emergency_contact_name}
@@ -2203,8 +2425,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="field-group">
-                        <label className="field-label">Emergency Contact Phone</label>
+                        <label className="field-label" htmlFor="manual-emergency-contact-phone">Emergency Contact Phone</label>
                         <input
+                          id="manual-emergency-contact-phone"
                           className="field-input"
                           placeholder="+231 xxx xxxx"
                           value={manualForm.emergency_contact_phone}
@@ -2217,8 +2440,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="field-group">
-                        <label className="field-label">Date of Birth</label>
+                        <label className="field-label" htmlFor="manual-date-of-birth">Date of Birth</label>
                         <input
+                          id="manual-date-of-birth"
                           className="field-input"
                           type="date"
                           value={manualForm.date_of_birth}
@@ -2228,8 +2452,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="field-group">
-                        <label className="field-label">Nationality</label>
+                        <label className="field-label" htmlFor="manual-nationality">Nationality</label>
                         <input
+                          id="manual-nationality"
                           className="field-input"
                           placeholder="Liberian"
                           value={manualForm.nationality}
@@ -2239,8 +2464,9 @@ export default function AdminDashboard() {
                         />
                       </div>
                       <div className="field-group">
-                        <label className="field-label">County of Origin</label>
+                        <label className="field-label" htmlFor="manual-county-of-origin">County of Origin</label>
                         <input
+                          id="manual-county-of-origin"
                           className="field-input"
                           list="liberia-counties-manual"
                           placeholder="e.g. Montserrado"
@@ -2256,8 +2482,9 @@ export default function AdminDashboard() {
                         </datalist>
                       </div>
                       <div className="field-group">
-                        <label className="field-label">Current Address</label>
+                        <label className="field-label" htmlFor="manual-current-address">Current Address</label>
                         <input
+                          id="manual-current-address"
                           className="field-input"
                           placeholder="e.g. 123 Broad Street, Monrovia"
                           value={manualForm.current_address}
@@ -2436,7 +2663,7 @@ export default function AdminDashboard() {
                               borderColor: 'var(--error-text)',
                               color: 'var(--error-text)',
                             }}
-                            onClick={() => handleRejectSubmission(s.id)}
+                            onClick={() => handleRejectSubmission(s)}
                           >
                             Reject
                           </button>
@@ -2445,7 +2672,7 @@ export default function AdminDashboard() {
                       <button
                         className="btn-outline"
                         style={{ fontSize: '10px', padding: '4px 8px' }}
-                        onClick={() => handleDeleteSubmission(s.id)}
+                        onClick={() => handleDeleteSubmission(s)}
                       >
                         Delete
                       </button>
@@ -3103,27 +3330,7 @@ export default function AdminDashboard() {
                                 border: '0.5px solid #CC0000',
                                 cursor: 'pointer',
                               }}
-                              onClick={async () => {
-                                if (
-                                  !window.confirm(
-                                    'Delete this student record? This cannot be undone.',
-                                  )
-                                )
-                                  return
-                                try {
-                                  const res = await adminFetch(
-                                    `/api/students/${encodeURIComponent(s.student_id)}`,
-                                    { method: 'DELETE' },
-                                  )
-                                  if (!res.ok) {
-                                    toast.error('Failed to delete student.')
-                                    return
-                                  }
-                                  loadStudents()
-                                } catch {
-                                  toast.error('Failed to delete student.')
-                                }
-                              }}
+                              onClick={() => handleDeleteStudent(s)}
                             >
                               Delete
                             </button>

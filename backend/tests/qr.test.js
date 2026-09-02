@@ -60,7 +60,13 @@ describe('QR module — v1 shim (verify-only; legacy printed cards)', () => {
   })
 
   it('should reject v1 token when k_legacy is revoked', async () => {
-    const { signV1, verifyV1, getAllKeyRecords, LEGACY_KID, verifyStudentToken } = require('../qr-keys')
+    const {
+      signV1,
+      verifyV1,
+      getAllKeyRecords,
+      LEGACY_KID,
+      verifyStudentToken,
+    } = require('../qr-keys')
     const token = signV1('STU-2024-002')
     // Simulate k_legacy revoked by mutating the cached record
     const records = await getAllKeyRecords()
@@ -164,6 +170,46 @@ describe('QR module — signStudentToken now emits v2', () => {
     const claimsB64 = token.split('.')[1]
     const claims = JSON.parse(Buffer.from(claimsB64, 'base64url').toString())
     expect(claims.exp).toBeGreaterThan(claims.iat)
+  })
+})
+
+describe('QR module — public verification record', () => {
+  it('limits public QR details to base identity plus enabled QR fields', () => {
+    const { buildPublicVerificationStudent } = require('../routes/qr')
+    const publicRecord = buildPublicVerificationStudent(
+      {
+        full_name: 'Ada Test Student',
+        student_id: 'AMD-2026-001',
+        year_level: '4th Year',
+        position: 'Treasurer',
+        photo_url: 'https://example.test/photo.jpg',
+        qr_url: 'https://example.test/qr.png',
+        programme: 'Medicine',
+        blood_type: 'O+',
+        student_email: 'ada@example.test',
+        emergency_contact_name: 'Private Contact',
+        emergency_contact_phone: '+231 000 0000',
+        current_address: 'Private address',
+        admin_notes: 'Do not expose',
+      },
+      {
+        programme: { enabled: true },
+        blood_type: { enabled: false },
+        student_email: { enabled: true },
+        emergency_contact_name: { enabled: false },
+        emergency_contact_phone: { enabled: false },
+        current_address: { enabled: false },
+      },
+    )
+
+    expect(publicRecord).toEqual({
+      full_name: 'Ada Test Student',
+      student_id: 'AMD-2026-001',
+      year_level: '4th Year',
+      photo_url: 'https://example.test/photo.jpg',
+      programme: 'Medicine',
+      student_email: 'ada@example.test',
+    })
   })
 })
 

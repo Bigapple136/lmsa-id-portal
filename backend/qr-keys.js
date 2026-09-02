@@ -192,10 +192,8 @@ function verifyV1(token, legacyKey) {
 // ---- v2 sign/verify (rotatable) -------------------------------------------
 
 /**
- * Sign a v2 token. The issuer flip (going live with v2 on printed cards) is a
- * deliberate, separate change — see Phase 2 of the design. Until then the
- * public signStudentToken() keeps signing v1 so this code path can be fully
- * exercised and tested in isolation.
+ * Sign a v2 token. signStudentToken() now emits this rotatable token format,
+ * while verifyStudentToken() still accepts legacy v1 printed-card tokens.
  *
  * opts.ttlSec — optional token lifetime for short-lived digital links
  *               (preview/self-correct); printed cards omit it (exp = null).

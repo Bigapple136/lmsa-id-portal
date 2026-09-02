@@ -1,3 +1,5 @@
+import { useId } from 'react'
+
 export default function Panel({
   icon,
   title,
@@ -7,8 +9,10 @@ export default function Panel({
   open = true,
   onToggle,
 }) {
+  const panelId = useId()
   const clickable = collapsible && !!onToggle
   const Head = clickable ? 'button' : 'div'
+  const bodyId = `${panelId}-body`
 
   return (
     <section className="panel">
@@ -16,6 +20,8 @@ export default function Panel({
         type={clickable ? 'button' : undefined}
         className={`panel-head${clickable ? ' panel-head--btn' : ''}`}
         onClick={clickable ? onToggle : undefined}
+        aria-expanded={clickable ? open : undefined}
+        aria-controls={clickable ? bodyId : undefined}
       >
         {icon && (
           <span className="panel-icon" aria-hidden="true">
@@ -30,7 +36,11 @@ export default function Panel({
           </span>
         )}
       </Head>
-      {(!collapsible || open) && <div className="panel-body">{children}</div>}
+      {(!collapsible || open) && (
+        <div id={bodyId} className="panel-body">
+          {children}
+        </div>
+      )}
     </section>
   )
 }

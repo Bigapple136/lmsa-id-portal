@@ -88,45 +88,45 @@ export default function App() {
     <ErrorBoundary>
       <ToastProvider>
         <BrowserRouter>
-        <Suspense fallback={<RouteLoadingFallback />}>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/preview/:token" element={<PreviewPage />} />
-          <Route path="/qr/:studentId" element={<QrViewPage />} />
-          <Route
-            path="/admin"
-            element={
-              <SentryErrorBoundary>
-                <AdminDashboard />
-              </SentryErrorBoundary>
-            }
-          />
-          <Route
-            path="/admin/admins"
-            element={
-              <SentryErrorBoundary>
-                <AdminManagementPage />
-              </SentryErrorBoundary>
-            }
-          />
-          <Route
-            path="/admin/qr-keys"
-            element={
-              <SentryErrorBoundary>
-                <QrKeyManagement />
-              </SentryErrorBoundary>
-            }
-          />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/terms" element={<TermsPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/submit" element={<StudentSubmissionForm />} />
-          <Route path="/status" element={<StudentStatusPage />} />
-          <Route path="/check-status" element={<StudentStatusCheck />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-        </Suspense>
-      </BrowserRouter>
+          <Suspense fallback={<RouteLoadingFallback />}>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/preview/:token" element={<PreviewPage />} />
+              <Route path="/qr/:token" element={<QrViewPage />} />
+              <Route
+                path="/admin"
+                element={
+                  <SentryErrorBoundary>
+                    <AdminDashboard />
+                  </SentryErrorBoundary>
+                }
+              />
+              <Route
+                path="/admin/admins"
+                element={
+                  <SentryErrorBoundary>
+                    <AdminManagementPage />
+                  </SentryErrorBoundary>
+                }
+              />
+              <Route
+                path="/admin/qr-keys"
+                element={
+                  <SentryErrorBoundary>
+                    <QrKeyManagement />
+                  </SentryErrorBoundary>
+                }
+              />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/submit" element={<StudentSubmissionForm />} />
+              <Route path="/status" element={<StudentStatusPage />} />
+              <Route path="/check-status" element={<StudentStatusCheck />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
       </ToastProvider>
     </ErrorBoundary>
   )

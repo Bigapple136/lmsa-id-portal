@@ -1,3 +1,4 @@
+/* eslint-disable react/prop-types */
 import { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import IDCardDisplay from '../components/IDCardDisplay'
@@ -75,10 +76,11 @@ export default function PreviewPage() {
   const [corrections, setCorrections] = useState({ full_name: '', year_level: '' })
   const [qrCorrections, setQrCorrections] = useState({})
   const [qrWrongFields, setQrWrongFields] = useState({})
+  const [correctionError, setCorrectionError] = useState('')
   const [photoNoticed, setPhotoNoticed] = useState(false)
   const [reportTab, setReportTab] = useState('qr')
 
-  const [templateStatus, setTemplateStatus] = useState('loading')
+  const [, setTemplateStatus] = useState('loading')
 
   // Decode token to get expiry info (v2 tokens)
   const tokenInfo = useMemo(() => {
@@ -96,7 +98,7 @@ export default function PreviewPage() {
   // something correct — no completeness gate required.
   const useDisplayCanvas = useMemo(
     () => Boolean(templateUrl && fieldSides),
-    [templateUrl, fieldSides]
+    [templateUrl, fieldSides],
   )
 
   useEffect(() => {
@@ -199,6 +201,7 @@ export default function PreviewPage() {
   }
 
   function toggleIssue(id) {
+    setCorrectionError('')
     setSelectedIssues((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]))
   }
 
@@ -208,39 +211,116 @@ export default function PreviewPage() {
     const hasPhoto = selectedIssues.includes('photo_issue')
     const hasOther = selectedIssues.some((i) => i !== 'qr_details' && i !== 'photo_issue')
 
+    if (hasOther) {
+      setCorrections({
+        full_name: selectedIssues.includes('full_name') ? student.full_name || '' : '',
+        year_level: selectedIssues.includes('year_level') ? student.year_level || '' : '',
+      })
+    }
+    setCorrectionError('')
+
     if (hasQr && hasOther) {
       setReportTab('qr')
       setStep('report_modal')
     } else if (hasQr) {
       setStep('qr_form')
     } else if (hasOther) {
-      setCorrections({
-        full_name: selectedIssues.includes('full_name') ? student.full_name : '',
-        year_level: selectedIssues.includes('year_level') ? student.year_level : '',
-      })
       setStep('other_form')
     } else if (hasPhoto) {
       setStep('photo_notice')
     }
   }
 
-  async function handleCorrectionSubmit(e) {
-    e.preventDefault()
-    setSubmitting(true)
+  function selectedQrFields() {
+    return enabledQrFields().filter((field) => qrWrongFields[field])
+  }
+
+  function validateQrCorrectionSelection() {
+    const fields = selectedQrFields()
+    if (!fields.length) return { error: 'Select at least one QR detail to correct.' }
+
+    const values = {}
+    for (const field of fields) {
+      const value = String(qrCorrections[field] || '').trim()
+      if (!value) return { error: `Enter the correct ${QR_FIELD_META[field].label.toLowerCase()}.` }
+      if (value === String(student[field] || '').trim()) {
+        return {
+          error: `Enter a ${QR_FIELD_META[field].label.toLowerCase()} that differs from the current record.`,
+        }
+      }
+      values[field] = value
+    }
+
+    return { values }
+  }
+
+  function handleCombinedQrNext() {
+    setCorrectionError('')
+    const result = validateQrCorrectionSelection()
+    if (result.error) {
+      setCorrectionError(result.error)
+      return
+    }
+    setReportTab('other')
+  }
+
+  function buildValidatedCorrectionBody() {
     const hasQr = selectedIssues.includes('qr_details')
     const hasPhoto = selectedIssues.includes('photo_issue')
     const hasOther = selectedIssues.some((i) => i !== 'qr_details' && i !== 'photo_issue')
+    const nextCorrections = {}
+    const nextQrCorrections = {}
 
-    const body = {
-      corrections: hasOther
-        ? {
-            ...(selectedIssues.includes('full_name') && { full_name: corrections.full_name }),
-            ...(selectedIssues.includes('year_level') && { year_level: corrections.year_level }),
-          }
-        : {},
-      qr_corrections: hasQr ? qrCorrections : {},
-      photo_issue: hasPhoto,
+    if (hasOther && selectedIssues.includes('full_name')) {
+      const value = corrections.full_name.trim()
+      if (!value) return { error: 'Enter the correct full name before submitting.' }
+      if (value === String(student.full_name || '').trim()) {
+        return { error: 'Enter a corrected full name that differs from the current record.' }
+      }
+      nextCorrections.full_name = value
     }
+
+    if (hasOther && selectedIssues.includes('year_level')) {
+      const value = corrections.year_level
+      if (!value) return { error: 'Select the correct year / level before submitting.' }
+      if (value === student.year_level) {
+        return { error: 'Select a year / level that differs from the current record.' }
+      }
+      nextCorrections.year_level = value
+    }
+
+    if (hasQr) {
+      const qrValidation = validateQrCorrectionSelection()
+      if (qrValidation.error) return qrValidation
+      Object.assign(nextQrCorrections, qrValidation.values)
+    }
+
+    return {
+      body: {
+        corrections: nextCorrections,
+        qr_corrections: nextQrCorrections,
+        photo_issue: hasPhoto,
+      },
+    }
+  }
+
+  function canSubmitQrCorrections() {
+    const fields = selectedQrFields()
+    return fields.length > 0 && fields.every((field) => String(qrCorrections[field] || '').trim())
+  }
+
+  async function handleCorrectionSubmit(e) {
+    e.preventDefault()
+    setCorrectionError('')
+    const result = buildValidatedCorrectionBody()
+    if (result.error) {
+      setCorrectionError(result.error)
+      return
+    }
+
+    setSubmitting(true)
+    const hasPhoto = selectedIssues.includes('photo_issue')
+    const body = result.body
 
     try {
       const res = await apiFetch(
@@ -292,9 +372,11 @@ export default function PreviewPage() {
     setCorrections({ full_name: '', year_level: '' })
     setQrCorrections({})
     setQrWrongFields({})
+    setCorrectionError('')
   }
 
   function toggleQrWrong(field) {
+    setCorrectionError('')
     setQrWrongFields((prev) => {
       const next = { ...prev, [field]: !prev[field] }
       if (!next[field]) {
@@ -309,6 +391,7 @@ export default function PreviewPage() {
   }
 
   function handleQrCorrectionChange(field, value) {
+    setCorrectionError('')
     setQrCorrections((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -346,17 +429,22 @@ export default function PreviewPage() {
         <div className="page-center">
           <div className="landing-card">
             <div className="landing-form">
-              <div className="error-box">{error}</div>
-              <button className="btn-outline" onClick={() => navigate('/')}>
-                ← Go back
-              </button>
+              <div className="error-box" role="alert">
+                {error}
+              </div>
+              <div className="preview-recovery-actions" aria-label="Preview recovery options">
+                <button className="btn-outline" onClick={() => navigate('/')}>
+                  Back to student portal
+                </button>
+                <button className="btn-gold" onClick={() => navigate('/check-status')}>
+                  Check card status
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
     )
-
-  const isActioned = confirmed || ['photo_issue'].includes(student?.status)
 
   return (
     <div className="page-outer">
@@ -375,30 +463,31 @@ export default function PreviewPage() {
                 background: tokenInfo.expInfo.expired
                   ? 'var(--error-bg, #fee2e2)'
                   : tokenInfo.expInfo.days <= 1
-                  ? 'var(--warning-bg, #fef3c7)'
-                  : 'var(--info-bg, #dbeafe)',
+                    ? 'var(--warning-bg, #fef3c7)'
+                    : 'var(--info-bg, #dbeafe)',
                 color: tokenInfo.expInfo.expired
                   ? 'var(--error-text, #991b1b)'
                   : tokenInfo.expInfo.days <= 1
-                  ? 'var(--warning-text, #92400e)'
-                  : 'var(--info-text, #1e40af)',
+                    ? 'var(--warning-text, #92400e)'
+                    : 'var(--info-text, #1e40af)',
                 fontSize: '13px',
                 fontWeight: 500,
               }}
             >
               {tokenInfo.expInfo.expired ? (
                 <>
-                  <span style={{ fontWeight: 700, marginRight: 8 }}>✗</span>
-                  This preview link has expired. Please request a new link from your administrator.
+                  <span className="expiry-banner-label">Expired</span>
+                  This preview link has expired. Please request a new link from LMSA.
                 </>
               ) : tokenInfo.expInfo.days <= 1 ? (
                 <>
-                  <span style={{ fontWeight: 700, marginRight: 8 }}>⚠</span>
-                  This preview link expires in {tokenInfo.expInfo.text}. Please confirm or report issues soon.
+                  <span className="expiry-banner-label">Soon</span>
+                  This preview link expires in {tokenInfo.expInfo.text}. Please confirm or report
+                  issues soon.
                 </>
               ) : (
                 <>
-                  <span style={{ fontWeight: 700, marginRight: 8 }}>ℹ</span>
+                  <span className="expiry-banner-label">Active</span>
                   This preview link expires in {tokenInfo.expInfo.text}.
                 </>
               )}
@@ -407,14 +496,14 @@ export default function PreviewPage() {
 
           <div className="preview-topbar">
             <button className="btn-back" onClick={() => navigate('/')}>
-              ← Back
+              Back
             </button>
             <span className="preview-topbar-title">Your ID Card Preview</span>
           </div>
 
           {useDisplayCanvas ? (
-              <div style={{ padding: '16px 16px 44px' }}>
-                <CardCanvas
+            <div style={{ padding: '16px 16px 44px' }}>
+              <CardCanvas
                 student={student}
                 templateUrlFront={templateUrlFront}
                 templateUrlBack={templateUrlBack}
@@ -427,7 +516,14 @@ export default function PreviewPage() {
             <div>
               <IDCardDisplay student={student} />
               {!templateUrl && (
-                <p style={{ fontSize: '11px', color: 'var(--warning)', marginTop: '8px', padding: '0 16px' }}>
+                <p
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--warning)',
+                    marginTop: '8px',
+                    padding: '0 16px',
+                  }}
+                >
                   No card template uploaded yet — showing the fallback layout.
                 </p>
               )}
@@ -435,13 +531,13 @@ export default function PreviewPage() {
           )}
           <div style={{ padding: '0 16px 16px' }}>
             <button className="btn-print" onClick={() => setShowPrint(true)}>
-              🖨 View Print Preview
+              View print preview
             </button>
 
             {/* ── CONFIRMED ── */}
             {confirmed && (
               <div className="success-box">
-                ✓ Your card has been confirmed. LMSA has been notified. Thank you!
+                Your card has been confirmed. LMSA has been notified. Thank you.
               </div>
             )}
 
@@ -449,7 +545,7 @@ export default function PreviewPage() {
             {!confirmed && step === 'idle' && (
               <>
                 <div className="confirm-box">
-                  ✓ Your details were found. Review carefully and confirm or report an issue.
+                  Your details were found. Review carefully, then confirm or report an issue.
                 </div>
 
                 <div className="section-title">Verify your details</div>
@@ -566,18 +662,16 @@ export default function PreviewPage() {
             {step === 'qr_form' && (
               <div className="report-panel">
                 <div className="section-title">Correct your QR Code details</div>
-                <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '14px' }}>
-                  These details will appear when your QR code is scanned. Toggle any that are
-                  incorrect.
+                <p className="correction-help">
+                  These details will appear when your QR code is scanned. Select each incorrect
+                  field and enter the replacement value.
                 </p>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '14px',
-                    marginBottom: '16px',
-                  }}
-                >
+                {correctionError && (
+                  <div className="error-box" role="alert">
+                    {correctionError}
+                  </div>
+                )}
+                <div className="qr-correction-list">
                   {enabledQrFields().map((field) => (
                     <QrFieldRow
                       key={field}
@@ -594,7 +688,7 @@ export default function PreviewPage() {
                   <button
                     className="btn-gold"
                     onClick={handleCorrectionSubmit}
-                    disabled={submitting || !Object.values(qrWrongFields).some(Boolean)}
+                    disabled={submitting || !canSubmitQrCorrections()}
                   >
                     {submitting ? 'Submitting...' : 'Submit Correction'}
                   </button>
@@ -625,7 +719,10 @@ export default function PreviewPage() {
                     }}
                   >
                     <button
-                      onClick={() => setReportTab('qr')}
+                      onClick={() => {
+                        setCorrectionError('')
+                        setReportTab('qr')
+                      }}
                       style={{
                         flex: 1,
                         padding: '12px 8px',
@@ -642,7 +739,10 @@ export default function PreviewPage() {
                       QR Code Details
                     </button>
                     <button
-                      onClick={() => setReportTab('other')}
+                      onClick={() => {
+                        setCorrectionError('')
+                        setReportTab('other')
+                      }}
                       style={{
                         flex: 1,
                         padding: '12px 8px',
@@ -662,17 +762,15 @@ export default function PreviewPage() {
 
                   {reportTab === 'qr' && (
                     <div style={{ padding: '16px' }}>
-                      <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '14px' }}>
-                        Toggle any details that are incorrect and enter the correct value.
+                      <p className="correction-help">
+                        Select every incorrect QR detail and enter the value LMSA should review.
                       </p>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '14px',
-                          marginBottom: '16px',
-                        }}
-                      >
+                      {correctionError && (
+                        <div className="error-box" role="alert">
+                          {correctionError}
+                        </div>
+                      )}
+                      <div className="qr-correction-list">
                         {enabledQrFields().map((field) => (
                           <QrFieldRow
                             key={field}
@@ -688,10 +786,10 @@ export default function PreviewPage() {
                       <div className="btn-row">
                         <button
                           className="btn-gold"
-                          onClick={handleCorrectionSubmit}
-                          disabled={submitting || !Object.values(qrWrongFields).some(Boolean)}
+                          onClick={handleCombinedQrNext}
+                          disabled={!canSubmitQrCorrections()}
                         >
-                          {submitting ? 'Submitting...' : 'Submit Correction'}
+                          Continue to other details
                         </button>
                         <button className="btn-outline" onClick={() => setStep('select')}>
                           Back
@@ -710,15 +808,27 @@ export default function PreviewPage() {
                           gap: '12px',
                         }}
                       >
+                        {correctionError && (
+                          <div className="error-box" role="alert">
+                            {correctionError}
+                          </div>
+                        )}
                         {selectedIssues.includes('full_name') && (
                           <div className="field-group">
-                            <label className="field-label">Correct full name</label>
+                            <label
+                              className="field-label"
+                              htmlFor="preview-correct-full-name-combined"
+                            >
+                              Correct full name
+                            </label>
                             <input
+                              id="preview-correct-full-name-combined"
                               className="field-input"
                               value={corrections.full_name}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                setCorrectionError('')
                                 setCorrections({ ...corrections, full_name: e.target.value })
-                              }
+                              }}
                               placeholder="Enter your correct full name"
                               required
                             />
@@ -726,13 +836,17 @@ export default function PreviewPage() {
                         )}
                         {selectedIssues.includes('year_level') && (
                           <div className="field-group">
-                            <label className="field-label">Correct year / level</label>
+                            <label className="field-label" htmlFor="preview-correct-year-combined">
+                              Correct year / level
+                            </label>
                             <select
+                              id="preview-correct-year-combined"
                               className="field-input"
                               value={corrections.year_level}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                setCorrectionError('')
                                 setCorrections({ ...corrections, year_level: e.target.value })
-                              }
+                              }}
                             >
                               {YEARS.map((y) => (
                                 <option key={y}>{y}</option>
@@ -772,15 +886,24 @@ export default function PreviewPage() {
                   onSubmit={handleCorrectionSubmit}
                   style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
                 >
+                  {correctionError && (
+                    <div className="error-box" role="alert">
+                      {correctionError}
+                    </div>
+                  )}
                   {selectedIssues.includes('full_name') && (
                     <div className="field-group">
-                      <label className="field-label">Correct full name</label>
+                      <label className="field-label" htmlFor="preview-correct-full-name">
+                        Correct full name
+                      </label>
                       <input
+                        id="preview-correct-full-name"
                         className="field-input"
                         value={corrections.full_name}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setCorrectionError('')
                           setCorrections({ ...corrections, full_name: e.target.value })
-                        }
+                        }}
                         placeholder="Enter your correct full name"
                         required
                       />
@@ -788,13 +911,17 @@ export default function PreviewPage() {
                   )}
                   {selectedIssues.includes('year_level') && (
                     <div className="field-group">
-                      <label className="field-label">Correct year / level</label>
+                      <label className="field-label" htmlFor="preview-correct-year">
+                        Correct year / level
+                      </label>
                       <select
+                        id="preview-correct-year"
                         className="field-input"
                         value={corrections.year_level}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setCorrectionError('')
                           setCorrections({ ...corrections, year_level: e.target.value })
-                        }
+                        }}
                       >
                         {YEARS.map((y) => (
                           <option key={y}>{y}</option>
@@ -846,8 +973,8 @@ export default function PreviewPage() {
             {step === 'done' && (
               <div className="success-box">
                 {photoNoticed && !selectedIssues.some((i) => i !== 'photo_issue')
-                  ? '📷 Your photo issue has been reported. LMSA will contact you to arrange a re-shoot.'
-                  : '✓ Your corrections have been submitted. Please review your updated card above and confirm if everything looks correct now.'}
+                  ? 'Photo issue reported. LMSA will contact you to arrange a re-shoot.'
+                  : 'Corrections submitted. Please review your updated card above and confirm if everything looks correct now.'}
                 {selectedIssues.some((i) => i !== 'photo_issue') && !confirmed && (
                   <div style={{ marginTop: '12px' }}>
                     <button
@@ -880,32 +1007,29 @@ function QrFieldRow({
   onCorrectionChange,
 }) {
   const isBloodType = field === 'blood_type'
+  const inputId = `qr-correction-${field}`
+  const editorId = `qr-correction-value-${field}`
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', flex: 1 }}
-        >
-          <input
-            type="checkbox"
-            checked={isWrong}
-            onChange={onToggleWrong}
-            style={{ accentColor: 'var(--gold)' }}
-          />
-          <span style={{ fontSize: '13px', color: '#374151', fontWeight: 500 }}>
-            {QR_FIELD_META[field].label}
-          </span>
+    <div className={`qr-field-row${isWrong ? ' is-selected' : ''}`}>
+      <div className="qr-field-row-main">
+        <label className="qr-field-toggle" htmlFor={inputId}>
+          <input id={inputId} type="checkbox" checked={isWrong} onChange={onToggleWrong} />
+          <span>{QR_FIELD_META[field].label}</span>
         </label>
-        <span style={{ fontSize: '13px', color: '#9ca3af' }}>{currentValue}</span>
+        <span className="qr-field-current">Current: {currentValue}</span>
       </div>
       {isWrong && (
-        <div style={{ paddingLeft: '28px' }}>
+        <div className="qr-field-editor">
+          <label className="field-label" htmlFor={editorId}>
+            Correct {QR_FIELD_META[field].label.toLowerCase()}
+          </label>
           {isBloodType ? (
             <select
+              id={editorId}
               className="field-input"
               value={correctionValue}
               onChange={(e) => onCorrectionChange(e.target.value)}
-              style={{ fontSize: '13px' }}
+              required
             >
               <option value="">Select correct blood type</option>
               {BLOOD_TYPES.map((bt) => (
@@ -916,6 +1040,7 @@ function QrFieldRow({
             </select>
           ) : (
             <input
+              id={editorId}
               className="field-input"
               type={
                 field === 'student_email'
@@ -927,7 +1052,7 @@ function QrFieldRow({
               value={correctionValue}
               onChange={(e) => onCorrectionChange(e.target.value)}
               placeholder={`Correct ${QR_FIELD_META[field].label.toLowerCase()}`}
-              style={{ fontSize: '13px' }}
+              required
             />
           )}
         </div>

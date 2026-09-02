@@ -1,24 +1,28 @@
-import { useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
 export default function Footer() {
-  const navigate = useNavigate()
-
   return (
     <footer className="footer">
       <div className="footer-inner">
         <span className="footer-copy">© 2026 GoldWay. All rights reserved.</span>
-        <span className="footer-sep">·</span>
-        <button className="footer-link" onClick={() => navigate('/terms')}>
+        <span className="footer-sep" aria-hidden="true">
+          ·
+        </span>
+        <Link className="footer-link" to="/terms">
           Terms of Service
-        </button>
-        <span className="footer-sep">·</span>
-        <button className="footer-link" onClick={() => navigate('/privacy')}>
+        </Link>
+        <span className="footer-sep" aria-hidden="true">
+          ·
+        </span>
+        <Link className="footer-link" to="/privacy">
           Privacy Policy
-        </button>
-        <span className="footer-sep">·</span>
-        <button className="footer-link" onClick={() => navigate('/about')}>
+        </Link>
+        <span className="footer-sep" aria-hidden="true">
+          ·
+        </span>
+        <Link className="footer-link" to="/about">
           About
-        </button>
+        </Link>
       </div>
     </footer>
   )

@@ -1,13 +1,27 @@
-import { useState, useEffect } from 'react'
+/* eslint-disable react/prop-types */
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Footer from '../components/Footer'
 import { apiFetch } from '../lib/api'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const LIBERIA_COUNTIES = [
-  'Bomi', 'Bong', 'Gbarpolu', 'Grand Bassa', 'Grand Cape Mount',
-  'Grand Gedeh', 'Grand Kru', 'Lofa', 'Margibi', 'Maryland',
-  'Montserrado', 'Nimba', 'River Cess', 'River Gee', 'Sinoe',
+  'Bomi',
+  'Bong',
+  'Gbarpolu',
+  'Grand Bassa',
+  'Grand Cape Mount',
+  'Grand Gedeh',
+  'Grand Kru',
+  'Lofa',
+  'Margibi',
+  'Maryland',
+  'Montserrado',
+  'Nimba',
+  'River Cess',
+  'River Gee',
+  'Sinoe',
 ]
 
 const STEPS = [
@@ -16,6 +30,31 @@ const STEPS = [
   { key: 'additional', label: 'Additional Information' },
   { key: 'review', label: 'Review & Submit' },
 ]
+
+const INITIAL_FORM = {
+  student_id: '',
+  full_name: '',
+  year_level: '1st Year',
+  position: '',
+  programme: '',
+  blood_type: '',
+  student_email: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
+  date_of_birth: '',
+  nationality: 'Liberian',
+  county_of_origin: '',
+  current_address: '',
+}
+
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
+function formatServerError(message) {
+  if (!message) return 'Submission failed. Please try again.'
+  return message.replace(/_/g, ' ')
+}
 
 export default function StudentSubmissionForm() {
   const [enabled, setEnabled] = useState(null)
@@ -28,14 +67,10 @@ export default function StudentSubmissionForm() {
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [errorDetail, setErrorDetail] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [fieldsConfig, setFieldsConfig] = useState(null)
   const [qrFieldsConfig, setQrFieldsConfig] = useState(null)
-  const [form, setForm] = useState({
-    student_id: '', full_name: '', year_level: '1st Year', position: '',
-    programme: '', blood_type: '', student_email: '',
-    emergency_contact_name: '', emergency_contact_phone: '',
-    date_of_birth: '', nationality: 'Liberian', county_of_origin: '', current_address: '',
-  })
+  const [form, setForm] = useState(INITIAL_FORM)
 
   useEffect(() => {
     async function init() {
@@ -44,15 +79,15 @@ export default function StudentSubmissionForm() {
         setStatusError(false)
         setErrorDetail('')
 
-        // 1) Submission status — critical, but retry transient failures
-        //    (backend cold start, 5xx, network/timeout).
         let statusRes
         try {
           statusRes = await apiFetch('/api/submissions/status', { retries: 2 })
         } catch (err) {
           console.error('[StudentSubmissionForm] status request failed', err)
           if (window.Sentry) {
-            try { window.Sentry.captureException(err, { tags: { stage: 'load-status' } }) } catch {}
+            try {
+              window.Sentry.captureException(err, { tags: { stage: 'load-status' } })
+            } catch {}
           }
           const timedOut = err && err.name === 'AbortError'
           setErrorDetail(
@@ -75,15 +110,8 @@ export default function StudentSubmissionForm() {
           setStatusError(true)
           return
         }
-        if (typeof statusData.enabled !== 'boolean') {
-          // Missing/invalid setting → treat as closed rather than blocking the UI.
-          setEnabled(false)
-        } else {
-          setEnabled(statusData.enabled)
-        }
+        setEnabled(typeof statusData.enabled === 'boolean' ? statusData.enabled : false)
 
-        // 2) Field configuration — non-critical. Degrade to defaults if either
-        //    request fails so the form still loads.
         const [fieldsSettled, qrSettled] = await Promise.allSettled([
           apiFetch('/api/settings/fields').then((r) => r.json()),
           apiFetch('/api/settings/qr-fields').then((r) => r.json()),
@@ -93,7 +121,9 @@ export default function StudentSubmissionForm() {
       } catch (err) {
         console.error('[StudentSubmissionForm] init failed', err)
         if (window.Sentry) {
-          try { window.Sentry.captureException(err, { tags: { stage: 'load-init' } }) } catch {}
+          try {
+            window.Sentry.captureException(err, { tags: { stage: 'load-init' } })
+          } catch {}
         }
         setErrorDetail('Something went wrong while loading the form. Please retry.')
         setStatusError(true)
@@ -104,27 +134,120 @@ export default function StudentSubmissionForm() {
     init()
   }, [retry])
 
-  const update = (field) => (e) => setForm({ ...form, [field]: e.target.value })
+  const visibleFields = useMemo(
+    () => ({
+      position: fieldsConfig?.position?.enabled === true,
+      programme: qrFieldsConfig?.programme?.enabled === true,
+      blood_type: qrFieldsConfig?.blood_type?.enabled === true,
+      student_email: qrFieldsConfig?.student_email?.enabled === true,
+      emergency_contact_name: qrFieldsConfig?.emergency_contact_name?.enabled === true,
+      emergency_contact_phone: qrFieldsConfig?.emergency_contact_phone?.enabled === true,
+      date_of_birth: qrFieldsConfig?.date_of_birth?.enabled === true,
+      nationality: qrFieldsConfig?.nationality?.enabled === true,
+      county_of_origin: qrFieldsConfig?.county_of_origin?.enabled === true,
+      current_address: qrFieldsConfig?.current_address?.enabled === true,
+    }),
+    [fieldsConfig, qrFieldsConfig],
+  )
 
-  const showPosition = fieldsConfig?.position?.enabled === true
-  const showProgramme = qrFieldsConfig?.programme?.enabled === true
-  const showBloodType = qrFieldsConfig?.blood_type?.enabled === true
-  const showStudentEmail = qrFieldsConfig?.student_email?.enabled === true
-  const showEmergencyContactName = qrFieldsConfig?.emergency_contact_name?.enabled === true
-  const showEmergencyContactPhone = qrFieldsConfig?.emergency_contact_phone?.enabled === true
-  const showDateOfBirth = qrFieldsConfig?.date_of_birth?.enabled === true
-  const showNationality = qrFieldsConfig?.nationality?.enabled === true
-  const showCountyOfOrigin = qrFieldsConfig?.county_of_origin?.enabled === true
-  const showCurrentAddress = qrFieldsConfig?.current_address?.enabled === true
+  const update = (field) => (e) => {
+    const value = e.target.value
+    setForm((current) => ({ ...current, [field]: value }))
+    setFieldErrors((current) => {
+      if (!current[field]) return current
+      const next = { ...current }
+      delete next[field]
+      return next
+    })
+    if (error) setError('')
+  }
 
-  function canNext() {
-    if (step === 0) return form.student_id.trim() && form.full_name.trim()
-    if (step === 1) return true
-    if (step === 2) return true
-    return false
+  function validateFields(fields) {
+    const nextErrors = {}
+
+    for (const field of fields) {
+      const value = String(form[field] || '').trim()
+      if (field === 'student_id' && !value) nextErrors[field] = 'Enter your Student ID.'
+      if (field === 'full_name' && !value) nextErrors[field] = 'Enter your full name.'
+      if (field === 'year_level' && !YEARS.includes(form.year_level)) {
+        nextErrors[field] = 'Select your year level.'
+      }
+      if (field === 'student_email' && value && !isEmail(value)) {
+        nextErrors[field] = 'Enter a valid email address.'
+      }
+      if (field === 'date_of_birth' && value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        nextErrors[field] = 'Use a valid date of birth.'
+      }
+    }
+
+    return nextErrors
+  }
+
+  function fieldsForStep(stepIndex) {
+    if (stepIndex === 0) return ['student_id', 'full_name', 'year_level']
+    if (stepIndex === 1) return visibleFields.programme ? ['programme'] : []
+    if (stepIndex === 2) {
+      return [
+        visibleFields.student_email && 'student_email',
+        visibleFields.date_of_birth && 'date_of_birth',
+        visibleFields.nationality && 'nationality',
+        visibleFields.county_of_origin && 'county_of_origin',
+        visibleFields.current_address && 'current_address',
+        visibleFields.blood_type && 'blood_type',
+        visibleFields.emergency_contact_name && 'emergency_contact_name',
+        visibleFields.emergency_contact_phone && 'emergency_contact_phone',
+      ].filter(Boolean)
+    }
+    return []
+  }
+
+  function validateStep(stepIndex = step) {
+    const nextErrors = validateFields(fieldsForStep(stepIndex))
+    setFieldErrors(nextErrors)
+    if (Object.keys(nextErrors).length) {
+      setError('Please fix the highlighted field before continuing.')
+      return false
+    }
+    setError('')
+    return true
+  }
+
+  function handleNext() {
+    if (!validateStep(step)) return
+    setStep((current) => Math.min(current + 1, STEPS.length - 1))
+  }
+
+  function handleBack() {
+    if (step === 0) {
+      if (window.history.length > 1) window.history.back()
+      else window.location.assign('/')
+      return
+    }
+    setError('')
+    setFieldErrors({})
+    setStep((current) => Math.max(current - 1, 0))
+  }
+
+  function validateAllSteps() {
+    const stepErrors = [0, 1, 2].map((stepIndex) => validateFields(fieldsForStep(stepIndex)))
+    const nextErrors = Object.assign({}, ...stepErrors)
+    setFieldErrors(nextErrors)
+    if (Object.keys(nextErrors).length) {
+      const firstErrorStep = stepErrors.findIndex((errors) => Object.keys(errors).length)
+      setStep(firstErrorStep >= 0 ? firstErrorStep : 0)
+      setError('Please fix the highlighted field before submitting.')
+      return false
+    }
+    return true
   }
 
   async function doSubmit() {
+    if (!validateAllSteps()) return
+    if (!agreed) {
+      setError('Please agree to the Terms of Service and Privacy Policy before submitting.')
+      return
+    }
+
     setSubmitting(true)
     setError('')
     try {
@@ -133,11 +256,11 @@ export default function StudentSubmissionForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (res.ok) {
         setSubmitted(true)
       } else {
-        setError(data.error || 'Submission failed. Please try again.')
+        setError(formatServerError(data.error))
       }
     } catch {
       setError('Something went wrong. Please check your connection and try again.')
@@ -146,75 +269,112 @@ export default function StudentSubmissionForm() {
     }
   }
 
+  const reviewRows = [
+    { label: 'Student ID', value: form.student_id || 'Not provided' },
+    { label: 'Full Name', value: form.full_name || 'Not provided' },
+    { label: 'Year / Level', value: form.year_level || 'Not provided' },
+    visibleFields.position && { label: 'Position', value: form.position || 'Not provided' },
+    visibleFields.programme && { label: 'Programme', value: form.programme || 'Not provided' },
+    visibleFields.student_email && { label: 'Email', value: form.student_email || 'Not provided' },
+    visibleFields.date_of_birth && {
+      label: 'Date of Birth',
+      value: form.date_of_birth || 'Not provided',
+    },
+    visibleFields.nationality && {
+      label: 'Nationality',
+      value: form.nationality || 'Not provided',
+    },
+    visibleFields.county_of_origin && {
+      label: 'County of Origin',
+      value: form.county_of_origin || 'Not provided',
+    },
+    visibleFields.current_address && {
+      label: 'Address',
+      value: form.current_address || 'Not provided',
+    },
+    visibleFields.blood_type && { label: 'Blood Type', value: form.blood_type || 'Not provided' },
+    visibleFields.emergency_contact_name && {
+      label: 'Emergency Contact',
+      value: form.emergency_contact_name || 'Not provided',
+    },
+    visibleFields.emergency_contact_phone && {
+      label: 'Emergency Phone',
+      value: form.emergency_contact_phone || 'Not provided',
+    },
+  ].filter(Boolean)
+
   if (loading) {
     return (
-      <div className="page-center">
-        <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <p style={{ fontSize: '13px', color: 'var(--muted)' }}>Loading...</p>
-        </div>
-      </div>
+      <SubmissionState
+        title="Loading student form"
+        message="Preparing the secure LMSA submission form."
+      />
     )
   }
 
   if (statusError) {
     return (
-      <div className="page-center">
-        <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#9888;&#65039;</div>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
-            Unable to load the form
-          </h2>
-          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '20px' }}>
-            {errorDetail || 'We could not reach the server. Please check your connection and try again.'}
-          </p>
-          <button className="btn-gold" style={{ padding: '10px 24px' }} onClick={() => setRetry((n) => n + 1)}>
-            Retry
-          </button>
-        </div>
-      </div>
+      <SubmissionState
+        title="Unable to load the form"
+        message={
+          errorDetail ||
+          'We could not reach the server. Please check your connection and try again.'
+        }
+        tone="error"
+      >
+        <button
+          className="btn-primary submission-state-action"
+          onClick={() => setRetry((n) => n + 1)}
+        >
+          Retry loading form
+        </button>
+        <Link className="btn-outline submission-state-action" to="/check-status">
+          Check existing status
+        </Link>
+      </SubmissionState>
     )
   }
 
   if (!enabled) {
     return (
-      <div className="page-center">
-        <div className="landing-card" style={{ textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>&#128274;</div>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '8px' }}>
-            Form is currently closed
-          </h2>
-          <p style={{ fontSize: '13px', color: 'var(--muted)' }}>
-            The student submission form is not accepting responses at this time.
-          </p>
-        </div>
-      </div>
+      <SubmissionState
+        title="Form is currently closed"
+        message="The student submission form is not accepting responses at this time. You can still check an existing card status."
+        tone="locked"
+      >
+        <Link className="btn-primary submission-state-action" to="/check-status">
+          Check card status
+        </Link>
+        <Link className="btn-outline submission-state-action" to="/">
+          Back to student portal
+        </Link>
+      </SubmissionState>
     )
   }
 
   if (submitted) {
     return (
       <div className="submission-page">
-        <div className="submission-topbar">
-          <div className="submission-topbar-inner">
-            <div className="submission-topbar-brand">
-              <img src="/lmsa-logo.png" alt="LMSA" className="submission-topbar-logo" />
-              <span className="submission-topbar-name">LMSA</span>
-            </div>
-          </div>
-        </div>
+        <SubmissionTopbar />
         <div className="submission-wizard-body">
           <div className="submission-wizard-card">
-            <div style={{ textAlign: 'center', padding: '48px 32px' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#9989;</div>
-              <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '8px', color: 'var(--text)' }}>
-                Submission Received!
-              </h2>
-              <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '8px', lineHeight: 1.6 }}>
-                Your details have been submitted successfully. An admin will review your information shortly.
+            <div className="submission-final-state" role="status">
+              <div className="submission-final-seal" aria-hidden="true">
+                <SealIcon />
+              </div>
+              <h1>Submission received</h1>
+              <p>
+                Your details have been submitted successfully. LMSA will review your information
+                before it is added to the ID card workflow.
               </p>
-              <p style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 500 }}>
-                You may now close this tab.
-              </p>
+              <div className="submission-final-actions">
+                <Link className="btn-primary" to="/check-status">
+                  Check status later
+                </Link>
+                <Link className="btn-outline" to="/">
+                  Back to student portal
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -223,87 +383,109 @@ export default function StudentSubmissionForm() {
     )
   }
 
-  const reviewRows = [
-    { label: 'Student ID', value: form.student_id },
-    { label: 'Full Name', value: form.full_name },
-    { label: 'Year / Level', value: form.year_level },
-    showPosition && form.position && { label: 'Position', value: form.position },
-    showProgramme && form.programme && { label: 'Programme', value: form.programme },
-    showStudentEmail && form.student_email && { label: 'Email', value: form.student_email },
-    showDateOfBirth && form.date_of_birth && { label: 'Date of Birth', value: form.date_of_birth },
-    showNationality && form.nationality && { label: 'Nationality', value: form.nationality },
-    showCountyOfOrigin && form.county_of_origin && { label: 'County of Origin', value: form.county_of_origin },
-    showCurrentAddress && form.current_address && { label: 'Address', value: form.current_address },
-    showBloodType && form.blood_type && { label: 'Blood Type', value: form.blood_type },
-    showEmergencyContactName && form.emergency_contact_name && { label: 'Emergency Contact', value: form.emergency_contact_name },
-    showEmergencyContactPhone && form.emergency_contact_phone && { label: 'Emergency Phone', value: form.emergency_contact_phone },
-  ].filter(Boolean)
-
   return (
     <div className="submission-page">
-      <div className="submission-topbar">
-        <div className="submission-topbar-inner">
-          <div className="submission-topbar-brand">
-            <img src="/lmsa-logo.png" alt="LMSA" className="submission-topbar-logo" />
-            <span className="submission-topbar-name">LMSA</span>
-          </div>
-          <div className="submission-topbar-right">
-            <span className="submission-topbar-portal">Student Portal</span>
-          </div>
-        </div>
-      </div>
+      <SubmissionTopbar />
 
       <div className="submission-wizard-body">
         <div className="submission-wizard-card">
-          <div className="step-indicator">
+          <div className="step-indicator" aria-label="Submission progress">
             {STEPS.map((s, i) => (
-              <div key={s.key} className={`step-item ${i <= step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
+              <div
+                key={s.key}
+                className={`step-item ${i <= step ? 'active' : ''} ${i < step ? 'done' : ''}`}
+                aria-current={i === step ? 'step' : undefined}
+              >
                 <div className="step-circle">{i < step ? '\u2713' : i + 1}</div>
                 <div className="step-label">{s.label}</div>
-                {i < STEPS.length - 1 && <div className="step-line" />}
+                {i < STEPS.length - 1 && <div className="step-line" aria-hidden="true" />}
               </div>
             ))}
           </div>
 
           <div className="submission-form-body">
-            {error && <div className="error-box" style={{ marginBottom: '16px' }}>{error}</div>}
+            {error && (
+              <div className="error-box" role="alert">
+                {error}
+              </div>
+            )}
 
             {step === 0 && (
               <>
                 <div className="form-section-header">
                   <div>
-                    <h2 className="form-section-title">Student Information</h2>
-                    <p className="form-section-sub">Please provide accurate information. All fields are required.</p>
+                    <h1 className="form-section-title">Student Information</h1>
+                    <p className="form-section-sub">
+                      Enter the details LMSA uses to identify your student card record. Required
+                      fields are marked.
+                    </p>
                   </div>
-                  <div className="form-security-badge">
-                    <span className="form-security-icon">&#128274;</span>
-                    <span className="form-security-text">Your information is secure and will be kept confidential.</span>
-                  </div>
+                  <SecurityBadge />
                 </div>
                 <div className="form-grid">
-                  <div className="field-group">
-                    <label className="field-label">Student ID <span className="required">*</span></label>
-                    <input className="field-input" placeholder="Enter your student ID"
-                      value={form.student_id} onChange={update('student_id')} required />
-                  </div>
-                  <div className="field-group">
-                    <label className="field-label">Full Name <span className="required">*</span></label>
-                    <input className="field-input" placeholder="Enter your full name"
-                      value={form.full_name} onChange={update('full_name')} required />
-                  </div>
-                  <div className="field-group">
-                    <label className="field-label">Year Level <span className="required">*</span></label>
-                    <select className="field-input" value={form.year_level} onChange={update('year_level')}>
+                  <FieldWrapper field="student_id" label="Student ID" required errors={fieldErrors}>
+                    <input
+                      id="submission-student-id"
+                      className="field-input"
+                      placeholder="e.g. AMD-2024-0001"
+                      value={form.student_id}
+                      onChange={update('student_id')}
+                      required
+                      aria-required="true"
+                      aria-invalid={Boolean(fieldErrors.student_id)}
+                      aria-describedby="submission-student-id-error"
+                      autoComplete="off"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                    />
+                  </FieldWrapper>
+                  <FieldWrapper field="full_name" label="Full Name" required errors={fieldErrors}>
+                    <input
+                      id="submission-full-name"
+                      className="field-input"
+                      placeholder="Enter your full name"
+                      value={form.full_name}
+                      onChange={update('full_name')}
+                      required
+                      aria-required="true"
+                      aria-invalid={Boolean(fieldErrors.full_name)}
+                      aria-describedby="submission-full-name-error"
+                      autoComplete="name"
+                    />
+                  </FieldWrapper>
+                  <FieldWrapper field="year_level" label="Year Level" required errors={fieldErrors}>
+                    <select
+                      id="submission-year-level"
+                      className="field-input"
+                      value={form.year_level}
+                      onChange={update('year_level')}
+                      required
+                      aria-required="true"
+                      aria-invalid={Boolean(fieldErrors.year_level)}
+                      aria-describedby="submission-year-level-error"
+                    >
                       <option value="">Select year level</option>
-                      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                      {YEARS.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
                     </select>
-                  </div>
-                  {showPosition && (
-                    <div className="field-group">
-                      <label className="field-label">Position</label>
-                      <input className="field-input" placeholder="Your position in LMSA"
-                        value={form.position} onChange={update('position')} />
-                    </div>
+                  </FieldWrapper>
+                  {visibleFields.position && (
+                    <FieldWrapper field="position" label="Position" errors={fieldErrors}>
+                      <input
+                        id="submission-position"
+                        className="field-input"
+                        placeholder="Your position in LMSA"
+                        value={form.position}
+                        onChange={update('position')}
+                        aria-describedby="submission-position-hint"
+                      />
+                      <p className="field-hint" id="submission-position-hint">
+                        Optional — for LMSA roles that appear on the card.
+                      </p>
+                    </FieldWrapper>
                   )}
                 </div>
               </>
@@ -313,19 +495,33 @@ export default function StudentSubmissionForm() {
               <>
                 <div className="form-section-header">
                   <div>
-                    <h2 className="form-section-title">Academic Information</h2>
-                    <p className="form-section-sub">Tell us about your programme and role.</p>
+                    <h1 className="form-section-title">Academic Information</h1>
+                    <p className="form-section-sub">
+                      Add academic details when LMSA has requested them for QR verification.
+                    </p>
                   </div>
                 </div>
-                <div className="form-grid">
-                  {showProgramme && (
-                    <div className="field-group">
-                      <label className="field-label">Programme <span className="required">*</span></label>
-                      <input className="field-input" placeholder="Enter your programme"
-                        value={form.programme} onChange={update('programme')} />
-                    </div>
-                  )}
-                </div>
+                {visibleFields.programme ? (
+                  <div className="form-grid">
+                    <FieldWrapper field="programme" label="Programme" errors={fieldErrors}>
+                      <input
+                        id="submission-programme"
+                        className="field-input"
+                        placeholder="Enter your programme"
+                        value={form.programme}
+                        onChange={update('programme')}
+                        aria-describedby="submission-programme-hint"
+                      />
+                      <p className="field-hint" id="submission-programme-hint">
+                        Optional — leave blank if LMSA has not assigned a programme label.
+                      </p>
+                    </FieldWrapper>
+                  </div>
+                ) : (
+                  <div className="form-grid-empty">
+                    No additional academic fields are needed for this submission.
+                  </div>
+                )}
               </>
             )}
 
@@ -333,74 +529,154 @@ export default function StudentSubmissionForm() {
               <>
                 <div className="form-section-header">
                   <div>
-                    <h2 className="form-section-title">Additional Information</h2>
-                    <p className="form-section-sub">Contact and personal details.</p>
+                    <h1 className="form-section-title">Additional Information</h1>
+                    <p className="form-section-sub">
+                      These details may appear when an official QR code is scanned. Only provide
+                      information you recognise and want LMSA to review.
+                    </p>
                   </div>
                 </div>
-                <div className="form-grid">
-                  {showStudentEmail && (
-                    <div className="field-group">
-                      <label className="field-label">Email <span className="required">*</span></label>
-                      <input className="field-input" type="email" placeholder="Enter your email address"
-                        value={form.student_email} onChange={update('student_email')} />
-                    </div>
-                  )}
-                  {showDateOfBirth && (
-                    <div className="field-group">
-                      <label className="field-label">Date of Birth <span className="required">*</span></label>
-                      <input className="field-input" type="date"
-                        value={form.date_of_birth} onChange={update('date_of_birth')} />
-                    </div>
-                  )}
-                  {showNationality && (
-                    <div className="field-group">
-                      <label className="field-label">Nationality <span className="required">*</span></label>
-                      <input className="field-input" placeholder="Enter your nationality"
-                        value={form.nationality} onChange={update('nationality')} />
-                    </div>
-                  )}
-                  {showCountyOfOrigin && (
-                    <div className="field-group">
-                      <label className="field-label">County of Origin <span className="required">*</span></label>
-                      <input className="field-input" list="liberia-counties-sub" placeholder="e.g. Montserrado"
-                        value={form.county_of_origin} onChange={update('county_of_origin')} />
-                      <datalist id="liberia-counties-sub">
-                        {LIBERIA_COUNTIES.map(c => <option key={c} value={c} />)}
-                      </datalist>
-                    </div>
-                  )}
-                  {showCurrentAddress && (
-                    <div className="field-group form-grid-full">
-                      <label className="field-label">Address <span className="required">*</span></label>
-                      <textarea className="field-input" placeholder="Enter your full address" rows={3}
-                        value={form.current_address} onChange={update('current_address')}
-                        style={{ resize: 'vertical', minHeight: '60px' }} />
-                    </div>
-                  )}
-                  {showBloodType && (
-                    <div className="field-group">
-                      <label className="field-label">Blood Type <span className="required">*</span></label>
-                      <select className="field-input" value={form.blood_type} onChange={update('blood_type')}>
-                        <option value="">Select blood type</option>
-                        {BLOOD_TYPES.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                    </div>
-                  )}
-                  {showEmergencyContactName && (
-                    <div className="field-group">
-                      <label className="field-label">Emergency Contact Name <span className="required">*</span></label>
-                      <input className="field-input" placeholder="Enter full name"
-                        value={form.emergency_contact_name} onChange={update('emergency_contact_name')} />
-                    </div>
-                  )}
-                  {showEmergencyContactPhone && (
-                    <div className="field-group">
-                      <label className="field-label">Emergency Contact Phone <span className="required">*</span></label>
-                      <input className="field-input" placeholder="+231 xxx xxxx"
-                        value={form.emergency_contact_phone} onChange={update('emergency_contact_phone')} />
-                    </div>
-                  )}
-                </div>
+                {fieldsForStep(2).length ? (
+                  <div className="form-grid">
+                    {visibleFields.student_email && (
+                      <FieldWrapper field="student_email" label="Email" errors={fieldErrors}>
+                        <input
+                          id="submission-student-email"
+                          className="field-input"
+                          type="email"
+                          placeholder="Enter your email address"
+                          value={form.student_email}
+                          onChange={update('student_email')}
+                          aria-invalid={Boolean(fieldErrors.student_email)}
+                          aria-describedby="submission-student-email-error"
+                          autoComplete="email"
+                        />
+                      </FieldWrapper>
+                    )}
+                    {visibleFields.date_of_birth && (
+                      <FieldWrapper
+                        field="date_of_birth"
+                        label="Date of Birth"
+                        errors={fieldErrors}
+                      >
+                        <input
+                          id="submission-date-of-birth"
+                          className="field-input"
+                          type="date"
+                          value={form.date_of_birth}
+                          onChange={update('date_of_birth')}
+                          aria-invalid={Boolean(fieldErrors.date_of_birth)}
+                          aria-describedby="submission-date-of-birth-error"
+                        />
+                      </FieldWrapper>
+                    )}
+                    {visibleFields.nationality && (
+                      <FieldWrapper field="nationality" label="Nationality" errors={fieldErrors}>
+                        <input
+                          id="submission-nationality"
+                          className="field-input"
+                          placeholder="Enter your nationality"
+                          value={form.nationality}
+                          onChange={update('nationality')}
+                          autoComplete="country-name"
+                        />
+                      </FieldWrapper>
+                    )}
+                    {visibleFields.county_of_origin && (
+                      <FieldWrapper
+                        field="county_of_origin"
+                        label="County of Origin"
+                        errors={fieldErrors}
+                      >
+                        <input
+                          id="submission-county-of-origin"
+                          className="field-input"
+                          list="liberia-counties-sub"
+                          placeholder="e.g. Montserrado"
+                          value={form.county_of_origin}
+                          onChange={update('county_of_origin')}
+                        />
+                        <datalist id="liberia-counties-sub">
+                          {LIBERIA_COUNTIES.map((county) => (
+                            <option key={county} value={county} />
+                          ))}
+                        </datalist>
+                      </FieldWrapper>
+                    )}
+                    {visibleFields.current_address && (
+                      <FieldWrapper
+                        field="current_address"
+                        label="Address"
+                        errors={fieldErrors}
+                        className="form-grid-full"
+                      >
+                        <textarea
+                          id="submission-current-address"
+                          className="field-input submission-textarea"
+                          placeholder="Enter your full address"
+                          rows={3}
+                          value={form.current_address}
+                          onChange={update('current_address')}
+                          autoComplete="street-address"
+                        />
+                      </FieldWrapper>
+                    )}
+                    {visibleFields.blood_type && (
+                      <FieldWrapper field="blood_type" label="Blood Type" errors={fieldErrors}>
+                        <select
+                          id="submission-blood-type"
+                          className="field-input"
+                          value={form.blood_type}
+                          onChange={update('blood_type')}
+                        >
+                          <option value="">Select blood type</option>
+                          {BLOOD_TYPES.map((bloodType) => (
+                            <option key={bloodType} value={bloodType}>
+                              {bloodType}
+                            </option>
+                          ))}
+                        </select>
+                      </FieldWrapper>
+                    )}
+                    {visibleFields.emergency_contact_name && (
+                      <FieldWrapper
+                        field="emergency_contact_name"
+                        label="Emergency Contact Name"
+                        errors={fieldErrors}
+                      >
+                        <input
+                          id="submission-emergency-contact-name"
+                          className="field-input"
+                          placeholder="Enter full name"
+                          value={form.emergency_contact_name}
+                          onChange={update('emergency_contact_name')}
+                          autoComplete="name"
+                        />
+                      </FieldWrapper>
+                    )}
+                    {visibleFields.emergency_contact_phone && (
+                      <FieldWrapper
+                        field="emergency_contact_phone"
+                        label="Emergency Contact Phone"
+                        errors={fieldErrors}
+                      >
+                        <input
+                          id="submission-emergency-contact-phone"
+                          className="field-input"
+                          type="tel"
+                          placeholder="+231 xxx xxxx"
+                          value={form.emergency_contact_phone}
+                          onChange={update('emergency_contact_phone')}
+                          autoComplete="tel"
+                        />
+                      </FieldWrapper>
+                    )}
+                  </div>
+                ) : (
+                  <div className="form-grid-empty">
+                    No QR or emergency fields are enabled for this submission.
+                  </div>
+                )}
               </>
             )}
 
@@ -408,28 +684,42 @@ export default function StudentSubmissionForm() {
               <>
                 <div className="form-section-header">
                   <div>
-                    <h2 className="form-section-title">Review &amp; Submit</h2>
-                    <p className="form-section-sub">Please review your information before submitting.</p>
+                    <h1 className="form-section-title">Review &amp; Submit</h1>
+                    <p className="form-section-sub">
+                      Review the information LMSA will receive before submitting.
+                    </p>
                   </div>
-                  <div className="form-security-badge">
-                    <span className="form-security-icon">&#128274;</span>
-                    <span className="form-security-text">Your information is secure and will be kept confidential.</span>
-                  </div>
+                  <SecurityBadge />
                 </div>
                 <div className="review-grid">
-                  {reviewRows.map(r => (
-                    <div key={r.label} className="review-row">
-                      <span className="review-label">{r.label}</span>
-                      <span className="review-value">{r.value}</span>
+                  {reviewRows.map((row) => (
+                    <div key={row.label} className="review-row">
+                      <span className="review-label">{row.label}</span>
+                      <span className="review-value">{row.value}</span>
                     </div>
                   ))}
                 </div>
+                <p className="review-note">
+                  Blank optional details are recorded as “Not provided” and can be clarified during
+                  LMSA review.
+                </p>
                 <div className="review-agree">
-                  <input type="checkbox" id="agree-tos" checked={agreed}
-                    onChange={e => setAgreed(e.target.checked)}
-                    style={{ accentColor: 'var(--gold)', cursor: 'pointer', flexShrink: 0 }} />
-                  <label htmlFor="agree-tos" style={{ fontSize: '13px', color: 'var(--muted)', lineHeight: 1.5, cursor: 'pointer' }}>
-                    I agree to the <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'underline' }}>Terms of Service</a> and <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', textDecoration: 'underline' }}>Privacy Policy</a>
+                  <input
+                    type="checkbox"
+                    id="agree-tos"
+                    checked={agreed}
+                    onChange={(e) => setAgreed(e.target.checked)}
+                  />
+                  <label htmlFor="agree-tos">
+                    I agree to the{' '}
+                    <Link to="/terms" target="_blank" rel="noreferrer">
+                      Terms of Service
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/privacy" target="_blank" rel="noreferrer">
+                      Privacy Policy
+                    </Link>
+                    .
                   </label>
                 </div>
               </>
@@ -437,31 +727,21 @@ export default function StudentSubmissionForm() {
           </div>
 
           <div className="submission-form-footer">
-            <button
-              className="submission-btn-cancel"
-              onClick={() => step === 0 ? window.history.back() : setStep(step - 1)}
-            >
-              {step === 0 ? (
-                <>&larr; Cancel</>
-              ) : (
-                <>&larr; Back</>
-              )}
+            <button className="submission-btn-cancel" type="button" onClick={handleBack}>
+              {step === 0 ? 'Cancel' : 'Back'}
             </button>
-            {step < 3 ? (
-              <button
-                className="submission-btn-next"
-                onClick={() => setStep(step + 1)}
-                disabled={!canNext()}
-              >
-                Continue &rarr;
+            {step < STEPS.length - 1 ? (
+              <button className="submission-btn-next" type="button" onClick={handleNext}>
+                Continue
               </button>
             ) : (
               <button
                 className="submission-btn-submit"
+                type="button"
                 onClick={doSubmit}
                 disabled={!agreed || submitting}
               >
-                {submitting ? 'Submitting...' : <>&#10148; Submit &amp; Continue</>}
+                {submitting ? 'Submitting…' : 'Submit details'}
               </button>
             )}
           </div>
@@ -469,5 +749,87 @@ export default function StudentSubmissionForm() {
       </div>
       <Footer />
     </div>
+  )
+}
+
+function SubmissionTopbar() {
+  return (
+    <div className="submission-topbar">
+      <div className="submission-topbar-inner">
+        <Link className="submission-topbar-brand" to="/" aria-label="LMSA ID Portal home">
+          <img src="/lmsa-logo.png" alt="LMSA" className="submission-topbar-logo" />
+          <span className="submission-topbar-name">LMSA</span>
+        </Link>
+        <div className="submission-topbar-right">
+          <span className="submission-topbar-portal">Student Portal</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FieldWrapper({ field, label, required = false, errors, children, className = '' }) {
+  const inputId = `submission-${field.replace(/_/g, '-')}`
+  const errorId = `${inputId}-error`
+  return (
+    <div className={`field-group ${className}`.trim()}>
+      <label className="field-label" htmlFor={inputId}>
+        {label}
+        {required && <span className="required"> *</span>}
+      </label>
+      {children}
+      {errors[field] && (
+        <p className="field-error" id={errorId}>
+          {errors[field]}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function SecurityBadge() {
+  return (
+    <div className="form-security-badge">
+      <span className="form-security-icon" aria-hidden="true">
+        <SealIcon small />
+      </span>
+      <span className="form-security-text">Your information is secure and kept confidential.</span>
+    </div>
+  )
+}
+
+function SubmissionState({ title, message, tone = 'info', children }) {
+  return (
+    <div className="submission-page">
+      <SubmissionTopbar />
+      <main className="submission-wizard-body">
+        <div className={`submission-state-card submission-state-card--${tone}`} role="status">
+          <div className="submission-state-seal" aria-hidden="true">
+            <SealIcon tone={tone} />
+          </div>
+          <h1>{title}</h1>
+          <p>{message}</p>
+          {children && <div className="submission-state-actions">{children}</div>}
+        </div>
+      </main>
+      <Footer />
+    </div>
+  )
+}
+
+function SealIcon({ tone = 'info', small = false }) {
+  const stroke = tone === 'error' ? '#E24B4A' : tone === 'locked' ? '#C9A84C' : '#087F8C'
+  const size = small ? 20 : 46
+  return (
+    <svg width={size} height={size} viewBox="0 0 46 46" fill="none" aria-hidden="true">
+      <path d="M23 5l15.5 9v18L23 41 7.5 32V14L23 5z" stroke={stroke} strokeWidth="2" />
+      <path
+        d="M15.5 23.5l5 5L31 17.5"
+        stroke={stroke}
+        strokeWidth="2.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }

@@ -344,7 +344,7 @@ export default function LayoutMapper({
         },
       }))
     },
-    [dragging, setLayout],
+    [dragging, setLayout, snapGrid],
   )
 
   const onUp = useCallback(() => setDragging(null), [])
@@ -377,6 +377,32 @@ export default function LayoutMapper({
         },
       }
     })
+  }
+
+  function handleFieldKeyDown(event, field) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      setSelected(field)
+      return
+    }
+
+    const moves = {
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+    }
+    const move = moves[event.key]
+    if (!move) return
+    event.preventDefault()
+    setSelected(field)
+    nudge(field, move[0], move[1])
+  }
+
+  function handleZoneKeyDown(event, index) {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    setActiveZone(index)
   }
 
   // ── Save ──
@@ -723,6 +749,12 @@ export default function LayoutMapper({
             {zones.map((z, i) => (
               <div
                 key={i}
+                role="button"
+                tabIndex={0}
+                className="layout-chip-focus"
+                aria-pressed={activeZone === i}
+                aria-label={`Template box ${i + 1}. Press Enter to assign a field.`}
+                onKeyDown={(e) => handleZoneKeyDown(e, i)}
                 onPointerDown={(e) => {
                   e.stopPropagation()
                   e.preventDefault()
@@ -764,6 +796,12 @@ export default function LayoutMapper({
               return (
                 <div
                   key={field}
+                  role="button"
+                  tabIndex={0}
+                  className="layout-chip-focus"
+                  aria-pressed={isSel}
+                  aria-label={`${label} field. Drag with pointer or use arrow keys to nudge.`}
+                  onKeyDown={(e) => handleFieldKeyDown(e, field)}
                   onPointerDown={(e) => startDrag(e, field)}
                   style={{
                     position: 'absolute',
@@ -805,12 +843,15 @@ export default function LayoutMapper({
           {/* Field legend */}
           <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
             {activeFields.map((f) => (
-              <div
+              <button
                 key={f}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                type="button"
+                className="layout-legend-chip"
+                aria-pressed={selected === f}
                 onClick={() => setSelected(f)}
               >
-                <div
+                <span
+                  aria-hidden="true"
                   style={{
                     width: '8px',
                     height: '8px',
@@ -819,7 +860,7 @@ export default function LayoutMapper({
                   }}
                 />
                 <span style={{ fontSize: '10px', color: 'var(--muted)' }}>{FIELD_META[f].label}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -1232,18 +1273,14 @@ export default function LayoutMapper({
       {autoMap && (
         <div
           onClick={() => setAutoMap(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '16px',
-          }}
+          className="modal-overlay"
+          style={{ zIndex: 1000, background: 'rgba(0,0,0,0.45)' }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="automap-dialog-title"
+            aria-describedby="automap-dialog-desc"
             onClick={(e) => e.stopPropagation()}
             style={{
               background: 'var(--surface)',
@@ -1256,10 +1293,10 @@ export default function LayoutMapper({
               overflowY: 'auto',
             }}
           >
-            <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text)', marginBottom: '4px' }}>
+            <div id="automap-dialog-title" style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text)', marginBottom: '4px' }}>
               Auto-Map {autoMap.side} layout
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px', lineHeight: '1.5' }}>
+            <p id="automap-dialog-desc" style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px', lineHeight: '1.5' }}>
               Proposed field positions from detected template boxes. Confirm to apply, or close to keep your current layout.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
