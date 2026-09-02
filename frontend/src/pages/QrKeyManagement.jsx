@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminFetch, adminJson } from '../lib/api'
+import { supabase } from '../lib/supabase'
 import { useToast } from '../components/Toast'
-import StatusBadge from '../components/StatusBadge'
 import EmptyState from '../components/EmptyState'
+import NotificationCenter from '../components/NotificationCenter'
+import SessionTimeout from '../components/SessionTimeout'
 
 const STATUS_COLORS = {
   active: { bg: 'var(--success-bg)', text: 'var(--success-text)', border: 'var(--success-border)' },
@@ -84,6 +86,7 @@ export default function QrKeyManagement() {
   const [revokeModalOpen, setRevokeModalOpen] = useState(false)
   const [revokeKid, setRevokeKid] = useState(null)
   const [revokeReason, setRevokeReason] = useState('')
+  const [revokeConfirm, setRevokeConfirm] = useState('')
   const [revokeLoading, setRevokeLoading] = useState(false)
   const [inspectModalOpen, setInspectModalOpen] = useState(false)
   const [inspectToken, setInspectToken] = useState('')
@@ -116,9 +119,17 @@ export default function QrKeyManagement() {
   }
 
   useEffect(() => {
-    loadKeys()
-    loadAudit()
-    setLoading(false)
+    let mounted = true
+    async function loadInitialData() {
+      setLoading(true)
+      await Promise.all([loadKeys(), loadAudit()])
+      if (mounted) setLoading(false)
+    }
+    loadInitialData()
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleRotate() {
@@ -147,6 +158,10 @@ export default function QrKeyManagement() {
       toast.error('Please provide a reason for revocation')
       return
     }
+    if (revokeConfirm.trim() !== revokeKid) {
+      toast.error('Type the key ID exactly to confirm revocation')
+      return
+    }
     setRevokeLoading(true)
     try {
       const res = await adminJson(`/api/qr/keys/revoke/${revokeKid}`, 'POST', { reason: revokeReason })
@@ -158,6 +173,7 @@ export default function QrKeyManagement() {
       setRevokeModalOpen(false)
       setRevokeKid(null)
       setRevokeReason('')
+      setRevokeConfirm('')
       await loadKeys()
       await loadAudit()
     } catch (err) {
@@ -192,6 +208,7 @@ export default function QrKeyManagement() {
   function openRevokeModal(kid) {
     setRevokeKid(kid)
     setRevokeReason('')
+    setRevokeConfirm('')
     setRevokeModalOpen(true)
   }
 
@@ -202,9 +219,32 @@ export default function QrKeyManagement() {
   }
 
   const activeKey = keys.find(k => k.status === 'active')
+  const keyCounts = keys.reduce(
+    (acc, key) => ({ ...acc, [key.status]: (acc[key.status] || 0) + 1 }),
+    { active: 0, retired: 0, revoked: 0 },
+  )
 
   return (
-    <div className="page-content" style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="page-outer">
+      <div className="admin-topbar">
+        <div className="admin-topbar-left">
+          <button className="btn-back" onClick={() => navigate('/admin')}>
+            ← Dashboard
+          </button>
+          <div>
+            <div className="topbar-title">QR Key Management</div>
+            <div className="topbar-sub">Credential security · signing keys and audit trail</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <NotificationCenter />
+          <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-body admin-subview">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: '700', color: 'var(--navy)', marginBottom: '4px' }}>
@@ -225,6 +265,32 @@ export default function QrKeyManagement() {
           </button>
         </div>
       </div>
+
+      <section className="qr-key-posture" aria-label="QR key security posture">
+        <div className="qr-key-posture-title">Current credential security posture</div>
+        {loading ? (
+          <div className="admin-loading-state">Loading key ring…</div>
+        ) : (
+          <div className="qr-key-posture-grid">
+            <div className="qr-key-posture-stat">
+              <strong>{keyCounts.active}</strong>
+              <span>active signing key</span>
+            </div>
+            <div className="qr-key-posture-stat">
+              <strong>{keyCounts.retired}</strong>
+              <span>retired verification keys</span>
+            </div>
+            <div className="qr-key-posture-stat">
+              <strong>{keyCounts.revoked}</strong>
+              <span>revoked rejected keys</span>
+            </div>
+            <div className="qr-key-posture-stat">
+              <strong>{audit.length}</strong>
+              <span>audit entries shown</span>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* Active Key Banner */}
       {activeKey && (
@@ -422,11 +488,18 @@ export default function QrKeyManagement() {
 
       {/* Rotate Modal */}
       {rotateModalOpen && (
-        <div className="modal-overlay" onClick={() => setRotateModalOpen(false)}>
-          <div className="modal" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rotate-key-dialog-title"
+            style={{ maxWidth: '420px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Rotate QR Signing Key</h3>
-              <button className="modal-close" onClick={() => setRotateModalOpen(false)}>✕</button>
+              <h3 id="rotate-key-dialog-title" style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Rotate QR Signing Key</h3>
+              <button type="button" className="modal-close" onClick={() => setRotateModalOpen(false)} aria-label="Close rotate key dialog">✕</button>
             </div>
             <div style={{ padding: '20px 24px' }}>
               <p style={{ color: 'var(--muted)', fontSize: '13px', marginBottom: '16px' }}>
@@ -458,11 +531,18 @@ export default function QrKeyManagement() {
 
       {/* Revoke Modal */}
       {revokeModalOpen && (
-        <div className="modal-overlay" onClick={() => setRevokeModalOpen(false)}>
-          <div className="modal" style={{ maxWidth: '420px' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="revoke-key-dialog-title"
+            style={{ maxWidth: '420px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Revoke Key</h3>
-              <button className="modal-close" onClick={() => setRevokeModalOpen(false)}>✕</button>
+              <h3 id="revoke-key-dialog-title" style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Revoke Key</h3>
+              <button type="button" className="modal-close" onClick={() => setRevokeModalOpen(false)} aria-label="Close revoke key dialog">✕</button>
             </div>
             <div style={{ padding: '20px 24px' }}>
               <p style={{ color: 'var(--muted)', fontSize: '13px', marginBottom: '16px' }}>
@@ -484,11 +564,23 @@ export default function QrKeyManagement() {
                   style={{ fontSize: '13px', fontFamily: 'inherit' }}
                 />
               </div>
+              <div className="field-group" style={{ marginBottom: '16px' }}>
+                <label className="field-label" htmlFor="revokeConfirm">Type key ID to confirm</label>
+                <input
+                  id="revokeConfirm"
+                  className="field-input"
+                  value={revokeConfirm}
+                  onChange={(e) => setRevokeConfirm(e.target.value)}
+                  placeholder={revokeKid || 'key ID'}
+                  autoComplete="off"
+                  style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px' }}
+                />
+              </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button className="btn-secondary" onClick={() => setRevokeModalOpen(false)} disabled={revokeLoading}>
                   Cancel
                 </button>
-                <button className="btn-gold" onClick={handleRevoke} disabled={revokeLoading || !revokeReason.trim()} style={{ background: 'var(--error-text)', borderColor: 'var(--error-border)' }}>
+                <button className="btn-danger" onClick={handleRevoke} disabled={revokeLoading || !revokeReason.trim() || revokeConfirm.trim() !== revokeKid}>
                   {revokeLoading ? 'Revoking...' : 'Revoke Key'}
                 </button>
               </div>
@@ -499,16 +591,24 @@ export default function QrKeyManagement() {
 
       {/* QR Inspector Modal */}
       {inspectModalOpen && (
-        <div className="modal-overlay" onClick={() => setInspectModalOpen(false)}>
-          <div className="modal" style={{ maxWidth: '700px', maxHeight: '85vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="inspect-token-dialog-title"
+            style={{ maxWidth: '700px', maxHeight: '85vh', overflow: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>QR Token Inspector</h3>
-              <button className="modal-close" onClick={() => setInspectModalOpen(false)}>✕</button>
+              <h3 id="inspect-token-dialog-title" style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>QR Token Inspector</h3>
+              <button type="button" className="modal-close" onClick={() => setInspectModalOpen(false)} aria-label="Close QR token inspector">✕</button>
             </div>
             <div style={{ padding: '20px 24px' }}>
               <div className="field-group" style={{ marginBottom: '16px' }}>
-                <label className="field-label">Paste QR Token</label>
+                <label className="field-label" htmlFor="inspectToken">Paste QR Token</label>
                 <textarea
+                  id="inspectToken"
                   className="field-input"
                   rows={3}
                   value={inspectToken}
@@ -628,6 +728,8 @@ export default function QrKeyManagement() {
           </div>
         </div>
       )}
+      </div>
+      <SessionTimeout />
     </div>
   )
 }

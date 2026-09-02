@@ -5,6 +5,7 @@ import { adminFetch } from '../lib/api'
 import SessionTimeout from '../components/SessionTimeout'
 import { useToast } from '../components/Toast'
 import NotificationCenter from '../components/NotificationCenter'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 export default function AdminManagementPage() {
   const navigate = useNavigate()
@@ -19,6 +20,9 @@ export default function AdminManagementPage() {
   const [role, setRole] = useState('support_admin')
   const [submitting, setSubmitting] = useState(false)
   const [inviteMsg, setInviteMsg] = useState('')
+  const [pendingRemove, setPendingRemove] = useState(null)
+  const [pendingRoleChange, setPendingRoleChange] = useState(null)
+  const [adminActionLoading, setAdminActionLoading] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -79,36 +83,58 @@ export default function AdminManagementPage() {
     }
   }
 
-  async function handleRemove(id) {
-    if (!window.confirm('Remove this admin? They will lose access immediately.')) return
+  function handleRemove(admin) {
+    setPendingRemove(admin)
+  }
+
+  async function confirmRemove() {
+    if (!pendingRemove) return
+    setAdminActionLoading(true)
     try {
-      const res = await adminFetch(`/api/admins/${id}`, { method: 'DELETE' })
+      const res = await adminFetch(`/api/admins/${pendingRemove.id}`, { method: 'DELETE' })
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error || 'Failed to remove admin.')
         return
       }
-      setAdmins((prev) => prev.filter((a) => a.id !== id))
+      setAdmins((prev) => prev.filter((a) => a.id !== pendingRemove.id))
+      setPendingRemove(null)
     } catch {
       toast.error('Failed to remove admin.')
+    } finally {
+      setAdminActionLoading(false)
     }
   }
 
-  async function handleRoleChange(id, newRole) {
+  function handleRoleChange(admin, newRole) {
+    if ((admin.role || 'support_admin') === newRole) return
+    setPendingRoleChange({ admin, newRole })
+  }
+
+  async function confirmRoleChange() {
+    if (!pendingRoleChange) return
+    setAdminActionLoading(true)
     try {
-      const res = await adminFetch(`/api/admins/${id}`, {
+      const res = await adminFetch(`/api/admins/${pendingRoleChange.admin.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
+        body: JSON.stringify({ role: pendingRoleChange.newRole }),
       })
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error || 'Failed to update role.')
         return
       }
-      setAdmins((prev) => prev.map((a) => (a.id === id ? { ...a, role: newRole } : a)))
+      setAdmins((prev) =>
+        prev.map((a) =>
+          a.id === pendingRoleChange.admin.id ? { ...a, role: pendingRoleChange.newRole } : a,
+        ),
+      )
+      setPendingRoleChange(null)
     } catch {
       toast.error('Failed to update role.')
+    } finally {
+      setAdminActionLoading(false)
     }
   }
 
@@ -140,6 +166,40 @@ export default function AdminManagementPage() {
         </div>
       </div>
 
+      <ConfirmDialog
+        open={Boolean(pendingRemove)}
+        title="Remove admin access?"
+        confirmLabel="Remove admin"
+        onCancel={() => setPendingRemove(null)}
+        onConfirm={confirmRemove}
+        loading={adminActionLoading}
+      >
+        <p>
+          <strong>{pendingRemove?.email}</strong> will lose LMSA admin access immediately.
+          This should only be done after confirming the person no longer needs portal access.
+        </p>
+        <div className="confirm-dialog-note">This access change is immediate and should match LMSA operator records.</div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingRoleChange)}
+        title="Change admin role?"
+        confirmLabel="Update role"
+        variant="normal"
+        onCancel={() => setPendingRoleChange(null)}
+        onConfirm={confirmRoleChange}
+        loading={adminActionLoading}
+      >
+        <p>
+          Change <strong>{pendingRoleChange?.admin?.email}</strong> from{' '}
+          <strong>{pendingRoleChange?.admin?.role || 'support_admin'}</strong> to{' '}
+          <strong>{pendingRoleChange?.newRole}</strong>?
+        </p>
+        <p style={{ marginTop: '10px' }}>
+          Full admins can manage higher-risk settings. Confirm this matches the intended LMSA access level.
+        </p>
+      </ConfirmDialog>
+
       <div className="admin-body">
         <div className="admin-card">
           <div className="section-title">Invite new admin</div>
@@ -153,8 +213,9 @@ export default function AdminManagementPage() {
             style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}
           >
             <div className="field-group" style={{ flex: '1 1 200px' }}>
-              <label className="field-label">Full name</label>
+              <label className="field-label" htmlFor="invite-admin-name">Full name</label>
               <input
+                id="invite-admin-name"
                 className="field-input"
                 placeholder="Jane Doe"
                 value={name}
@@ -163,8 +224,9 @@ export default function AdminManagementPage() {
               />
             </div>
             <div className="field-group" style={{ flex: '1 1 240px' }}>
-              <label className="field-label">Email address</label>
+              <label className="field-label" htmlFor="invite-admin-email">Email address</label>
               <input
+                id="invite-admin-email"
                 className="field-input"
                 type="email"
                 placeholder="jane@example.com"
@@ -175,8 +237,9 @@ export default function AdminManagementPage() {
               />
             </div>
             <div className="field-group" style={{ flex: '0 0 140px' }}>
-              <label className="field-label">Role</label>
+              <label className="field-label" htmlFor="invite-admin-role">Role</label>
               <select
+                id="invite-admin-role"
                 className="field-input"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
@@ -348,7 +411,8 @@ export default function AdminManagementPage() {
                     ) : (
                       <select
                         value={a.role || 'support_admin'}
-                        onChange={(e) => handleRoleChange(a.id, e.target.value)}
+                        aria-label={`Change role for ${a.email}`}
+                        onChange={(e) => handleRoleChange(a, e.target.value)}
                         style={{
                           fontSize: '12px',
                           padding: '2px 6px',
@@ -396,7 +460,8 @@ export default function AdminManagementPage() {
                           border: '0.5px solid #CC0000',
                           cursor: 'pointer',
                         }}
-                        onClick={() => handleRemove(a.id)}
+                        onClick={() => handleRemove(a)}
+                        aria-label={`Remove admin access for ${a.email}`}
                       >
                         Remove
                       </button>
