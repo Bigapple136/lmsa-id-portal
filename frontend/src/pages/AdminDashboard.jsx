@@ -874,6 +874,17 @@ export default function AdminDashboard() {
       if (res.ok) {
         setEditMsg({ ok: true, text: 'Student updated. QR code regenerated.' })
         sessionStorage.removeItem(DRAFT_KEY)
+        // Reflect the saved record (incl. the new versioned photo/signature
+        // URLs) immediately, both in the dialog thumbnail and the list row,
+        // rather than waiting for the full reload.
+        if (data && typeof data === 'object') {
+          setEditStudent((prev) => (prev ? { ...prev, ...data } : prev))
+          setEditPhoto(null)
+          setEditSig(null)
+          setStudents((prev) =>
+            prev.map((s) => (s.student_id === data.student_id ? { ...s, ...data } : s)),
+          )
+        }
         loadStudents()
         setTimeout(() => setEditStudent(null), 1200)
       } else setEditMsg({ ok: false, text: data.error || 'Update failed.' })

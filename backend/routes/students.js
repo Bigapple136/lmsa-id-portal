@@ -25,6 +25,7 @@ const { email, maxLength } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 const logger = require('../logger')
 const { logAdminAction } = require('../auditLog')
+const { withVersion } = require('../utils/storageUrl')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
 
@@ -81,7 +82,10 @@ async function uploadPhoto(buffer, mimeType, studentId, yearLevel) {
   const {
     data: { publicUrl },
   } = supabase.storage.from('id-cards').getPublicUrl(filePath)
-  return publicUrl
+  // The path is stable across re-uploads (upsert), so bust CDN/browser
+  // caches with a per-upload version — otherwise a replaced photo keeps
+  // rendering as the old one in the admin list and ID-card preview.
+  return withVersion(publicUrl)
 }
 
 async function uploadSignature(buffer, studentId, yearLevel) {
@@ -103,7 +107,7 @@ async function uploadSignature(buffer, studentId, yearLevel) {
   const {
     data: { publicUrl },
   } = supabase.storage.from('id-cards').getPublicUrl(filePath)
-  return publicUrl
+  return withVersion(publicUrl)
 }
 
 async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
@@ -143,7 +147,10 @@ async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
       data: { publicUrl },
     } = supabase.storage.from('id-cards').getPublicUrl(newPath)
     await supabase.storage.from('id-cards').remove([oldPhotoPathJpg, oldPhotoPathPng].filter(Boolean))
-    await supabase.from('students').update({ photo_url: publicUrl }).eq('student_id', studentId)
+    await supabase
+      .from('students')
+      .update({ photo_url: withVersion(publicUrl) })
+      .eq('student_id', studentId)
   }
 
   const sigResult = await supabase.storage
@@ -161,7 +168,10 @@ async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
       data: { publicUrl },
     } = supabase.storage.from('id-cards').getPublicUrl(newPath)
     await supabase.storage.from('id-cards').remove([oldSigPath])
-    await supabase.from('students').update({ signature_url: publicUrl }).eq('student_id', studentId)
+    await supabase
+      .from('students')
+      .update({ signature_url: withVersion(publicUrl) })
+      .eq('student_id', studentId)
   }
 }
 
