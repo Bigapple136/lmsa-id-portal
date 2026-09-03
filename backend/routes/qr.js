@@ -15,6 +15,7 @@ const {
   logQrAudit,
 } = require('../qr-keys')
 const logger = require('../logger')
+const { withVersion } = require('../utils/storageUrl')
 
 const JSZip = require('jszip')
 
@@ -72,7 +73,9 @@ async function uploadQR(buffer, student) {
   const {
     data: { publicUrl },
   } = supabase.storage.from('qr-codes').getPublicUrl(path)
-  return publicUrl
+  // QR is regenerated in place on every edit — version the URL so the
+  // preview picks up the new code instead of a cached copy.
+  return withVersion(publicUrl)
 }
 
 async function saveQRUrl(studentId, url) {

@@ -25,6 +25,7 @@ const { email, maxLength } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 const logger = require('../logger')
 const { logAdminAction } = require('../auditLog')
+const { withVersion } = require('../utils/storageUrl')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
 
@@ -81,7 +82,10 @@ async function uploadPhoto(buffer, mimeType, studentId, yearLevel) {
   const {
     data: { publicUrl },
   } = supabase.storage.from('id-cards').getPublicUrl(filePath)
-  return publicUrl
+  // The path is stable across re-uploads (upsert), so bust CDN/browser
+  // caches with a per-upload version — otherwise a replaced photo keeps
+  // rendering as the old one in the admin list and ID-card preview.
+  return withVersion(publicUrl)
 }
 
 async function uploadSignature(buffer, studentId, yearLevel) {
@@ -103,7 +107,26 @@ async function uploadSignature(buffer, studentId, yearLevel) {
   const {
     data: { publicUrl },
   } = supabase.storage.from('id-cards').getPublicUrl(filePath)
-  return publicUrl
+  return withVersion(publicUrl)
+}
+
+// Deletes a student's stored photo (both possible extensions) or signature
+// from the id-cards bucket. Storage paths are deterministic, so this only
+// needs the student ID and the year folder the file currently lives in.
+// A missing object is not an error — the DB column is the source of truth.
+async function removeStudentAsset(kind, studentId, yearLevel) {
+  const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const folder = normaliseYearFolder(yearLevel)
+  const paths =
+    kind === 'photo'
+      ? [`photos/${folder}/${safeSid}.jpg`, `photos/${folder}/${safeSid}.png`]
+      : [`signatures/${folder}/${safeSid}.png`]
+  const { error } = await supabase.storage.from('id-cards').remove(paths)
+  if (error) throw new Error(error.message)
+}
+
+function isTruthyFlag(v) {
+  return v === true || v === 1 || v === '1' || v === 'true' || v === 'on'
 }
 
 async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
@@ -143,7 +166,10 @@ async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
       data: { publicUrl },
     } = supabase.storage.from('id-cards').getPublicUrl(newPath)
     await supabase.storage.from('id-cards').remove([oldPhotoPathJpg, oldPhotoPathPng].filter(Boolean))
-    await supabase.from('students').update({ photo_url: publicUrl }).eq('student_id', studentId)
+    await supabase
+      .from('students')
+      .update({ photo_url: withVersion(publicUrl) })
+      .eq('student_id', studentId)
   }
 
   const sigResult = await supabase.storage
@@ -161,7 +187,10 @@ async function migrateStudentFiles(studentId, oldYearLevel, newYearLevel) {
       data: { publicUrl },
     } = supabase.storage.from('id-cards').getPublicUrl(newPath)
     await supabase.storage.from('id-cards').remove([oldSigPath])
-    await supabase.from('students').update({ signature_url: publicUrl }).eq('student_id', studentId)
+    await supabase
+      .from('students')
+      .update({ signature_url: withVersion(publicUrl) })
+      .eq('student_id', studentId)
   }
 }
 
@@ -595,6 +624,8 @@ router.patch(
       nationality,
       county_of_origin,
       current_address,
+      remove_photo,
+      remove_signature,
     } = req.body
 
     if (year_level && !validateYear(year_level))
@@ -641,12 +672,40 @@ router.patch(
     if (county_of_origin !== undefined) updates.county_of_origin = county_of_origin?.trim() || null
     if (current_address !== undefined) updates.current_address = current_address?.trim() || null
 
+    // A new upload always wins over a removal flag for the same slot.
+    const wantRemovePhoto = isTruthyFlag(remove_photo) && !req.files?.photo?.[0]
+    const wantRemoveSignature = isTruthyFlag(remove_signature) && !req.files?.signature?.[0]
+
     const identityFields = ['full_name', 'year_level', 'photo_url', 'signature_url']
     let identityChanged = Object.keys(updates).some((k) => identityFields.includes(k))
-    if (req.files?.photo?.[0]) {
+    if (req.files?.photo?.[0] || wantRemovePhoto) {
       identityChanged = true
     }
     if (identityChanged) updates.status = 'pending'
+
+    // Remove assets from storage first, using the folder the file currently
+    // lives in (the OLD year level) — a concurrent year-level change is
+    // migrated afterwards and will simply find nothing to move.
+    if (wantRemovePhoto && current.photo_url) {
+      try {
+        await removeStudentAsset('photo', req.params.studentId, oldYearLevel)
+      } catch (err) {
+        return res.status(400).json({ error: 'Photo removal failed: ' + err.message })
+      }
+      updates.photo_url = null
+    } else if (wantRemovePhoto) {
+      updates.photo_url = null
+    }
+    if (wantRemoveSignature && current.signature_url) {
+      try {
+        await removeStudentAsset('signature', req.params.studentId, oldYearLevel)
+      } catch (err) {
+        return res.status(400).json({ error: 'Signature removal failed: ' + err.message })
+      }
+      updates.signature_url = null
+    } else if (wantRemoveSignature) {
+      updates.signature_url = null
+    }
 
     if (req.files?.photo?.[0]) {
       try {
@@ -700,6 +759,23 @@ router.patch(
       await getQRGenerator()(data)
     } catch (err) {
       logger.warn({ studentId: data.student_id, err: err.message }, 'QR regenerate failed')
+    }
+
+    // Asset removals are destructive and not recoverable from the portal, so
+    // they get their own audit trail entries.
+    if (wantRemovePhoto && current.photo_url) {
+      await logAdminAction(req, 'student_photo_remove', {
+        targetType: 'student',
+        targetId: req.params.studentId,
+        details: { previous_url: current.photo_url },
+      })
+    }
+    if (wantRemoveSignature && current.signature_url) {
+      await logAdminAction(req, 'student_signature_remove', {
+        targetType: 'student',
+        targetId: req.params.studentId,
+        details: { previous_url: current.signature_url },
+      })
     }
 
     res.json(data)
