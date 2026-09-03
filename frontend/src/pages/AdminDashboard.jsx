@@ -11,6 +11,7 @@ import EmptyState from '../components/EmptyState'
 import SettingsCard from '../components/SettingsCard'
 import FieldToggleGroup from '../components/FieldToggleGroup'
 import ConfirmDialog from '../components/ConfirmDialog'
+import AssetSlot from '../components/AssetSlot'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
 import { Doughnut, Bar } from 'react-chartjs-2'
 
@@ -114,6 +115,8 @@ function humanizeAction(action) {
   const labels = {
     renew_cohort: 'Renewed cohort',
     student_delete: 'Deleted student',
+    student_photo_remove: 'Removed student photo',
+    student_signature_remove: 'Removed student signature',
     manual_confirmation: 'Manually confirmed student',
     layout_save: 'Saved layout',
     layout_revert: 'Reverted layout',
@@ -273,6 +276,8 @@ export default function AdminDashboard() {
   const [editForm, setEditForm] = useState({})
   const [editPhoto, setEditPhoto] = useState(null)
   const [editSig, setEditSig] = useState(null)
+  const [editRemovePhoto, setEditRemovePhoto] = useState(false)
+  const [editRemoveSig, setEditRemoveSig] = useState(false)
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [editMsg, setEditMsg] = useState(null)
   const [issueNotes, setIssueNotes] = useState({})
@@ -842,6 +847,8 @@ export default function AdminDashboard() {
     })
     setEditPhoto(null)
     setEditSig(null)
+    setEditRemovePhoto(false)
+    setEditRemoveSig(false)
     setEditMsg(null)
   }
 
@@ -865,6 +872,9 @@ export default function AdminDashboard() {
       form.append('current_address', editForm.current_address || '')
       if (editPhoto) form.append('photo', editPhoto)
       if (editSig) form.append('signature', editSig)
+      // Removal flags are ignored server-side when a replacement is uploaded
+      if (editRemovePhoto && !editPhoto) form.append('remove_photo', '1')
+      if (editRemoveSig && !editSig) form.append('remove_signature', '1')
       const res = await adminForm(
         `/api/students/${encodeURIComponent(editStudent.student_id)}`,
         'PATCH',
@@ -872,7 +882,16 @@ export default function AdminDashboard() {
       )
       const data = await res.json()
       if (res.ok) {
-        setEditMsg({ ok: true, text: 'Student updated. QR code regenerated.' })
+        const removed = [
+          editRemovePhoto && !editPhoto ? 'photo' : null,
+          editRemoveSig && !editSig ? 'signature' : null,
+        ].filter(Boolean)
+        setEditMsg({
+          ok: true,
+          text: removed.length
+            ? `Student updated. ${removed.join(' and ')} removed. QR code regenerated.`
+            : 'Student updated. QR code regenerated.',
+        })
         sessionStorage.removeItem(DRAFT_KEY)
         // Reflect the saved record (incl. the new versioned photo/signature
         // URLs) immediately, both in the dialog thumbnail and the list row,
@@ -881,6 +900,8 @@ export default function AdminDashboard() {
           setEditStudent((prev) => (prev ? { ...prev, ...data } : prev))
           setEditPhoto(null)
           setEditSig(null)
+          setEditRemovePhoto(false)
+          setEditRemoveSig(false)
           setStudents((prev) =>
             prev.map((s) => (s.student_id === data.student_id ? { ...s, ...data } : s)),
           )
@@ -1370,91 +1391,51 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-              <div className="field-group">
-                <label className="field-label" htmlFor="edit-photo-input">Replace Photo (optional)</label>
-                <div
-                  className="upload-zone"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Choose a replacement student photo"
-                  style={{ padding: '12px' }}
-                  onClick={() => openFileInput('edit-photo-input')}
-                  onKeyDown={(e) => handleFileZoneKeyDown(e, 'edit-photo-input')}
-                >
-                  <input
-                    id="edit-photo-input"
-                    type="file"
-                    accept=".jpg,.jpeg,.png"
-                    hidden
-                    onChange={(e) => {
-                      if (e.target.files[0]) setEditPhoto(e.target.files[0])
-                    }}
-                  />
-                  {editStudent.photo_url && !editPhoto ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <img
-                        src={editStudent.photo_url}
-                        alt=""
-                        style={{
-                          width: '36px',
-                          height: '44px',
-                          objectFit: 'cover',
-                          borderRadius: '3px',
-                        }}
-                      />
-                      <span className="upload-text">
-                        Current photo · <span className="upload-link">Replace</span>
-                      </span>
-                    </div>
-                  ) : editPhoto ? (
-                    <p className="upload-selected">📷 {editPhoto.name}</p>
-                  ) : (
-                    <p className="upload-text">
-                      No photo yet · <span className="upload-link">Upload</span>
-                    </p>
-                  )}
-                </div>
-              </div>
+              <AssetSlot
+                id="edit-photo-input"
+                label="Photo"
+                accept=".jpg,.jpeg,.png"
+                hint="JPG or PNG · portrait orientation works best"
+                currentUrl={editStudent.photo_url}
+                stagedFile={editPhoto}
+                markedForRemoval={editRemovePhoto}
+                onPick={(f) => {
+                  setEditPhoto(f)
+                  setEditRemovePhoto(false)
+                }}
+                onRemove={() => setEditRemovePhoto(true)}
+                onUndo={() => {
+                  setEditPhoto(null)
+                  setEditRemovePhoto(false)
+                }}
+                thumbStyle={{ width: '36px', height: '44px', objectFit: 'cover', borderRadius: '3px' }}
+                emptyText="No photo on file"
+                currentText="Current photo"
+                removeLabel="Remove"
+              />
               {fields?.signature?.enabled && (
-                <div className="field-group">
-                  <label className="field-label" htmlFor="edit-sig-input">Replace Signature (optional)</label>
-                  <div
-                    className="upload-zone"
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Choose a replacement student signature"
-                    style={{ padding: '12px' }}
-                    onClick={() => openFileInput('edit-sig-input')}
-                    onKeyDown={(e) => handleFileZoneKeyDown(e, 'edit-sig-input')}
-                  >
-                    <input
-                      id="edit-sig-input"
-                      type="file"
-                      accept=".png"
-                      hidden
-                      onChange={(e) => setEditSig(e.target.files[0])}
-                    />
-                    {editStudent.signature_url && !editSig ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <img
-                          src={editStudent.signature_url}
-                          alt=""
-                          style={{ height: '28px', objectFit: 'contain', maxWidth: '80px' }}
-                        />
-                        <span className="upload-text">
-                          Current sig · <span className="upload-link">Replace</span>
-                        </span>
-                      </div>
-                    ) : editSig ? (
-                      <p className="upload-selected">✍ {editSig.name}</p>
-                    ) : (
-                      <p className="upload-text">
-                        PNG only · transparent background ·{' '}
-                        <span className="upload-link">Upload</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
+                <AssetSlot
+                  id="edit-sig-input"
+                  label="Signature"
+                  accept=".png"
+                  hint="PNG only · transparent background"
+                  currentUrl={editStudent.signature_url}
+                  stagedFile={editSig}
+                  markedForRemoval={editRemoveSig}
+                  onPick={(f) => {
+                    setEditSig(f)
+                    setEditRemoveSig(false)
+                  }}
+                  onRemove={() => setEditRemoveSig(true)}
+                  onUndo={() => {
+                    setEditSig(null)
+                    setEditRemoveSig(false)
+                  }}
+                  thumbStyle={{ height: '28px', maxWidth: '80px', objectFit: 'contain' }}
+                  emptyText="No signature on file"
+                  currentText="Current signature"
+                  removeLabel="Remove"
+                />
               )}
               {editMsg && (
                 <div className={editMsg.ok ? 'success-box' : 'error-box'}>{editMsg.text}</div>

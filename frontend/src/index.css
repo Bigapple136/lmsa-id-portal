@@ -5385,6 +5385,61 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+/* Edit-student image slots: zone + inline Remove/Undo action */
+.asset-slot-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.asset-slot-row .asset-slot-zone {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+  padding: 12px;
+  text-align: left;
+}
+.asset-slot-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.asset-slot-preview img { flex-shrink: 0; background: var(--bg); }
+.asset-slot-preview--removing img { opacity: 0.35; filter: grayscale(1); }
+.asset-slot[data-state='removing'] .asset-slot-zone {
+  border-color: var(--error-border);
+  background: var(--error-bg);
+}
+.asset-slot[data-state='removing'] .upload-text { color: var(--error-text); }
+.asset-slot[data-state='removing'] .upload-link { color: var(--error-text); }
+.asset-slot[data-state='staged'] .asset-slot-zone { border-style: solid; border-color: var(--teal, var(--gold)); }
+.asset-slot-filename {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-slot-action {
+  flex: 0 0 auto;
+  align-self: center;
+  min-height: 40px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+.asset-slot-action--remove { color: var(--error-text); border-color: var(--error-border); }
+.asset-slot-action--remove:hover { background: var(--error-bg); }
+.asset-slot-hint { margin-top: 0; }
+.asset-slot-notice {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--error-text);
+}
+@media (max-width: 480px) {
+  .asset-slot-row { flex-direction: column; }
+  .asset-slot-action { align-self: stretch; }
+}
+
 .upload-zone[role='button']:focus-visible,
 .field-toggle-row:focus-visible,
 .layout-chip-focus:focus-visible,
