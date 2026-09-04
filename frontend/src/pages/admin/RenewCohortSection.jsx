@@ -33,28 +33,28 @@ function RenewCohortSection() {
 
   return (
     <div style={{ display: 'flex', gap: '10px', alignItems: 'end', flexWrap: 'wrap' }}>
-      <div className="field-group" style={{ flex: '0 0 auto' }}>
+      <div className="field-group u-flex-none" >
         <label className="field-label" htmlFor="renew-year-level">Year level</label>
         <select
           id="renew-year-level"
-          className="field-input"
+          className="field-input u-fs-13 u-p-7-10"
           value={yearLevel}
           onChange={(e) => setYearLevel(e.target.value)}
-          style={{ fontSize: '13px', padding: '7px 10px' }}
-        >
+          
+>
           {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
-      <div className="field-group" style={{ flex: '0 0 auto' }}>
+      <div className="field-group u-flex-none" >
         <label className="field-label" htmlFor="renew-new-expiry-date">New expiry date</label>
         <input
           id="renew-new-expiry-date"
           type="date"
-          className="field-input"
+          className="field-input u-fs-13 u-p-7-10"
           value={newValidUntil}
           onChange={(e) => setNewValidUntil(e.target.value)}
-          style={{ fontSize: '13px', padding: '7px 10px' }}
-        />
+          
+/>
       </div>
       <button
         className="btn-gold"

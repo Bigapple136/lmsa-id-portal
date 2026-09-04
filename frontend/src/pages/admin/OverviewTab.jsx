@@ -202,7 +202,7 @@ export default function OverviewTab() {
                   <div className="chart-card-title">Active Template</div>
                   <div className="chart-card-sub">Current card design being used</div>
                   {dataLoading ? (
-                    <div className="skeleton skeleton-row" style={{ marginTop: 14 }} />
+                    <div className="skeleton skeleton-row u-mt-14"  />
                   ) : activeTemplateFront || activeTemplateBack ? (
                     <>
                       {activeTemplateFront && (
@@ -243,7 +243,7 @@ export default function OverviewTab() {
                       )}
                     </>
                   ) : (
-                    <div className="error-box" style={{ marginTop: 14 }}>
+                    <div className="error-box u-mt-14" >
                       No template uploaded.{' '}
                       <span
                         style={{ textDecoration: 'underline', cursor: 'pointer' }}
@@ -298,7 +298,7 @@ export default function OverviewTab() {
                 <div className="chart-card-title">Recent Activity</div>
                 <div className="chart-card-sub">Latest student additions and updates</div>
                 {dataLoading ? (
-                  <div style={{ marginTop: 14 }}>
+                  <div className="u-mt-14">
                     {[1, 2, 3, 4, 5].map((i) => (
                       <div key={i} className="skeleton skeleton-row" />
                     ))}

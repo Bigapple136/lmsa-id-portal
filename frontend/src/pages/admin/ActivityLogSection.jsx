@@ -40,12 +40,7 @@ function ActivityLogSection() {
 
   return (
     <div
-      style={{
-        background: 'var(--bg)',
-        border: '0.5px solid var(--border)',
-        borderRadius: '8px',
-        padding: '12px',
-      }}
+      className="u-bg-bg u-bd u-r-8 u-p-12"
     >
       <button
         type="button"
@@ -68,7 +63,7 @@ function ActivityLogSection() {
         <span style={{ fontSize: '10px', color: 'var(--muted)', transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
       </button>
       {open && (
-        <div style={{ marginTop: '10px' }}>
+        <div className="u-mt-10">
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
             <button
               type="button"
@@ -81,16 +76,16 @@ function ActivityLogSection() {
             </button>
           </div>
           {entries.length === 0 && !loading ? (
-            <p style={{ fontSize: '12px', color: 'var(--muted)' }}>No recorded actions yet.</p>
+            <p className="u-fs-12 u-c-muted">No recorded actions yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '320px', overflowY: 'auto' }}>
               {entries.map((e) => (
                 <div key={e.id} style={{ fontSize: '12px', borderBottom: '0.5px solid var(--border)', paddingBottom: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                    <span style={{ fontWeight: '600', color: 'var(--text)' }}>{humanizeAction(e.action)}</span>
-                    <span style={{ color: 'var(--muted)', flexShrink: 0 }}>{new Date(e.created_at).toLocaleString()}</span>
+                  <div className="u-flex u-jc-between u-gap-8">
+                    <span className="u-fw-600 u-c-text">{humanizeAction(e.action)}</span>
+                    <span className="u-c-muted u-shrink-0">{new Date(e.created_at).toLocaleString()}</span>
                   </div>
-                  <div style={{ color: 'var(--muted)', marginTop: '2px' }}>
+                  <div className="u-c-muted u-mt-2">
                     {e.admin_email || 'unknown admin'}
                     {e.target_type && ` · ${e.target_type}${e.target_id ? `:${e.target_id}` : ''}`}
                   </div>

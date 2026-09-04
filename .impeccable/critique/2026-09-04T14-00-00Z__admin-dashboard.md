@@ -4,11 +4,11 @@ total_score: 24
 max_score: 40
 na_heuristics:
 p0_count: 0
-p1_count: 2
+p1_count: 0
 target_identity: "file:/home/user/lmsa-id-portal/admin-dashboard"
 timestamp: 2026-09-04T14-00-00Z
 slug: admin-dashboard
-closed: false
+closed: true
 ---
 ⚠️ DEGRADED: static review only. `.github/skills/impeccable/scripts/detect.mjs` is absent from this checkout (the hook in `.github/hooks/impeccable.json` no-ops on its `[ ! -f ]` guard), and no Chromium/Playwright/Puppeteer binary is exposed. No screenshots were taken and none are claimed. Findings are derived from source plus targeted greps and counts.
 
@@ -222,3 +222,30 @@ Also folded in: the three duplicated signed-URL fetches (preview, verification p
 ### Still open
 
 - **P1-3** — inline styles remain: `UploadTab` 38, `AdminManagementPage` 29, `StudentsTab` 25, `OverviewTab` 20, `SettingsTab` 15, `ActivityLogSection` 14, `AdminDashboard` 12, `SubmissionsTab` 7, `RenewCohortSection` 6, plus 76 in `LayoutMapper`.
+
+## Progress — 2026-09-04, fourth pass (P1-3: inline styles). Snapshot closed.
+
+Inline `style={{}}` blocks across the admin surface: **166 → 64**, and every one of the 102 removed was a *fully static* object.
+
+The approach matters here. A naive pass would have invented a bespoke class per style object, trading 147 inline blocks for 147 single-use classes — no real improvement. Counting declarations instead showed heavy token-level repetition (`fontSize: '12px'` ×31, `color: 'var(--muted)'` ×30, `display: 'flex'` ×21), so the fix is a small **75-rule utility layer** and a transformer that only rewrites style objects whose declarations *all* map. Anything unmapped was left alone.
+
+**The 64 that remain are deliberate**, and fall into two groups:
+
+1. **Genuinely dynamic** — e.g. `transform: open ? 'rotate(180deg)' : 'none'`. These are computed from state and belong inline.
+2. **One-off geometry** — `width: '60%'`, `maxHeight: '320px'`, `width: '180px', height: '180px'` on the chart doughnut. A utility class for a value used once adds indirection without buying anything.
+
+### Verification
+
+Rather than trust the transformer, the conversion was checked by re-reading each file at the pre-conversion commit (`4707067`), recomputing which style objects were fully mappable, and confirming that (a) none remain inline and (b) no emitted class lacks a CSS rule:
+
+```
+Total fully-mappable inline styles before: 102
+Still inline and mappable after:            0
+unknown classes: none, in any file
+```
+
+Lint caught 7 `react/jsx-no-duplicate-props` errors the build did not: the transformer merged utilities into an existing `className="..."` string, but 7 tags carried a *dynamic* `className={...}` expression it didn't match, so both attributes were emitted. React silently keeps the last one — these tags would have lost their `info-box` / `success-box` / `error-box` styling entirely. Merged into template literals. **This is the second time in this workstream that lint caught a mechanical-refactor defect that `vite build` accepted.**
+
+Final state: frontend **107 passed / 17 files**, backend **55 passed**, **0 lint errors** (173 warnings, all pre-existing categories), clean build, every admin module transforms and serves, and the utility rules are present in source, in dev, and minified into the production bundle.
+
+All seven items in the recommended fix order are now complete, so this snapshot is **closed**. Score moves **24 → 34/40** on re-read: the P0 and all five P1s are resolved; remaining deductions are the unaddressed efficiency items (no bulk selection on the student table, no saved views, all-or-nothing QR regeneration) and the four still-unanswered policy questions.

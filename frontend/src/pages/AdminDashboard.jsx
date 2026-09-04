@@ -1176,13 +1176,13 @@ export default function AdminDashboard() {
               </button>
             </div>
             {issueNotes[editStudent.student_id] && (
-              <div className="info-box" style={{ marginBottom: '14px' }}>
+              <div className="info-box u-mb-14" >
                 <strong>Student's report:</strong> {issueNotes[editStudent.student_id].note}
               </div>
             )}
             <form
               onSubmit={handleEditSave}
-              style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+              className="u-flex u-col u-gap-12"
             >
               <div className="field-group">
                 <label className="field-label" htmlFor="edit-full-name">Full Name</label>
@@ -1228,10 +1228,10 @@ export default function AdminDashboard() {
                   marginTop: '2px',
                 }}
               >
-                <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                <p className="u-fs-11 u-c-muted u-mb-10">
                   QR-encoded details — stored but not printed on card face
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="u-flex u-col u-gap-10">
                   <div className="field-group">
                     <label className="field-label" htmlFor="edit-programme">Programme</label>
                     <input
@@ -1414,7 +1414,7 @@ export default function AdminDashboard() {
           This will replace QR images for <strong>{students.length} student record{students.length === 1 ? '' : 's'}</strong>.
           Use it only after confirming the active signing key and public scanner path are correct.
         </p>
-        <label className="qr-field-toggle" style={{ marginTop: '12px' }}>
+        <label className="qr-field-toggle u-mt-12" >
           <input
             type="checkbox"
             checked={qrRegenerateAcknowledged}
@@ -1439,7 +1439,7 @@ export default function AdminDashboard() {
           This moves <strong>{pendingRejectSubmission?.full_name || 'this student'}</strong> out of the pending review queue.
           Add a clear LMSA-facing reason so another admin understands the decision later.
         </p>
-        <div className="field-group" style={{ marginTop: '12px' }}>
+        <div className="field-group u-mt-12" >
           <label className="field-label" htmlFor="submission-reject-notes">
             Rejection note (optional but recommended)
           </label>
@@ -1491,7 +1491,7 @@ export default function AdminDashboard() {
             GoldWay Admin Dashboard{userRole === 'support_admin' && ' · Support Admin'}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="u-flex u-ai-center u-gap-8">
           <NotificationCenter
             onNavigateStudent={(studentId, _type) => {
               setStatusFilter('issues')

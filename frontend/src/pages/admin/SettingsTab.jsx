@@ -82,11 +82,11 @@ export default function SettingsTab() {
                     footer={
                       <>
                         <button
-                          className="btn-gold"
+                          className="btn-gold u-p-7-16 u-fs-13"
                           onClick={saveFields}
                           disabled={fieldsSaving}
-                          style={{ padding: '7px 16px', fontSize: '13px' }}
-                        >
+                          
+>
                           {fieldsSaving ? 'Saving...' : 'Save field settings'}
                         </button>
                         {fieldsMsg && (
@@ -125,11 +125,11 @@ export default function SettingsTab() {
                     footer={
                       <>
                         <button
-                          className="btn-gold"
+                          className="btn-gold u-p-7-16 u-fs-13"
                           onClick={saveQrFields}
                           disabled={qrFieldsSaving}
-                          style={{ padding: '7px 16px', fontSize: '13px' }}
-                        >
+                          
+>
                           {qrFieldsSaving ? 'Saving...' : 'Save QR fields'}
                         </button>
                         {qrFieldsMsg && (
@@ -165,42 +165,31 @@ export default function SettingsTab() {
                   }}
                 >
                   <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '10px',
-                    }}
+                    className="u-flex u-ai-center u-jc-between u-mb-10"
                   >
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: '500' }}>Form Status</div>
-                      <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                      <div className="u-fs-13 u-fw-500">Form Status</div>
+                      <div className="u-fs-11 u-c-muted u-mt-2">
                         {submissionFormEnabled
                           ? 'Students can submit their details'
                           : 'Form is closed to submissions'}
                       </div>
                     </div>
                     <button
-                      className={`btn-${submissionFormEnabled ? 'outline' : 'gold'}`}
+                      className={`${`btn-${submissionFormEnabled ? 'outline' : 'gold'}`} u-fs-12 u-p-7-14`}
                       onClick={handleToggleSubmissionForm}
-                      style={{ fontSize: '12px', padding: '7px 14px' }}
                     >
                       {submissionFormEnabled ? 'Disable Form' : 'Enable Form'}
                     </button>
                   </div>
                   {submissionFormEnabled && (
                     <div
-                      style={{
-                        background: 'var(--bg)',
-                        borderRadius: 'var(--radius)',
-                        padding: '10px 12px',
-                        fontSize: '12px',
-                      }}
+                      className="u-bg-bg u-r u-p-10-12 u-fs-12"
                     >
-                      <div style={{ color: 'var(--muted)', marginBottom: '4px' }}>
+                      <div className="u-c-muted u-mb-4">
                         Share this link with students:
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div className="u-flex u-gap-8 u-ai-center">
                         <code
                           style={{
                             flex: 1,

@@ -41,35 +41,24 @@ export default function StudentsTab() {
               {/* QR bulk controls - admin only */}
               {userRole === 'admin' && (
                 <div
-                  style={{
-                    background: 'var(--bg)',
-                    border: '0.5px solid var(--border)',
-                    borderRadius: 'var(--radius)',
-                    padding: '12px',
-                    marginBottom: '14px',
-                  }}
+                  className="u-bg-bg u-bd u-r u-p-12 u-mb-14"
                 >
                   <div
-                    style={{
-                      fontSize: '12px',
-                      fontWeight: '500',
-                      color: 'var(--text)',
-                      marginBottom: '8px',
-                    }}
+                    className="u-fs-12 u-fw-500 u-c-text u-mb-8"
                   >
                     QR Code Management
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                  <div className="u-fs-11 u-c-muted u-mb-10">
                     {students.filter((s) => s.qr_url).length} of {students.length} students have QR
                     codes generated.
                   </div>
                   <div className="btn-row">
                     <button
-                      className="btn-gold"
+                      className="btn-gold u-fs-12 u-p-7-14"
                       onClick={handleGenerateAllQR}
                       disabled={qrGenerating}
-                      style={{ fontSize: '12px', padding: '7px 14px' }}
-                    >
+                      
+>
                       {qrGenerating ? 'Generating...' : 'Generate missing QR codes'}
                     </button>
                     <button
@@ -86,18 +75,17 @@ export default function StudentsTab() {
                       {qrGenerating ? 'Regenerating...' : 'Regenerate all'}
                     </button>
                     <button
-                      className="btn-outline"
+                      className="btn-outline u-fs-12 u-p-7-14"
                       onClick={() => handleDownload('/api/qr/export', 'LMSA_QR_Codes.zip')}
                       disabled={downloading['/api/qr/export']}
-                      style={{ fontSize: '12px', padding: '7px 14px' }}
-                    >
+                      
+>
                       {downloading['/api/qr/export'] ? 'Exporting...' : 'Export all as ZIP'}
                     </button>
                   </div>
                   {qrMsg && (
                     <div
-                      className={qrMsg.ok ? 'success-box' : 'error-box'}
-                      style={{ marginTop: '8px', fontSize: '12px' }}
+                      className={`${qrMsg.ok ? 'success-box' : 'error-box'} u-mt-8 u-fs-12`}
                     >
                       {qrMsg.text}
                     </div>
@@ -106,36 +94,25 @@ export default function StudentsTab() {
               )}
   
               <div
-                style={{
-                  background: 'var(--bg)',
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  padding: '12px',
-                  marginBottom: '14px',
-                }}
+                className="u-bg-bg u-bd u-r u-p-12 u-mb-14"
               >
                 <div
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    color: 'var(--text)',
-                    marginBottom: '8px',
-                  }}
+                  className="u-fs-12 u-fw-500 u-c-text u-mb-8"
                 >
                   Photoshoot Roster
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                <div className="u-fs-11 u-c-muted u-mb-10">
                   Export a printable roster with student names, ID numbers, and signature spaces for
                   the photoshoot session.
                 </div>
                 <button
-                  className="btn-outline"
+                  className="btn-outline u-fs-12 u-p-7-14"
                   onClick={() =>
                     handleDownload('/api/students/export/photoshoot', 'LMSA_Photoshoot_Roster.pdf')
                   }
                   disabled={downloading['/api/students/export/photoshoot']}
-                  style={{ fontSize: '12px', padding: '7px 14px' }}
-                >
+                  
+>
                   {downloading['/api/students/export/photoshoot']
                     ? 'Exporting...'
                     : 'Export Photoshoot Roster (PDF)'}
@@ -143,36 +120,25 @@ export default function StudentsTab() {
               </div>
   
               <div
-                style={{
-                  background: 'var(--bg)',
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  padding: '12px',
-                  marginBottom: '14px',
-                }}
+                className="u-bg-bg u-bd u-r u-p-12 u-mb-14"
               >
                 <div
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    color: 'var(--text)',
-                    marginBottom: '8px',
-                  }}
+                  className="u-fs-12 u-fw-500 u-c-text u-mb-8"
                 >
                   Card Design Roster
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                <div className="u-fs-11 u-c-muted u-mb-10">
                   Export a Word document with each student's front- and back-facing card
                   details (QR included) for the design team.
                 </div>
                 <button
-                  className="btn-outline"
+                  className="btn-outline u-fs-12 u-p-7-14"
                   onClick={() =>
                     handleDownload('/api/students/export/card-design', 'LMSA_Card_Design_Roster.docx')
                   }
                   disabled={downloading['/api/students/export/card-design']}
-                  style={{ fontSize: '12px', padding: '7px 14px' }}
-                >
+                  
+>
                   {downloading['/api/students/export/card-design']
                     ? 'Exporting...'
                     : 'Export Card Design Roster (DOCX)'}
@@ -180,18 +146,18 @@ export default function StudentsTab() {
               </div>
   
               <div
-                style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}
+                className="u-flex u-gap-8 u-mb-14 u-ai-center"
               >
                 <input
-                  className="field-input"
+                  className="field-input u-flex-1"
                   placeholder="Search by name or student ID..."
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value)
                     setCurrentPage(1)
                   }}
-                  style={{ flex: 1 }}
-                />
+                  
+/>
                 <select
                   className="field-input"
                   value={yearFilter}
@@ -296,14 +262,7 @@ export default function StudentsTab() {
   
                     {/* Pagination */}
                     <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        marginTop: '14px',
-                        flexWrap: 'wrap',
-                      }}
+                      className="u-flex u-ai-center u-jc-center u-gap-4 u-mt-14 u-wrap"
                     >
                       <button
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}

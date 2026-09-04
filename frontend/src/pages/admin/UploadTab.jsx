@@ -38,7 +38,7 @@ export default function UploadTab() {
   } = useDashboard()
 
   return (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+  <div className="u-flex u-col u-gap-16">
               {/* ── Card: Downloads ── */}
               <div className="chart-card">
                 <div className="chart-card-title">Downloads</div>
@@ -90,11 +90,11 @@ export default function UploadTab() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   {/* Front Template */}
                   <div>
-                    <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                    <div className="u-fs-12 u-fw-600 u-c-text u-mb-8">
                       Front Template
                     </div>
                     {activeTemplateFront ? (
-                      <div style={{ marginBottom: '10px' }}>
+                      <div className="u-mb-10">
                         <img
                           src={activeTemplateFront.file_url}
                           alt="Front template"
@@ -107,24 +107,24 @@ export default function UploadTab() {
                             marginBottom: '8px',
                           }}
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div className="u-flex u-ai-center u-jc-between">
                           <div>
-                            <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>{activeTemplateFront.file_name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>CR-80 · {new Date(activeTemplateFront.uploaded_at).toLocaleDateString()}</div>
+                            <div className="u-fs-12 u-fw-600 u-c-text">{activeTemplateFront.file_name}</div>
+                            <div className="u-fs-11 u-c-muted">CR-80 · {new Date(activeTemplateFront.uploaded_at).toLocaleDateString()}</div>
                           </div>
                           <span className="pill pill-green">Active</span>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>No template uploaded</div>
+                      <div className="u-fs-12 u-c-muted u-mb-10">No template uploaded</div>
                     )}
                     <div
-                      className="upload-zone"
+                      className="upload-zone u-p-12"
                       role="button"
                       tabIndex={0}
                       aria-label="Choose front card template image"
-                      style={{ padding: '12px' }}
-                      onClick={() => openFileInput('template-input-front')}
+                      
+onClick={() => openFileInput('template-input-front')}
                       onKeyDown={(e) => handleFileZoneKeyDown(e, 'template-input-front')}
                     >
                       <input
@@ -138,19 +138,19 @@ export default function UploadTab() {
                         }}
                       />
                       {templateFileFront ? (
-                        <p className="upload-selected" style={{ fontSize: '12px' }}>{templateFileFront.name}</p>
+                        <p className="upload-selected u-fs-12" >{templateFileFront.name}</p>
                       ) : (
                         <>
-                          <p className="upload-icon" aria-hidden="true" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
-                          <p className="upload-text" style={{ fontSize: '12px' }}>
+                          <p className="upload-icon u-fs-18 u-mb-4" aria-hidden="true" >⬆</p>
+                          <p className="upload-text u-fs-12" >
                             Drop or <span className="upload-link">browse</span>
                           </p>
-                          <p className="upload-hint" style={{ fontSize: '10px' }}>PNG/JPG · 1012×638 px</p>
+                          <p className="upload-hint u-fs-10" >PNG/JPG · 1012×638 px</p>
                         </>
                       )}
                     </div>
                     {templateFileFront && (
-                      <button className="btn-gold-full" onClick={() => handleTemplateUpload('front')} disabled={uploading} style={{ marginTop: '8px', width: '100%', fontSize: '12px', padding: '8px' }}>
+                      <button className="btn-gold-full u-mt-8 u-w-full u-fs-12 u-p-8" onClick={() => handleTemplateUpload('front')} disabled={uploading} >
                         {uploading ? 'Uploading...' : 'Upload Front'}
                       </button>
                     )}
@@ -158,11 +158,11 @@ export default function UploadTab() {
   
                   {/* Back Template */}
                   <div>
-                    <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
+                    <div className="u-fs-12 u-fw-600 u-c-text u-mb-8">
                       Back Template
                     </div>
                     {activeTemplateBack ? (
-                      <div style={{ marginBottom: '10px' }}>
+                      <div className="u-mb-10">
                         <img
                           src={activeTemplateBack.file_url}
                           alt="Back template"
@@ -175,24 +175,24 @@ export default function UploadTab() {
                             marginBottom: '8px',
                           }}
                         />
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div className="u-flex u-ai-center u-jc-between">
                           <div>
-                            <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>{activeTemplateBack.file_name}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>CR-80 · {new Date(activeTemplateBack.uploaded_at).toLocaleDateString()}</div>
+                            <div className="u-fs-12 u-fw-600 u-c-text">{activeTemplateBack.file_name}</div>
+                            <div className="u-fs-11 u-c-muted">CR-80 · {new Date(activeTemplateBack.uploaded_at).toLocaleDateString()}</div>
                           </div>
                           <span className="pill pill-green">Active</span>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>No template uploaded</div>
+                      <div className="u-fs-12 u-c-muted u-mb-10">No template uploaded</div>
                     )}
                     <div
-                      className="upload-zone"
+                      className="upload-zone u-p-12"
                       role="button"
                       tabIndex={0}
                       aria-label="Choose back card template image"
-                      style={{ padding: '12px' }}
-                      onClick={() => openFileInput('template-input-back')}
+                      
+onClick={() => openFileInput('template-input-back')}
                       onKeyDown={(e) => handleFileZoneKeyDown(e, 'template-input-back')}
                     >
                       <input
@@ -206,19 +206,19 @@ export default function UploadTab() {
                         }}
                       />
                       {templateFileBack ? (
-                        <p className="upload-selected" style={{ fontSize: '12px' }}>{templateFileBack.name}</p>
+                        <p className="upload-selected u-fs-12" >{templateFileBack.name}</p>
                       ) : (
                         <>
-                          <p className="upload-icon" aria-hidden="true" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
-                          <p className="upload-text" style={{ fontSize: '12px' }}>
+                          <p className="upload-icon u-fs-18 u-mb-4" aria-hidden="true" >⬆</p>
+                          <p className="upload-text u-fs-12" >
                             Drop or <span className="upload-link">browse</span>
                           </p>
-                          <p className="upload-hint" style={{ fontSize: '10px' }}>PNG/JPG · 1012×638 px</p>
+                          <p className="upload-hint u-fs-10" >PNG/JPG · 1012×638 px</p>
                         </>
                       )}
                     </div>
                     {templateFileBack && (
-                      <button className="btn-gold-full" onClick={() => handleTemplateUpload('back')} disabled={uploading} style={{ marginTop: '8px', width: '100%', fontSize: '12px', padding: '8px' }}>
+                      <button className="btn-gold-full u-mt-8 u-w-full u-fs-12 u-p-8" onClick={() => handleTemplateUpload('back')} disabled={uploading} >
                         {uploading ? 'Uploading...' : 'Upload Back'}
                       </button>
                     )}
@@ -227,8 +227,7 @@ export default function UploadTab() {
   
                 {uploadMsg && (
                   <div
-                    className={uploadMsg.ok ? 'success-box' : 'error-box'}
-                    style={{ marginTop: '12px' }}
+                    className={`${uploadMsg.ok ? 'success-box' : 'error-box'} u-mt-12`}
                   >
                     {uploadMsg.text}
                   </div>
@@ -269,12 +268,12 @@ export default function UploadTab() {
                     attach the image folder ZIP.
                   </p>
                   <div
-                    className="upload-zone"
+                    className="upload-zone u-mb-8"
                     role="button"
                     tabIndex={0}
                     aria-label="Choose student CSV file"
-                    style={{ marginBottom: '8px' }}
-                    onClick={() => openFileInput('csv-input')}
+                    
+onClick={() => openFileInput('csv-input')}
                     onKeyDown={(e) => handleFileZoneKeyDown(e, 'csv-input')}
                   >
                     <input
@@ -300,12 +299,12 @@ export default function UploadTab() {
                     )}
                   </div>
                   <div
-                    className="upload-zone"
+                    className="upload-zone u-mb-10 u-p-12"
                     role="button"
                     tabIndex={0}
                     aria-label="Choose optional photo ZIP file"
-                    style={{ marginBottom: '10px', padding: '12px' }}
-                    onClick={() => openFileInput('zip-input')}
+                    
+onClick={() => openFileInput('zip-input')}
                     onKeyDown={(e) => handleFileZoneKeyDown(e, 'zip-input')}
                   >
                     <input
@@ -334,8 +333,7 @@ export default function UploadTab() {
                   )}
                   {uploadMsg && (
                     <div
-                      className={uploadMsg.ok ? 'success-box' : 'error-box'}
-                      style={{ marginTop: '10px' }}
+                      className={`${uploadMsg.ok ? 'success-box' : 'error-box'} u-mt-10`}
                     >
                       {uploadMsg.text}
                     </div>
@@ -396,12 +394,12 @@ export default function UploadTab() {
                     <div className="field-group">
                       <label className="field-label" htmlFor="manual-photo-input">Student Photo</label>
                       <div
-                        className="upload-zone"
+                        className="upload-zone u-p-12"
                         role="button"
                         tabIndex={0}
                         aria-label="Choose student photo"
-                        style={{ padding: '12px' }}
-                        onClick={() => openFileInput('manual-photo-input')}
+                        
+onClick={() => openFileInput('manual-photo-input')}
                         onKeyDown={(e) => handleFileZoneKeyDown(e, 'manual-photo-input')}
                       >
                         <input
@@ -426,12 +424,12 @@ export default function UploadTab() {
                       <div className="field-group">
                         <label className="field-label" htmlFor="manual-sig-input">Student Signature</label>
                         <div
-                          className="upload-zone"
+                          className="upload-zone u-p-12"
                           role="button"
                           tabIndex={0}
                           aria-label="Choose student signature"
-                          style={{ padding: '12px' }}
-                          onClick={() => openFileInput('manual-sig-input')}
+                          
+onClick={() => openFileInput('manual-sig-input')}
                           onKeyDown={(e) => handleFileZoneKeyDown(e, 'manual-sig-input')}
                         >
                           <input
@@ -461,10 +459,10 @@ export default function UploadTab() {
                         marginTop: '4px',
                       }}
                     >
-                      <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
+                      <p className="u-fs-11 u-c-muted u-mb-10">
                         QR-encoded details — stored but not printed on card face
                       </p>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div className="u-flex u-col u-gap-10">
                         <div className="field-group">
                           <label className="field-label" htmlFor="manual-programme">Programme</label>
                           <input
@@ -620,8 +618,7 @@ export default function UploadTab() {
                   </div>
                   {manualMsg && (
                     <div
-                      className={manualMsg.ok ? 'success-box' : 'error-box'}
-                      style={{ marginTop: '10px' }}
+                      className={`${manualMsg.ok ? 'success-box' : 'error-box'} u-mt-10`}
                     >
                       {manualMsg.text}
                     </div>

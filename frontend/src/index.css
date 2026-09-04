@@ -5998,3 +5998,98 @@ textarea:focus-visible {
   }
   .student-td-edit { text-align: left; margin-top: 8px; }
 }
+
+/* ==========================================================================
+   Admin utility classes.
+   These replace static inline style={{...}} objects that were scattered
+   through the admin pages. Only fully-static declarations were converted:
+   anything computed from state stays inline, where it belongs. Keeping them
+   here means the admin surface can be themed and responsively overridden like
+   the rest of the app.
+   ========================================================================== */
+
+/* Typography */
+.u-ellipsis { text-overflow:ellipsis; }
+.u-fs-10 { font-size:10px; }
+.u-fs-11 { font-size:11px; }
+.u-fs-12 { font-size:12px; }
+.u-fs-13 { font-size:13px; }
+.u-fs-14 { font-size:14px; }
+.u-fs-18 { font-size:18px; }
+.u-fw-500 { font-weight:500; }
+.u-fw-600 { font-weight:600; }
+.u-fw-700 { font-weight:700; }
+.u-lh-15 { line-height:1.5; }
+.u-ls-wide { letter-spacing:0.05em; }
+.u-nowrap { white-space:nowrap; }
+.u-ov-hidden { overflow:hidden; }
+.u-ta-center { text-align:center; }
+.u-ta-right { text-align:right; }
+.u-upper { text-transform:uppercase; }
+
+/* Colour */
+.u-bg-bg { background:var(--bg); }
+.u-bg-white { background:var(--white); }
+.u-c-danger { color:#cc0000; }
+.u-c-gold { color:var(--gold); }
+.u-c-muted { color:var(--muted); }
+.u-c-success { color:var(--success-text); }
+.u-c-teal { color:var(--teal); }
+.u-c-text { color:var(--text); }
+.u-c-warn { color:var(--warn-text); }
+
+/* Layout */
+.u-ai-center { align-items:center; }
+.u-ai-start { align-items:flex-start; }
+.u-block { display:block; }
+.u-col { flex-direction:column; }
+.u-flex { display:flex; }
+.u-flex-1 { flex:1; }
+.u-flex-none { flex:0 0 auto; }
+.u-gap-10 { gap:10px; }
+.u-gap-12 { gap:12px; }
+.u-gap-16 { gap:16px; }
+.u-gap-4 { gap:4px; }
+.u-gap-6 { gap:6px; }
+.u-gap-8 { gap:8px; }
+.u-grid { display:grid; }
+.u-jc-between { justify-content:space-between; }
+.u-jc-center { justify-content:center; }
+.u-shrink-0 { flex-shrink:0; }
+.u-w-full { width:100%; }
+.u-wrap { flex-wrap:wrap; }
+
+/* Spacing */
+.u-mb-10 { margin-bottom:10px; }
+.u-mb-12 { margin-bottom:12px; }
+.u-mb-14 { margin-bottom:14px; }
+.u-mb-16 { margin-bottom:16px; }
+.u-mb-4 { margin-bottom:4px; }
+.u-mb-6 { margin-bottom:6px; }
+.u-mb-8 { margin-bottom:8px; }
+.u-mt-10 { margin-top:10px; }
+.u-mt-12 { margin-top:12px; }
+.u-mt-14 { margin-top:14px; }
+.u-mt-16 { margin-top:16px; }
+.u-mt-2 { margin-top:2px; }
+.u-mt-4 { margin-top:4px; }
+.u-mt-8 { margin-top:8px; }
+.u-p-10-12 { padding:10px 12px; }
+.u-p-12 { padding:12px; }
+.u-p-4-8 { padding:4px 8px; }
+.u-p-7-10 { padding:7px 10px; }
+.u-p-7-14 { padding:7px 14px; }
+.u-p-7-16 { padding:7px 16px; }
+.u-p-8 { padding:8px; }
+
+/* Borders and misc */
+.u-bd { border:0.5px solid var(--border); }
+.u-bd-1 { border:1px solid var(--border); }
+.u-bdt { border-top:0.5px solid var(--border); }
+.u-obj-cover { object-fit:cover; }
+.u-pointer { cursor:pointer; }
+.u-r { border-radius:var(--radius); }
+.u-r-4 { border-radius:4px; }
+.u-r-8 { border-radius:8px; }
+.u-r-full { border-radius:50%; }
+

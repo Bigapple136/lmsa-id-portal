@@ -35,10 +35,7 @@ export default function SubmissionsTab() {
               </div>
               {submissionMsg && (
                 <div
-                  className={
-                    submissionMsg.warn ? 'info-box' : submissionMsg.ok ? 'success-box' : 'error-box'
-                  }
-                  style={{ marginBottom: '10px', fontSize: '13px' }}
+                  className={`${submissionMsg.warn ? 'info-box' : submissionMsg.ok ? 'success-box' : 'error-box'} u-mb-10 u-fs-13`}
                 >
                   {submissionMsg.text}
                 </div>
@@ -87,13 +84,13 @@ export default function SubmissionsTab() {
                         )}
                       </div>
                       <StatusBadge status={s.status} />
-                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <div className="u-flex u-gap-4 u-shrink-0">
                         {s.status === 'pending' && (
                           <>
                             <button
-                              className="btn-gold"
-                              style={{ fontSize: '10px', padding: '4px 8px' }}
-                              onClick={() => handleApproveSubmission(s.id)}
+                              className="btn-gold u-fs-10 u-p-4-8"
+                              
+onClick={() => handleApproveSubmission(s.id)}
                             >
                               Approve
                             </button>
@@ -112,9 +109,9 @@ export default function SubmissionsTab() {
                           </>
                         )}
                         <button
-                          className="btn-outline"
-                          style={{ fontSize: '10px', padding: '4px 8px' }}
-                          onClick={() => handleDeleteSubmission(s)}
+                          className="btn-outline u-fs-10 u-p-4-8"
+                          
+onClick={() => handleDeleteSubmission(s)}
                         >
                           Delete
                         </button>
