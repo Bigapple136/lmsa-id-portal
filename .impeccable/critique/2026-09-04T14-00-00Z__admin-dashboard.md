@@ -3,8 +3,8 @@ target: admin dashboard
 total_score: 24
 max_score: 40
 na_heuristics:
-p0_count: 1
-p1_count: 5
+p0_count: 0
+p1_count: 2
 target_identity: "file:/home/user/lmsa-id-portal/admin-dashboard"
 timestamp: 2026-09-04T14-00-00Z
 slug: admin-dashboard
@@ -119,3 +119,30 @@ The public surface went 23 → 29 across two passes. The admin surface enters at
 2. The student table has search, two filters, and pagination but no bulk selection. Is multi-select with bulk approve/delete wanted, or is single-student review the deliberate workflow?
 3. Bulk QR regeneration currently regenerates for everyone. Should it be scoped to the current filter, which would make it far less dangerous?
 4. Is the 900px sidebar/tab-strip switch still the right breakpoint, and do admins actually use this on tablets? It determines whether the unified nav keeps two presentations or collapses to one.
+
+## Progress — 2026-09-04, first implementation pass
+
+Items 1–5 of the fix order are shipped. **P1-3 (inline styles) and the item-7 structural work remain open, so this snapshot stays `closed: false`.**
+
+| Item | State | What shipped |
+|---|---|---|
+| P0-1 duplicated nav | **Fixed** | One `ADMIN_TABS` array and one `<AdminNav>` component render both presentations. Real `role="tablist"` / `role="tab"` / `aria-selected` / `aria-controls`, roving `tabIndex`, and Arrow-Left/Right movement per the WAI-ARIA tabs pattern. Sibling routes (Admins, QR Keys) stay plain buttons — they are navigation, not tabs. |
+| P1-2 silent toasts | **Fixed** | `.toast-container` is `role="status"` `aria-live="polite"` and is now rendered **unconditionally** — a live region must exist in the DOM before content is inserted or the insertion is not announced. Errors escalate to `role="alert"`. The decorative glyph is `aria-hidden`. |
+| P1-1 unaddressable tabs | **Fixed** | `activeTab` derives from `useSearchParams` (`/admin?tab=students`), validated against `ADMIN_TABS` with a fallback to `overview`. `overview` clears the param rather than writing a redundant one. Uses `replace` so tab switching does not bloat history. |
+| P1-4 keyboard-unreachable shortcuts | **Partly fixed** | The two clickable stat cards are now real `<button>`s with a `disabled` state when the count is zero. **The student list is still `<div>`-based; real `<table>` markup is not done.** |
+| P1-5 emoji | **Fixed** | Every emoji embedded in a *visible text label* is gone (section titles, button labels, filename chips, the `QR ✓` badge → `QR ready`). The remainder sit in dedicated decorative slots and are now `aria-hidden="true"`, so none are announced. |
+| Landmarks / title | **Fixed** | The authenticated view gained `<main>` and a real `<h1>`; `useDocumentTitle` reflects the active tab, so history entries are distinguishable. |
+
+### Verification
+
+- Frontend: **95 passed / 15 files** — 13 new tests in `adminTabs.test.jsx` (tablist semantics, single-selected invariant, roving tabindex, arrow-key wrap, role-gated links) and `adminNav.test.jsx` (live region mounted before first toast, polite vs assertive, dismissal).
+- Backend: **55 passed** — untouched by this pass.
+- `npx vite build` clean; dev server boots and `/admin` returns 200.
+- `npm run lint`: **0 errors, 131 warnings** — 121 pre-existing plus 10 `react/prop-types` on the new `AdminNav`. No component in this repo declares PropTypes, so matching the house convention was preferred over introducing a lone exception. One `exhaustive-deps` warning was resolved with a documented disable on the mount-only draft-restore effect, where re-running would resurrect a discarded draft.
+
+### Still open
+
+- **P1-3** — 147 + 29 + 76 inline style blocks. Untouched. Check each against the admin media queries at `index.css:890-940`.
+- **P1-4 remainder** — the student list needs real `<table>` markup.
+- **Item 7** — splitting the six tab bodies out of the now ~3,500-line `AdminDashboard.jsx`.
+- All four targeted questions above are still unanswered. Tab state was implemented as a **query string** rather than nested routes (question 1) because it left the draft-restore logic intact; that decision is reversible.

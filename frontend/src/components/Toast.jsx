@@ -38,24 +38,31 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      {toasts.length > 0 && (
-        <div className="toast-container">
-          {toasts.map((t) => (
-            <div key={t.id} className={`toast toast-${t.type}`}>
-              <span className="toast-icon">
-                {t.type === 'success' && '✓'}
-                {t.type === 'error' && '✕'}
-                {t.type === 'info' && 'i'}
-                {t.type === 'warn' && '!'}
-              </span>
-              <span className="toast-msg">{t.message}</span>
-              <button className="toast-close" onClick={() => remove(t.id)} aria-label="Dismiss">
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Toasts are the only feedback channel for most admin actions, so the
+          container is a live region; errors escalate to role="alert". It is
+          rendered unconditionally: a live region has to exist in the DOM
+          before content is inserted into it, or the insertion is not
+          announced. */}
+      <div className="toast-container" role="status" aria-live="polite" aria-atomic="false">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`toast toast-${t.type}`}
+            role={t.type === 'error' ? 'alert' : undefined}
+          >
+            <span className="toast-icon" aria-hidden="true">
+              {t.type === 'success' && '✓'}
+              {t.type === 'error' && '✕'}
+              {t.type === 'info' && 'i'}
+              {t.type === 'warn' && '!'}
+            </span>
+            <span className="toast-msg">{t.message}</span>
+            <button className="toast-close" onClick={() => remove(t.id)} aria-label="Dismiss">
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
     </ToastContext.Provider>
   )
 }

@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { supabase } from '../lib/supabase'
+import useDocumentTitle from '../lib/useDocumentTitle'
 import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 import { useToast } from '../components/Toast'
@@ -219,6 +220,99 @@ function ActivityLogSection() {
   )
 }
 
+// Single source of truth for the dashboard's primary navigation. Previously
+// this array and its markup were duplicated verbatim between the sidebar and
+// the mobile tab strip, so every change had to be made twice.
+export const ADMIN_TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'upload', label: 'Upload' },
+  { id: 'layout', label: 'Layout' },
+  { id: 'students', label: 'Students' },
+  { id: 'submissions', label: 'Submissions' },
+  { id: 'settings', label: 'Settings' },
+]
+
+// Links out to sibling admin routes. These are navigation, not tabs, so they
+// are rendered as links rather than given tab semantics.
+const ADMIN_LINKS = [
+  { to: '/admin/admins', label: 'Admins', adminOnly: true },
+  { to: '/admin/qr-keys', label: 'QR Keys', adminOnly: false },
+]
+
+export function AdminNav({ tabs, activeTab, onSelect, userRole, onNavigate }) {
+  const links = ADMIN_LINKS.filter((l) => !l.adminOnly || userRole === 'admin')
+
+  // Roving arrow-key movement between tabs, per the WAI-ARIA tabs pattern.
+  const onKeyDown = (e, index) => {
+    const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+    if (!delta) return
+    e.preventDefault()
+    const next = (index + delta + tabs.length) % tabs.length
+    onSelect(tabs[next].id)
+    e.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus()
+  }
+
+  const renderTabs = (className) =>
+    tabs.map((tab, i) => (
+      <button
+        key={tab.id}
+        type="button"
+        role="tab"
+        id={`${className}-tab-${tab.id}`}
+        aria-selected={activeTab === tab.id}
+        aria-controls="admin-tabpanel"
+        tabIndex={activeTab === tab.id ? 0 : -1}
+        className={`${className} ${activeTab === tab.id ? 'active' : ''}`}
+        onClick={() => onSelect(tab.id)}
+        onKeyDown={(e) => onKeyDown(e, i)}
+      >
+        {className === 'admin-sidebar-item' ? (
+          <span className="admin-sidebar-label">{tab.label}</span>
+        ) : (
+          tab.label
+        )}
+      </button>
+    ))
+
+  return (
+    <>
+      <aside className="admin-sidebar">
+        <nav className="admin-sidebar-nav" aria-label="Dashboard sections">
+          <div role="tablist" aria-orientation="vertical" aria-label="Dashboard sections">
+            {renderTabs('admin-sidebar-item')}
+          </div>
+          {links.map((l) => (
+            <button
+              key={l.to}
+              type="button"
+              className="admin-sidebar-item"
+              onClick={() => onNavigate(l.to)}
+            >
+              <span className="admin-sidebar-label">{l.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="admin-tabs">
+        <div role="tablist" aria-label="Dashboard sections" className="admin-tabs-list">
+          {renderTabs('admin-tab')}
+        </div>
+        {links.map((l) => (
+          <button
+            key={l.to}
+            type="button"
+            className="admin-tab"
+            onClick={() => onNavigate(l.to)}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
 export default function AdminDashboard() {
   const toast = useToast()
   const [session, setSession] = useState(null)
@@ -232,7 +326,25 @@ export default function AdminDashboard() {
   const captchaRef = useRef(null)
   const navigate = useNavigate()
 
-  const [activeTab, setActiveTab] = useState('overview')
+  // Tab state lives in the query string so a section is bookmarkable,
+  // shareable, and reachable with the browser Back button.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab = ADMIN_TABS.some((t) => t.id === tabParam) ? tabParam : 'overview'
+  const setActiveTab = useCallback(
+    (tab) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (tab === 'overview') next.delete('tab')
+          else next.set('tab', tab)
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
   const [settingsActive, setSettingsActive] = useState('fields')
   const [uploadMode, setUploadMode] = useState('csv')
 
@@ -340,6 +452,9 @@ export default function AdminDashboard() {
       console.warn('[Draft] Failed to restore draft', err)
     }
     sessionStorage.removeItem(DRAFT_KEY)
+    // Mount-only: this restores a draft once and then clears it. setActiveTab
+    // is stable, and re-running this would resurrect a discarded draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Save form text to sessionStorage when tab goes to background
@@ -1144,6 +1259,19 @@ export default function AdminDashboard() {
         s.student_id.toLowerCase().includes(search.toLowerCase())),
   )
 
+  // Single entry point for tab changes so the submissions lazy-load stays in
+  // one place instead of being repeated per nav copy.
+  useDocumentTitle(
+    session
+      ? `${ADMIN_TABS.find((t) => t.id === activeTab)?.label || 'Dashboard'} · Admin`
+      : 'Admin sign in',
+  )
+
+  function selectTab(tab) {
+    setActiveTab(tab)
+    if (tab === 'submissions') loadSubmissions()
+  }
+
   const recentActivity = [...students]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 6)
@@ -1281,7 +1409,7 @@ export default function AdminDashboard() {
                 }}
               >
                 <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                  🔲 QR-encoded details — stored but not printed on card face
+                  QR-encoded details — stored but not printed on card face
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div className="field-group">
@@ -1538,7 +1666,7 @@ export default function AdminDashboard() {
 
       <div className="admin-topbar">
         <div>
-          <div className="topbar-logo">LMSA ID Portal</div>
+          <h1 className="topbar-logo">LMSA ID Portal</h1>
           <div className="topbar-sub">
             GoldWay Admin Dashboard{userRole === 'support_admin' && ' · Support Admin'}
           </div>
@@ -1560,74 +1688,18 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-sidebar-layout">
-        <aside className="admin-sidebar">
-          <nav className="admin-sidebar-nav">
-            {['overview', 'upload', 'layout', 'students', 'submissions', 'settings'].map((tab) => (
-              <button
-                key={tab}
-                className={`admin-sidebar-item ${activeTab === tab ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab(tab)
-                  if (tab === 'submissions') loadSubmissions()
-                }}
-              >
-                <span className="admin-sidebar-label">
-                  {tab === 'settings'
-                    ? 'Settings'
-                    : tab === 'submissions'
-                      ? 'Submissions'
-                      : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </span>
-              </button>
-            ))}
-            {userRole === 'admin' && (
-              <button
-                className="admin-sidebar-item"
-                onClick={() => navigate('/admin/admins')}
-              >
-                <span className="admin-sidebar-label">Admins</span>
-              </button>
-            )}
-            <button
-              className="admin-sidebar-item"
-              onClick={() => navigate('/admin/qr-keys')}
-            >
-              <span className="admin-sidebar-label">QR Keys</span>
-            </button>
-          </nav>
-        </aside>
+        {/* One nav definition, two presentations. The sidebar and the
+            horizontal strip are the same tablist rendered once; CSS swaps
+            which container is visible at the 900px breakpoint. */}
+        <AdminNav
+          tabs={ADMIN_TABS}
+          activeTab={activeTab}
+          onSelect={selectTab}
+          userRole={userRole}
+          onNavigate={navigate}
+        />
 
-        <div className="admin-tabs">
-          {['overview', 'upload', 'layout', 'students', 'submissions', 'settings'].map((tab) => (
-            <button
-              key={tab}
-              className={`admin-tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab(tab)
-                if (tab === 'submissions') loadSubmissions()
-              }}
-            >
-              {tab === 'settings'
-                ? 'Settings'
-                : tab === 'submissions'
-                  ? 'Submissions'
-                  : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-          {userRole === 'admin' && (
-            <button
-              className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`}
-              onClick={() => navigate('/admin/admins')}
-            >
-              Admins
-            </button>
-          )}
-          <button className="admin-tab" onClick={() => navigate('/admin/qr-keys')}>
-            QR Keys
-          </button>
-        </div>
-
-      <div className="admin-body">
+      <main className="admin-body" id="admin-tabpanel" role="tabpanel" tabIndex={-1}>
         {/* ── OVERVIEW ── */}
         {activeTab === 'overview' && (
           <div>
@@ -1654,36 +1726,34 @@ export default function AdminDashboard() {
                       <div className="stat-num pending">{stats.pending}</div>
                       <div className="stat-lbl">Pending</div>
                     </div>
-                    <div
-                      className="stat-box"
-                      style={{ cursor: stats.issues > 0 ? 'pointer' : 'default' }}
+                    <button
+                      type="button"
+                      className="stat-box stat-box--action"
+                      disabled={!stats.issues}
                       onClick={() => {
-                        if (stats.issues > 0) {
-                          setStatusFilter('issues')
-                          setActiveTab('students')
-                        }
+                        setStatusFilter('issues')
+                        selectTab('students')
                       }}
                     >
                       <div className="stat-num issue">{stats.issues}</div>
                       <div className="stat-lbl">Issues</div>
-                    </div>
+                    </button>
                     <div className="stat-box">
                       <div className="stat-num issue">{analyticsData?.corrections_by_field?.name || 0}</div>
                       <div className="stat-lbl">Name Corrections</div>
                     </div>
-                    <div
-                      className="stat-box"
-                      style={{ cursor: analyticsData?.photo_issues > 0 ? 'pointer' : 'default' }}
+                    <button
+                      type="button"
+                      className="stat-box stat-box--action"
+                      disabled={!analyticsData?.photo_issues}
                       onClick={() => {
-                        if (analyticsData?.photo_issues > 0) {
-                          setStatusFilter('issues')
-                          setActiveTab('students')
-                        }
+                        setStatusFilter('issues')
+                        selectTab('students')
                       }}
                     >
                       <div className="stat-num issue">{analyticsData?.photo_issues || 0}</div>
                       <div className="stat-lbl">Photo Issues</div>
-                    </div>
+                    </button>
                   </>
                 )
               }
@@ -1819,7 +1889,7 @@ export default function AdminDashboard() {
                   <>
                     {activeTemplateFront && (
                       <div className="template-card-inner">
-                        <div className="template-icon">🎨</div>
+                        <div className="template-icon" aria-hidden="true">🎨</div>
                         <div className="template-info">
                           <div className="template-name">{activeTemplateFront.file_name}</div>
                           <div className="template-meta">
@@ -1837,7 +1907,7 @@ export default function AdminDashboard() {
                     )}
                     {activeTemplateBack && (
                       <div className="template-card-inner">
-                        <div className="template-icon">🔙</div>
+                        <div className="template-icon" aria-hidden="true">🔙</div>
                         <div className="template-info">
                           <div className="template-name">{activeTemplateBack.file_name}</div>
                           <div className="template-meta">
@@ -1872,33 +1942,33 @@ export default function AdminDashboard() {
                 <div className="chart-card-sub">Jump to common tasks</div>
                 <div className="quick-actions-grid">
                   <button className="quick-action-btn" onClick={() => setActiveTab('upload')}>
-                    <div className="quick-action-icon" style={{ background: '#eefafb', color: 'var(--teal)' }}>⬆</div>
+                    <div className="quick-action-icon" aria-hidden="true" style={{ background: '#eefafb', color: 'var(--teal)' }}>⬆</div>
                     Upload Data
                   </button>
                   <button className="quick-action-btn" onClick={() => { setActiveTab('students'); }}>
-                    <div className="quick-action-icon" style={{ background: '#e6f4ec', color: 'var(--success-text)' }}>👤</div>
+                    <div className="quick-action-icon" aria-hidden="true" style={{ background: '#e6f4ec', color: 'var(--success-text)' }}>👤</div>
                     View Students
                   </button>
-                  <button className="quick-action-btn" onClick={() => { setActiveTab('submissions'); loadSubmissions(); }}>
-                    <div className="quick-action-icon" style={{ background: '#fef6e4', color: 'var(--warn-text)' }}>📋</div>
+                  <button className="quick-action-btn" onClick={() => selectTab('submissions')}>
+                    <div className="quick-action-icon" aria-hidden="true" style={{ background: '#fef6e4', color: 'var(--warn-text)' }}>📋</div>
                     Submissions
                   </button>
                   <button className="quick-action-btn" onClick={() => setActiveTab('layout')}>
-                    <div className="quick-action-icon" style={{ background: '#eef2f7', color: 'var(--navy-mid)' }}>🎨</div>
+                    <div className="quick-action-icon" aria-hidden="true" style={{ background: '#eef2f7', color: 'var(--navy-mid)' }}>🎨</div>
                     Card Layout
                   </button>
                   <button className="quick-action-btn" onClick={() => setActiveTab('settings')}>
-                    <div className="quick-action-icon" style={{ background: '#f3f4f6', color: 'var(--muted)' }}>⚙</div>
+                    <div className="quick-action-icon" aria-hidden="true" style={{ background: '#f3f4f6', color: 'var(--muted)' }}>⚙</div>
                     Settings
                   </button>
                   {userRole === 'admin' && (
                     <button className="quick-action-btn" onClick={() => navigate('/admin/admins')}>
-                      <div className="quick-action-icon" style={{ background: '#fef6e4', color: 'var(--gold)' }}>👥</div>
+                      <div className="quick-action-icon" aria-hidden="true" style={{ background: '#fef6e4', color: 'var(--gold)' }}>👥</div>
                       Manage Admins
                     </button>
                   )}
                   <button className="quick-action-btn" onClick={() => navigate('/admin/qr-keys')}>
-                    <div className="quick-action-icon" style={{ background: '#eefafb', color: 'var(--teal)' }}>🔐</div>
+                    <div className="quick-action-icon" aria-hidden="true" style={{ background: '#eefafb', color: 'var(--teal)' }}>🔐</div>
                     QR Key Security
                   </button>
                 </div>
@@ -1943,7 +2013,7 @@ export default function AdminDashboard() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* ── Card: Downloads ── */}
             <div className="chart-card">
-              <div className="chart-card-title">📥 Downloads</div>
+              <div className="chart-card-title">Downloads</div>
               <div className="chart-card-sub">
                 Get the pre-configured Excel file to fill in student data, and the pre-built
                 image folder to organise your photos before uploading.
@@ -1954,7 +2024,7 @@ export default function AdminDashboard() {
                   onClick={() => handleDownload('download-excel', 'LMSA_Student_Template.xlsx')}
                   disabled={downloading['download-excel']}
                 >
-                  <div className="download-icon">📊</div>
+                  <div className="download-icon" aria-hidden="true">📊</div>
                   <div>
                     <div className="download-title">
                       {downloading['download-excel'] ? 'Downloading...' : 'Student data template'}
@@ -1969,7 +2039,7 @@ export default function AdminDashboard() {
                   }
                   disabled={downloading['download-image-folder']}
                 >
-                  <div className="download-icon">📁</div>
+                  <div className="download-icon" aria-hidden="true">📁</div>
                   <div>
                     <div className="download-title">
                       {downloading['download-image-folder']
@@ -1984,7 +2054,7 @@ export default function AdminDashboard() {
 
             {/* ── Card: Card Templates ── */}
             <div className="chart-card">
-              <div className="chart-card-title">🎨 ID Card Templates <span className="new-badge">Front & Back</span></div>
+              <div className="chart-card-title">ID Card Templates <span className="new-badge">Front & Back</span></div>
               <div className="chart-card-sub">
                 Upload separate background images for the front and back of the ID card. Each side can have its own design.
               </div>
@@ -2040,10 +2110,10 @@ export default function AdminDashboard() {
                       }}
                     />
                     {templateFileFront ? (
-                      <p className="upload-selected" style={{ fontSize: '12px' }}>📄 {templateFileFront.name}</p>
+                      <p className="upload-selected" style={{ fontSize: '12px' }}>{templateFileFront.name}</p>
                     ) : (
                       <>
-                        <p className="upload-icon" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
+                        <p className="upload-icon" aria-hidden="true" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
                         <p className="upload-text" style={{ fontSize: '12px' }}>
                           Drop or <span className="upload-link">browse</span>
                         </p>
@@ -2108,10 +2178,10 @@ export default function AdminDashboard() {
                       }}
                     />
                     {templateFileBack ? (
-                      <p className="upload-selected" style={{ fontSize: '12px' }}>📄 {templateFileBack.name}</p>
+                      <p className="upload-selected" style={{ fontSize: '12px' }}>{templateFileBack.name}</p>
                     ) : (
                       <>
-                        <p className="upload-icon" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
+                        <p className="upload-icon" aria-hidden="true" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
                         <p className="upload-text" style={{ fontSize: '12px' }}>
                           Drop or <span className="upload-link">browse</span>
                         </p>
@@ -2139,7 +2209,7 @@ export default function AdminDashboard() {
 
             {/* ── Card: Add Students ── */}
             <div className="chart-card">
-              <div className="chart-card-title">👤 Add Students</div>
+              <div className="chart-card-title">Add Students</div>
               <div className="chart-card-sub">
                 Upload a CSV batch or add students one at a time.
               </div>
@@ -2190,10 +2260,10 @@ export default function AdminDashboard() {
                     }}
                   />
                   {csvFile ? (
-                    <p className="upload-selected">📋 {csvFile.name}</p>
+                    <p className="upload-selected">{csvFile.name}</p>
                   ) : (
                     <>
-                      <p className="upload-icon">⬆</p>
+                      <p className="upload-icon" aria-hidden="true">⬆</p>
                       <p className="upload-text">
                         Drop CSV or <span className="upload-link">browse</span>
                       </p>
@@ -2221,7 +2291,7 @@ export default function AdminDashboard() {
                     }}
                   />
                   {zipFile ? (
-                    <p className="upload-selected">📦 {zipFile.name}</p>
+                    <p className="upload-selected">{zipFile.name}</p>
                   ) : (
                     <p className="upload-text">
                       Drop image folder ZIP (optional) · <span className="upload-link">browse</span>
@@ -2316,7 +2386,7 @@ export default function AdminDashboard() {
                         }}
                       />
                       {manualPhoto ? (
-                        <p className="upload-selected">📷 {manualPhoto.name}</p>
+                        <p className="upload-selected">{manualPhoto.name}</p>
                       ) : (
                         <p className="upload-text">
                           Upload photo (optional) · <span className="upload-link">browse</span>
@@ -2344,7 +2414,7 @@ export default function AdminDashboard() {
                           onChange={(e) => setManualSig(e.target.files[0])}
                         />
                         {manualSig ? (
-                          <p className="upload-selected">✍ {manualSig.name}</p>
+                          <p className="upload-selected">{manualSig.name}</p>
                         ) : (
                           <p className="upload-text">
                             PNG · transparent background ·{' '}
@@ -2364,7 +2434,7 @@ export default function AdminDashboard() {
                     }}
                   >
                     <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                      🔲 QR-encoded details — stored but not printed on card face
+                      QR-encoded details — stored but not printed on card face
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div className="field-group">
@@ -2938,7 +3008,7 @@ export default function AdminDashboard() {
                   disabled={downloading.backup}
                   style={{ fontSize: '13px', padding: '9px 18px' }}
                 >
-                  {downloading.backup ? 'Generating backup...' : '📦 Download Full Backup'}
+                  {downloading.backup ? 'Generating backup...' : 'Download Full Backup'}
                 </button>
               </SettingsCard>
             )}
@@ -2967,7 +3037,7 @@ export default function AdminDashboard() {
                     marginBottom: '8px',
                   }}
                 >
-                  🔲 QR Code Management
+                  QR Code Management
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
                   {students.filter((s) => s.qr_url).length} of {students.length} students have QR
@@ -2980,7 +3050,7 @@ export default function AdminDashboard() {
                     disabled={qrGenerating}
                     style={{ fontSize: '12px', padding: '7px 14px' }}
                   >
-                    {qrGenerating ? 'Generating...' : '⚡ Generate missing QR codes'}
+                    {qrGenerating ? 'Generating...' : 'Generate missing QR codes'}
                   </button>
                   <button
                     className="btn-outline"
@@ -2993,7 +3063,7 @@ export default function AdminDashboard() {
                       color: '#CC0000',
                     }}
                   >
-                    {qrGenerating ? 'Regenerating...' : '🔄 Regenerate all'}
+                    {qrGenerating ? 'Regenerating...' : 'Regenerate all'}
                   </button>
                   <button
                     className="btn-outline"
@@ -3001,7 +3071,7 @@ export default function AdminDashboard() {
                     disabled={downloading['/api/qr/export']}
                     style={{ fontSize: '12px', padding: '7px 14px' }}
                   >
-                    {downloading['/api/qr/export'] ? 'Exporting...' : '⬇ Export all as ZIP'}
+                    {downloading['/api/qr/export'] ? 'Exporting...' : 'Export all as ZIP'}
                   </button>
                 </div>
                 {qrMsg && (
@@ -3032,7 +3102,7 @@ export default function AdminDashboard() {
                   marginBottom: '8px',
                 }}
               >
-                📋 Photoshoot Roster
+                Photoshoot Roster
               </div>
               <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
                 Export a printable roster with student names, ID numbers, and signature spaces for
@@ -3048,7 +3118,7 @@ export default function AdminDashboard() {
               >
                 {downloading['/api/students/export/photoshoot']
                   ? 'Exporting...'
-                  : '⬇ Export Photoshoot Roster (PDF)'}
+                  : 'Export Photoshoot Roster (PDF)'}
               </button>
             </div>
 
@@ -3069,7 +3139,7 @@ export default function AdminDashboard() {
                   marginBottom: '8px',
                 }}
               >
-                🎨 Card Design Roster
+                Card Design Roster
               </div>
               <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
                 Export a Word document with each student's front- and back-facing card
@@ -3085,7 +3155,7 @@ export default function AdminDashboard() {
               >
                 {downloading['/api/students/export/card-design']
                   ? 'Exporting...'
-                  : '⬇ Export Card Design Roster (DOCX)'}
+                  : 'Export Card Design Roster (DOCX)'}
               </button>
             </div>
 
@@ -3209,7 +3279,7 @@ export default function AdminDashboard() {
                                   border: '0.5px solid var(--success-border)',
                                 }}
                               >
-                                QR ✓
+                                QR ready
                               </span>
                               <button
                                 style={{
@@ -3418,7 +3488,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-      </div>
+      </main>
       </div>
 
       <SessionTimeout />

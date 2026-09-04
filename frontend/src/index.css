@@ -5843,3 +5843,24 @@ textarea:focus-visible {
     font-size: 12px;
   }
 }
+
+/* Stat tiles that act as shortcuts to a filtered student list. They are real
+   buttons so they are keyboard reachable; the disabled state is used when the
+   count is zero and there is nothing to drill into. */
+.stat-box--action {
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  border-style: solid;
+}
+.stat-box--action:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.stat-box--action:not(:disabled):hover {
+  border-color: var(--gold);
+}
+.stat-box--action:focus-visible {
+  outline: 3px solid rgba(8, 127, 140, 0.28);
+  outline-offset: 2px;
+}
