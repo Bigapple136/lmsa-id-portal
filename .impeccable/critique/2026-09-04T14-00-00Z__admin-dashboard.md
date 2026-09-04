@@ -146,3 +146,59 @@ Items 1–5 of the fix order are shipped. **P1-3 (inline styles) and the item-7 
 - **P1-4 remainder** — the student list needs real `<table>` markup.
 - **Item 7** — splitting the six tab bodies out of the now ~3,500-line `AdminDashboard.jsx`.
 - All four targeted questions above are still unanswered. Tab state was implemented as a **query string** rather than nested routes (question 1) because it left the draft-restore logic intact; that decision is reversible.
+
+## Progress — 2026-09-04, second implementation pass (item 7: file split)
+
+`AdminDashboard.jsx` **3,497 → 1,560 lines**. The six tab bodies and the shared pieces now live in `frontend/src/pages/admin/`:
+
+| Module | Lines | Notes |
+|---|---:|---|
+| `UploadTab.jsx` | 634 | Largest tab; 32 context bindings. |
+| `StudentsTab.jsx` | 509 | 29 bindings. Still `<div>`-based — see below. |
+| `OverviewTab.jsx` | 328 | |
+| `SettingsTab.jsx` | 298 | |
+| `SubmissionsTab.jsx` | 128 | |
+| `LayoutTab.jsx` | 45 | |
+| `ActivityLogSection.jsx` | 112 | Was already a standalone component. |
+| `AdminNav.jsx` | 94 | Moved out whole; its test now imports it directly and no longer needs supabase/api mocks. |
+| `RenewCohortSection.jsx` | 71 | Was already standalone. |
+| `constants.js` | 29 | `YEARS`, `LIBERIA_COUNTIES`, `FIELD_META`. |
+| `DashboardContext.jsx` | 25 | |
+
+### Why context rather than props
+
+Dependencies were measured with an AST pass, not guessed: the tabs need **13 / 32 / 9 / 9 / 18 / 29** bindings respectively, 93 unique in total. Prop-drilling that would have replaced one long file with an unreadable prop list at every call site. `DashboardProvider` keeps each tab a plain component while **all state remains owned by `AdminDashboard`** — no state moved, no ownership changed, no change to when anything updates.
+
+### Correctness check
+
+The refactor was performed with an AST tool rather than by hand, then **verified by re-parsing the pre-refactor file (`734cc5d`) and diffing each tab body against the extracted component**. All six are textually identical, whitespace-normalised:
+
+```
+IDENTICAL  overview     299 lines
+IDENTICAL  upload       583 lines
+IDENTICAL  layout        25 lines
+IDENTICAL  submissions  108 lines
+IDENTICAL  settings     259 lines
+IDENTICAL  students     465 lines
+```
+
+Two defects surfaced during the move, both caught by lint's `no-undef` rather than by the build (Vite happily bundled both):
+
+- The generated `dashboard` context object was inserted at the first textual match for `if (!session)` — which was **inside a `useEffect`**, not the render guard. It compiled and shipped a broken effect body. Relocated ahead of the render guard.
+- `ActivityLogSection` used `useEffect` without importing it once separated from the parent's import list.
+
+This is the argument for running lint as a gate on mechanical refactors: `vite build` passed in both broken states.
+
+### Verification
+
+- Frontend **97 passed / 16 files** (2 new context tests: value delivery, and a loud failure when a tab renders outside the provider).
+- Backend **55 passed** — untouched.
+- `npm run lint`: **0 errors**, 141 warnings (up from 131; the +10 are `react/prop-types` on the newly-separated components, matching the existing house convention).
+- Clean build; dev server serves `/`, `/admin`, `/admin?tab=students`, `/admin?tab=settings`, and every new module transforms without error.
+
+### Still open
+
+- **P1-3** — inline styles: 147 in the original dashboard (now distributed across the tab files), 29 in `AdminManagementPage`, 76 in `LayoutMapper`. Untouched.
+- **P1-4 remainder** — `StudentsTab` still needs real `<table>` markup.
+
+The split makes both of these materially easier: the student table work is now confined to a 509-line file instead of a 3,500-line one.

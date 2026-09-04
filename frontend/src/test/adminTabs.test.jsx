@@ -1,15 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 
-vi.mock('../lib/supabase', () => ({ supabase: { auth: { signOut: vi.fn(), getSession: vi.fn() } } }))
-vi.mock('../lib/api', () => ({
-  adminFetch: vi.fn(),
-  adminJson: vi.fn(),
-  adminForm: vi.fn(),
-  authMe: vi.fn(),
-}))
-
-const { AdminNav, ADMIN_TABS } = await import('../pages/AdminDashboard')
+// AdminNav now lives in its own module, so this no longer needs the
+// supabase/api mocks that importing the whole dashboard page required.
+import AdminNav, { ADMIN_TABS } from '../pages/admin/AdminNav'
 
 function renderNav(props = {}) {
   const onSelect = vi.fn()
