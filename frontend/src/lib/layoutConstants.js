@@ -2,12 +2,36 @@
 // All values are fractional (0–1) relative to card width/height.
 // Pixel-calibrated for LMSA portrait template (590×1004 px).
 
-// CR-80 standard card dimensions (mm) — used to show admins a physical
-// measurement alongside the fractional x/y/width/height values, since a
-// template's real photo-frame dimensions are usually known in mm (from
-// the design file or a ruler), not as a percentage of card width.
-export const CARD_WIDTH_MM = 85.6
-export const CARD_HEIGHT_MM = 54
+// CR-80 standard card edges (mm). The standard is 85.6 × 53.98mm; which of
+// those is the width depends on the card's orientation, so they are named by
+// edge length rather than by axis. Deriving the axis from the template's own
+// aspect ratio is the only way the millimetre readouts can stay true for both
+// a portrait and a landscape template.
+export const CR80_LONG_EDGE_MM = 85.6
+export const CR80_SHORT_EDGE_MM = 53.98
+
+// LMSA's production card is portrait: the calibrated template is 590×1004px
+// and CardCanvas renders at a 158.5% padding-top aspect. These two exports are
+// the portrait defaults used when no template has been measured yet.
+export const CARD_WIDTH_MM = CR80_SHORT_EDGE_MM
+export const CARD_HEIGHT_MM = CR80_LONG_EDGE_MM
+
+// Physical card dimensions for a template of a given pixel size. A template
+// taller than it is wide is portrait (short edge horizontal); a wider one is
+// landscape. Used to show admins a physical measurement alongside the
+// fractional x/y/width/height values, since a template's real photo-frame
+// dimensions are usually known in mm (from the design file or a ruler), not as
+// a percentage of card width.
+export function cardDimensionsMm(imgSize) {
+  const w = imgSize?.width
+  const h = imgSize?.height
+  if (!w || !h || w <= 0 || h <= 0) {
+    return { widthMm: CARD_WIDTH_MM, heightMm: CARD_HEIGHT_MM }
+  }
+  return h >= w
+    ? { widthMm: CR80_SHORT_EDGE_MM, heightMm: CR80_LONG_EDGE_MM }
+    : { widthMm: CR80_LONG_EDGE_MM, heightMm: CR80_SHORT_EDGE_MM }
+}
 
 export const CALIBRATED_LAYOUT_FRONT = {
   photo: { x: 0.1271, y: 0.1673, width: 0.7458, height: 0.3287, type: 'image' },
