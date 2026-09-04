@@ -106,7 +106,9 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
   const resolvedLayout = useMemo(() => resolveCardLayout(layout), [layout])
 
   const currentLayout = resolvedLayout[side]
-  // Render only fields assigned to this side (front | back | both). When
+  // Render only fields assigned to this side (front | back | both). A field
+  // set to 'none' is not printed on either side — it stays in the student's
+  // record and in the QR payload, it just has no place on the card. When
   // fieldSides isn't provided, fall back to the static per-side order.
   const fieldOrder = useMemo(() => {
     if (!fieldSides) return side === 'front' ? FRONT_FIELD_ORDER : BACK_FIELD_ORDER

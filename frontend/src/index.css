@@ -4455,6 +4455,15 @@ textarea:focus-visible {
 }
 .nudge-btn:hover { border-color: var(--gold); background: var(--white); }
 
+.layout-off-summary {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--border);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .layout-nudge-hint {
   font-size: 10px;
   line-height: 1.5;

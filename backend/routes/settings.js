@@ -8,6 +8,7 @@ const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const {
   isBoolean,
   checkFieldsConfig,
+  checkFieldSidesConfig,
   checkLayoutConfig,
 } = require('../middleware/validate')
 const logger = require('../logger')
@@ -33,9 +34,10 @@ const DEFAULT_QR_FIELDS = {
   current_address: { label: 'Current Address', enabled: true },
 }
 
-// Which side each card field is printed on. 'both' means it appears on the
-// back layout (qr is shared). Kept in sync with frontend/src/lib/layoutConstants.js
-// FRONT_FIELDS / BACK_FIELDS.
+// Which side each card field is printed on: 'front', 'back', 'both', or
+// 'none' (kept in the record and the QR payload, but not printed on the card).
+// Kept in sync with frontend/src/lib/layoutConstants.js FRONT_FIELDS /
+// BACK_FIELDS.
 const DEFAULT_FIELD_SIDES = {
   photo: 'front',
   full_name: 'front',
@@ -186,8 +188,16 @@ router.put('/qr-fields', requireAdmin, requireFullAdmin, async (req, res) => {
 router.put('/field-sides', requireAdmin, requireFullAdmin, async (req, res) => {
   try {
     const sides = req.body
-    if (!sides || typeof sides !== 'object') {
-      return res.status(400).json({ error: 'Invalid field-sides payload.' })
+    const sidesErr = checkFieldSidesConfig(sides)
+    if (sidesErr) return res.status(400).json({ error: sidesErr })
+
+    // QR verification is a core product guarantee, not a layout preference:
+    // a card with no QR cannot be verified at /qr/:studentId. It may move
+    // between sides, but it may not be turned off here.
+    if (sides.qr === 'none') {
+      return res.status(400).json({
+        error: 'The QR code cannot be removed from the card — public verification depends on it. Assign it to the front, back, or both.',
+      })
     }
     const { data, error } = await supabase
       .from('portal_settings')

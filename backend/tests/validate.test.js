@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-const { email, maxLength, firstError, uuid, enumValue } = require('../middleware/validate')
+const {
+  email,
+  maxLength,
+  firstError,
+  uuid,
+  enumValue,
+  checkFieldSidesConfig,
+  FIELD_SIDE_VALUES,
+} = require('../middleware/validate')
 
 describe('validate middleware', () => {
   describe('email', () => {
@@ -57,6 +65,39 @@ describe('validate middleware', () => {
     })
     it('returns error for invalid enum value', () => {
       expect(enumValue('superadmin', ['admin', 'support_admin'], 'role')).toBeTruthy()
+    })
+  })
+
+  describe('checkFieldSidesConfig', () => {
+    it('accepts every supported side, including none', () => {
+      expect(FIELD_SIDE_VALUES).toEqual(['front', 'back', 'both', 'none'])
+      expect(
+        checkFieldSidesConfig({
+          photo: 'front',
+          blood_type: 'back',
+          qr: 'both',
+          position: 'none',
+        }),
+      ).toBeNull()
+    })
+
+    it('accepts an empty object', () => {
+      expect(checkFieldSidesConfig({})).toBeNull()
+    })
+
+    it('rejects an unknown side', () => {
+      expect(checkFieldSidesConfig({ photo: 'middle' })).toMatch(/must be one of/)
+      expect(checkFieldSidesConfig({ photo: 'hidden' })).toMatch(/must be one of/)
+    })
+
+    it('rejects a non-string side', () => {
+      expect(checkFieldSidesConfig({ photo: false })).toBeTruthy()
+      expect(checkFieldSidesConfig({ photo: null })).toBeTruthy()
+    })
+
+    it('rejects a non-object payload', () => {
+      expect(checkFieldSidesConfig(null)).toBeTruthy()
+      expect(checkFieldSidesConfig('front')).toBeTruthy()
     })
   })
 })

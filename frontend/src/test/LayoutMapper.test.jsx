@@ -126,3 +126,55 @@ describe('LayoutMapper side switching', () => {
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
   })
 })
+
+describe('LayoutMapper "Not printed" field side', () => {
+  function openFieldSides() {
+    fireEvent.click(screen.getByRole('button', { name: /Field sides/ }))
+  }
+
+  it('offers Not printed for an ordinary field', () => {
+    render(<LayoutMapper {...baseProps} />)
+    openFieldSides()
+    const select = screen.getByLabelText('Position')
+    expect(
+      [...select.options].map((o) => o.value),
+    ).toEqual(['front', 'back', 'both', 'none'])
+  })
+
+  it('does not offer Not printed for the QR code', () => {
+    render(<LayoutMapper {...baseProps} />)
+    openFieldSides()
+    const select = screen.getByLabelText('QR Code')
+    expect([...select.options].map((o) => o.value)).toEqual(['front', 'back', 'both'])
+  })
+
+  it('removes a field from the card when set to Not printed', () => {
+    const onSaveFieldSides = vi.fn()
+    render(<LayoutMapper {...baseProps} onSaveFieldSides={onSaveFieldSides} />)
+    // Name starts on the front, so it has a chip and a legend entry.
+    expect(screen.getByRole('button', { name: 'Name', pressed: false })).toBeInTheDocument()
+
+    openFieldSides()
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'none' } })
+
+    expect(screen.queryByRole('button', { name: 'Name', pressed: false })).not.toBeInTheDocument()
+    expect(onSaveFieldSides).toHaveBeenCalledWith(
+      expect.objectContaining({ full_name: 'none' }),
+    )
+  })
+
+  it('summarises which fields are off the card, and says the data is kept', () => {
+    render(<LayoutMapper {...baseProps} />)
+    openFieldSides()
+    fireEvent.change(screen.getByLabelText('Position'), { target: { value: 'none' } })
+    const summary = screen.getByText(/Not printed on the card:/)
+    expect(summary).toHaveTextContent('Position')
+    expect(summary).toHaveTextContent(/Still stored on the student record/)
+  })
+
+  it('honours a persisted none from the server', () => {
+    render(<LayoutMapper {...baseProps} fieldSides={{ position: 'none' }} />)
+    openFieldSides()
+    expect(screen.getByLabelText('Position')).toHaveValue('none')
+  })
+})

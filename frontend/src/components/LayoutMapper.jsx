@@ -313,13 +313,17 @@ export default function LayoutMapper({
     }
   }, [templateUrl])
 
-  // Fields assigned to the current side
+  // Fields assigned to the current side. A field set to 'none' matches
+  // neither side, so it drops out of the canvas, the legend, the snap-to-box
+  // list, and the property panel without any further filtering.
   const sideFields = LAYOUT_FIELD_ORDER.filter(
     (f) => fieldSides[f] === side || fieldSides[f] === 'both',
   )
   const activeFields = sideFields.filter(
     (k) => k === 'qr' || enabledFields?.[k]?.enabled !== false,
   )
+  // Fields the admin has explicitly taken off the card, for the summary line.
+  const offFields = LAYOUT_FIELD_ORDER.filter((f) => fieldSides[f] === 'none')
 
   // ── Drag ──
   function startDrag(e, field) {
@@ -528,9 +532,21 @@ export default function LayoutMapper({
 
   // ── Field-side assignment ──
   function assignSide(field, newSide) {
+    // QR verification is a product guarantee — /qr/:studentId depends on the
+    // code being physically on the card — so the QR may move sides but may
+    // not be switched off. The server rejects this too.
+    if (field === 'qr' && newSide === 'none') {
+      setMsg({
+        ok: false,
+        text: 'The QR code cannot be removed from the card — public verification depends on it.',
+      })
+      setTimeout(() => setMsg(null), 6000)
+      return
+    }
     const next = { ...fieldSides, [field]: newSide }
     setFieldSides(next)
-    // Deselect if the field no longer belongs to this side
+    // Deselect if the field no longer belongs to this side (including 'none',
+    // where it belongs to no side at all).
     if (selected === field && newSide !== 'both' && newSide !== side) setSelected(null)
     if (onSaveFieldSides) onSaveFieldSides(next)
   }
@@ -564,7 +580,24 @@ export default function LayoutMapper({
       setTimeout(() => setMsg(null), 6000)
       return
     }
-    setAutoMap({ side, layout: proposed, rows })
+
+    // Never propose a position for a field the admin has taken off the card,
+    // or one that belongs to the other side.
+    const placeable = new Set(activeFields)
+    const filtered = Object.fromEntries(
+      Object.entries(proposed).filter(([field]) => placeable.has(field)),
+    )
+    const filteredRows = rows.filter((r) => placeable.has(r.field))
+    if (Object.keys(filtered).length === 0) {
+      setMsg({
+        ok: false,
+        text: `Every field the boxes matched is either on the other side or set to "Not printed", so there is nothing to map on the ${side}.`,
+      })
+      setTimeout(() => setMsg(null), 6000)
+      return
+    }
+
+    setAutoMap({ side, layout: filtered, rows: filteredRows })
   }
 
   function applyAutoMap() {
@@ -949,39 +982,67 @@ export default function LayoutMapper({
             {fieldSidesOpen && (
               <>
                 <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', lineHeight: '1.5' }}>
-                  Choose which side each field is printed on.
+                  Choose which side each field is printed on. <strong>Not printed</strong> keeps the
+                  field in the student&rsquo;s record and in the QR code, but leaves it off the card
+                  entirely.
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {LAYOUT_FIELD_ORDER.map((f) => (
-                    <div
-                      key={f}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div
-                          style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '2px',
-                            background: FIELD_META[f].color,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span style={{ fontSize: '11px', color: 'var(--text)' }}>{FIELD_META[f].label}</span>
-                      </div>
-                      <select
-                        className="field-input"
-                        value={fieldSides[f] || 'front'}
-                        onChange={(e) => assignSide(f, e.target.value)}
-                        style={{ fontSize: '11px', padding: '4px 6px', flexShrink: 0 }}
+                  {LAYOUT_FIELD_ORDER.map((f) => {
+                    const value = fieldSides[f] || 'front'
+                    const isOff = value === 'none'
+                    const selectId = `field-side-${f}`
+                    return (
+                      <div
+                        key={f}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
                       >
-                        <option value="front">Front</option>
-                        <option value="back">Back</option>
-                        <option value="both">Both</option>
-                      </select>
-                    </div>
-                  ))}
+                        <label
+                          htmlFor={selectId}
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}
+                        >
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '2px',
+                              background: isOff ? 'transparent' : FIELD_META[f].color,
+                              border: isOff ? `1px dashed ${FIELD_META[f].color}` : 'none',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              color: isOff ? 'var(--muted)' : 'var(--text)',
+                            }}
+                          >
+                            {FIELD_META[f].label}
+                          </span>
+                        </label>
+                        <select
+                          id={selectId}
+                          className="field-input"
+                          value={value}
+                          onChange={(e) => assignSide(f, e.target.value)}
+                          style={{ fontSize: '11px', padding: '4px 6px', flexShrink: 0 }}
+                        >
+                          <option value="front">Front</option>
+                          <option value="back">Back</option>
+                          <option value="both">Both</option>
+                          {/* The QR must stay on the card: /qr/:studentId
+                              verification depends on it being scannable. */}
+                          {f !== 'qr' && <option value="none">Not printed</option>}
+                        </select>
+                      </div>
+                    )
+                  })}
                 </div>
+                {offFields.length > 0 && (
+                  <p className="layout-off-summary">
+                    Not printed on the card: {offFields.map((f) => FIELD_META[f].label).join(', ')}.
+                    {' '}Still stored on the student record.
+                  </p>
+                )}
               </>
             )}
           </Panel>
