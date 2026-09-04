@@ -202,3 +202,23 @@ This is the argument for running lint as a gate on mechanical refactors: `vite b
 - **P1-4 remainder** — `StudentsTab` still needs real `<table>` markup.
 
 The split makes both of these materially easier: the student table work is now confined to a 509-line file instead of a 3,500-line one.
+
+## Progress — 2026-09-04, third pass (P1-4: the student table)
+
+The student list is now a real `<table>`, and the row moved into its own `StudentRow.jsx` (previously a `<div class="student-row">` stack inside the tab body).
+
+- `<thead>` with five `<th scope="col">` columns; the two purely-visual columns carry `sr-only` labels rather than empty headers.
+- The student's name is the row's `<th scope="row">`, so every cell is programmatically associated with the person it describes.
+- A `<caption class="sr-only">` announces the page position and result count.
+- **Every action now names its student.** Previously a screen-reader user met a page of identical "Edit", "Delete", and "Regenerate" buttons with no way to tell rows apart; each carries an `sr-only` suffix naming the student.
+- The photo is `alt=""` and the initials fallback is `aria-hidden` — the row header already announces the name, so both would otherwise repeat it.
+- Below 700px the table restyles into stacked cards, since a five-column table cannot hold its shape on a phone.
+- The row's **22 inline style blocks became 0**, replaced by `.student-*` classes.
+
+Also folded in: the three duplicated signed-URL fetches (preview, verification page) collapsed into one `openSignedUrl` helper, which encodes the student id — a student id containing `/` or a space previously produced a malformed request path. That is covered by a test.
+
+**Verification:** frontend **107 passed / 17 files** (10 new `StudentRow` tests), backend 55, 0 lint errors, clean build, `/admin?tab=students` serves and both new modules transform.
+
+### Still open
+
+- **P1-3** — inline styles remain: `UploadTab` 38, `AdminManagementPage` 29, `StudentsTab` 25, `OverviewTab` 20, `SettingsTab` 15, `ActivityLogSection` 14, `AdminDashboard` 12, `SubmissionsTab` 7, `RenewCohortSection` 6, plus 76 in `LayoutMapper`.

@@ -1,5 +1,6 @@
 import EmptyState from '../../components/EmptyState'
 import { YEARS } from './constants'
+import StudentRow from './StudentRow'
 import { useDashboard } from './DashboardContext'
 
 export default function StudentsTab() {
@@ -254,179 +255,44 @@ export default function StudentsTab() {
                 }, [])
                 return (
                   <>
-                    {pageStudents.map((s) => (
-                      <div className="student-row" key={s.id}>
-                        {s.photo_url ? (
-                          <img
-                            src={s.photo_url}
-                            alt={s.full_name}
-                            style={{
-                              width: '30px',
-                              height: '36px',
-                              borderRadius: '3px',
-                              objectFit: 'cover',
-                              flexShrink: 0,
-                            }}
-                          />
-                        ) : (
-                          <div className="avatar">{getInitials(s.full_name)}</div>
-                        )}
-                        <div className="student-info">
-                          <div className="student-name">{s.full_name}</div>
-                          <div className="student-meta">
-                            {s.student_id} · {s.year_level}
-                            {s.position ? ` · ${s.position}` : ''}
-                          </div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              marginTop: '2px',
-                              flexWrap: 'wrap',
-                            }}
-                          >
-                            {s.qr_url ? (
-                              <>
-                                <span
-                                  style={{
-                                    fontSize: '10px',
-                                    color: 'var(--success-text)',
-                                    background: 'var(--success-bg)',
-                                    padding: '1px 7px',
-                                    borderRadius: '20px',
-                                    border: '0.5px solid var(--success-border)',
-                                  }}
-                                >
-                                  QR ready
-                                </span>
-                                <button
-                                  style={{
-                                    fontSize: '10px',
-                                    color: '#5b8def',
-                                    background: 'transparent',
-                                    padding: '1px 7px',
-                                    borderRadius: '20px',
-                                    border: '0.5px solid #5b8def',
-                                    cursor: 'pointer',
-                                  }}
-                                  onClick={async () => {
-                                    try {
-                                      const res = await fetch(
-                                        `/api/students/preview-url/${encodeURIComponent(s.student_id)}`,
-                                        {
-                                          headers: {
-                                            Authorization: `Bearer ${session.access_token}`,
-                                          },
-                                        },
-                                      )
-                                      if (!res.ok) return
-                                      const { url } = await res.json()
-                                      window.open(url, '_blank', 'noopener,noreferrer')
-                                    } catch (err) {
-                                      console.warn('[Preview] Failed to open preview', err)
-                                    }
-                                  }}
-                                >
-                                  View preview
-                                </button>
-                                <button
-                                  style={{
-                                    fontSize: '10px',
-                                    color: 'var(--gold)',
-                                    background: 'transparent',
-                                    padding: '1px 7px',
-                                    borderRadius: '20px',
-                                    border: '0.5px solid var(--gold)',
-                                    cursor: 'pointer',
-                                  }}
-                                  onClick={async () => {
-                                    try {
-                                      const res = await fetch(
-                                        `/api/qr/verification-url/${encodeURIComponent(s.student_id)}`,
-                                        {
-                                          headers: {
-                                            Authorization: `Bearer ${session.access_token}`,
-                                          },
-                                        },
-                                      )
-                                      if (!res.ok) return
-                                      const { url } = await res.json()
-                                      window.open(url, '_blank', 'noopener,noreferrer')
-                                    } catch (err) {
-                                      console.warn('[QR Page] Failed to open verification page', err)
-                                    }
-                                  }}
-                                >
-                                  View page
-                                </button>
-                                {userRole === 'admin' && (
-                                  <button
-                                    style={{
-                                      fontSize: '10px',
-                                      color: '#CC0000',
-                                      background: 'transparent',
-                                      padding: '1px 7px',
-                                      borderRadius: '20px',
-                                      border: '0.5px solid #CC0000',
-                                      cursor: 'pointer',
-                                    }}
-                                    onClick={async () => {
-                                      await handleRegenerateQR(s.student_id)
-                                    }}
-                                  >
-                                    Regenerate
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              userRole === 'admin' && (
-                                <button
-                                  style={{
-                                    fontSize: '10px',
-                                    color: 'var(--warn-text)',
-                                    background: 'var(--warn-bg)',
-                                    padding: '1px 7px',
-                                    borderRadius: '20px',
-                                    border: '0.5px solid var(--warn-border)',
-                                    cursor: 'pointer',
-                                  }}
-                                  onClick={async () => {
-                                    await handleGenerateQR(s.student_id)
-                                  }}
-                                >
-                                  Generate QR
-                                </button>
-                              )
-                            )}
-                            {s.student_id && userRole === 'admin' && (
-                              <button
-                                type="button"
-                                style={{
-                                  fontSize: '10px',
-                                  color: '#CC0000',
-                                  background: 'transparent',
-                                  padding: '1px 7px',
-                                  borderRadius: '20px',
-                                  border: '0.5px solid #CC0000',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => handleDeleteStudent(s)}
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                          {issueNotes[s.student_id] && (
-                            <div className="student-issue-note">{issueNotes[s.student_id].note}</div>
-                          )}
-                        </div>
-                        {statusPill(s.status)}
-                        <button className="btn-edit" onClick={() => openEdit(s)}>
-                          Edit
-                        </button>
-                      </div>
-                    ))}
+                    <div className="student-table-wrap">
+                      <table className="student-table">
+                        <caption className="sr-only">
+                          Students, page {safePage} of {totalPages}. {filtered.length} matching
+                          {filtered.length === 1 ? ' student' : ' students'}.
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col" className="student-th-photo">
+                              <span className="sr-only">Photo</span>
+                            </th>
+                            <th scope="col">Student</th>
+                            <th scope="col">Credential</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">
+                              <span className="sr-only">Actions</span>
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pageStudents.map((s) => (
+                            <StudentRow
+                              key={s.id}
+                              student={s}
+                              session={session}
+                              userRole={userRole}
+                              issueNote={issueNotes[s.student_id]}
+                              statusPill={statusPill}
+                              getInitials={getInitials}
+                              onEdit={openEdit}
+                              onDelete={handleDeleteStudent}
+                              onGenerateQR={handleGenerateQR}
+                              onRegenerateQR={handleRegenerateQR}
+                            />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
   
                     {/* Pagination */}
                     <div
