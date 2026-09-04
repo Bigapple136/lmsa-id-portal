@@ -158,7 +158,7 @@ export default function AdminManagementPage() {
           </button>
           <div className="topbar-title">Manage Admins</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="u-flex u-ai-center u-gap-8">
           <NotificationCenter />
           <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>
             Sign out
@@ -195,7 +195,7 @@ export default function AdminManagementPage() {
           <strong>{pendingRoleChange?.admin?.role || 'support_admin'}</strong> to{' '}
           <strong>{pendingRoleChange?.newRole}</strong>?
         </p>
-        <p style={{ marginTop: '10px' }}>
+        <p className="u-mt-10">
           Full admins can manage higher-risk settings. Confirm this matches the intended LMSA access level.
         </p>
       </ConfirmDialog>
@@ -203,14 +203,14 @@ export default function AdminManagementPage() {
       <div className="admin-body">
         <div className="admin-card">
           <div className="section-title">Invite new admin</div>
-          <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '16px' }}>
+          <p className="u-fs-13 u-c-muted u-mb-16">
             An invitation email will be sent. They will set their own password before gaining
             access.
           </p>
 
           <form
             onSubmit={handleInvite}
-            style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}
+            className="u-flex u-gap-10 u-wrap u-mb-12"
           >
             <div className="field-group" style={{ flex: '1 1 200px' }}>
               <label className="field-label" htmlFor="invite-admin-name">Full name</label>
@@ -257,8 +257,7 @@ export default function AdminManagementPage() {
 
           {inviteMsg && (
             <div
-              className={inviteMsg.startsWith('Invite') ? 'success-box' : 'error-box'}
-              style={{ marginBottom: '12px' }}
+              className={`${inviteMsg.startsWith('Invite') ? 'success-box' : 'error-box'} u-mb-12`}
             >
               {inviteMsg}
             </div>
@@ -290,57 +289,27 @@ export default function AdminManagementPage() {
                 }}
               >
                 <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'var(--muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
+                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
                 >
                   Name
                 </span>
                 <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'var(--muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
+                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
                 >
                   Email
                 </span>
                 <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'var(--muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
+                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
                 >
                   Role
                 </span>
                 <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'var(--muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
+                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
                 >
                   Added
                 </span>
                 <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'var(--muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
+                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
                 >
                   Action
                 </span>
@@ -358,14 +327,7 @@ export default function AdminManagementPage() {
                   }}
                 >
                   <span
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      color: 'var(--text)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="u-fs-13 u-fw-500 u-c-text u-ov-hidden u-ellipsis u-nowrap"
                   >
                     {a.name || (
                       <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>—</span>
@@ -388,26 +350,15 @@ export default function AdminManagementPage() {
                     )}
                   </span>
                   <span
-                    style={{
-                      fontSize: '13px',
-                      color: 'var(--text)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="u-fs-13 u-c-text u-ov-hidden u-ellipsis u-nowrap"
                   >
                     {a.email}
                   </span>
                   <span
-                    style={{
-                      fontSize: '12px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="u-fs-12 u-ov-hidden u-ellipsis u-nowrap"
                   >
                     {a.id === currentUserId ? (
-                      <span style={{ color: 'var(--muted)' }}>{a.role || 'admin'}</span>
+                      <span className="u-c-muted">{a.role || 'admin'}</span>
                     ) : (
                       <select
                         value={a.role || 'support_admin'}
@@ -429,22 +380,16 @@ export default function AdminManagementPage() {
                     )}
                   </span>
                   <span
-                    style={{
-                      fontSize: '12px',
-                      color: 'var(--muted)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="u-fs-12 u-c-muted u-ov-hidden u-ellipsis u-nowrap"
                   >
                     {formatDate(a.created_at)}
                   </span>
                   <span>
                     {a.id === currentUserId ? (
-                      <span style={{ fontSize: '11px', color: 'var(--muted)' }}>—</span>
+                      <span className="u-fs-11 u-c-muted">—</span>
                     ) : isLastAdmin ? (
                       <span
-                        style={{ fontSize: '11px', color: 'var(--muted)' }}
+                        className="u-fs-11 u-c-muted"
                         title="Cannot remove the last admin"
                       >
                         —

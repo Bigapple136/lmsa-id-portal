@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { supabase } from '../lib/supabase'
+import useDocumentTitle from '../lib/useDocumentTitle'
 import { adminFetch, adminJson, adminForm, authMe } from '../lib/api'
 import LayoutMapper from '../components/LayoutMapper'
 import { useToast } from '../components/Toast'
@@ -16,208 +17,23 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearSca
 import { Doughnut, Bar } from 'react-chartjs-2'
 
 import SessionTimeout from '../components/SessionTimeout'
+import { YEARS, LIBERIA_COUNTIES, FIELD_META } from './admin/constants'
+import RenewCohortSection from './admin/RenewCohortSection'
+import ActivityLogSection from './admin/ActivityLogSection'
+import AdminNav, { ADMIN_TABS } from './admin/AdminNav'
+import { DashboardProvider } from './admin/DashboardContext'
+import OverviewTab from './admin/OverviewTab'
+import UploadTab from './admin/UploadTab'
+import LayoutTab from './admin/LayoutTab'
+import SubmissionsTab from './admin/SubmissionsTab'
+import SettingsTab from './admin/SettingsTab'
+import StudentsTab from './admin/StudentsTab'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
-const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
-const LIBERIA_COUNTIES = [
-  'Bomi',
-  'Bong',
-  'Gbarpolu',
-  'Grand Bassa',
-  'Grand Cape Mount',
-  'Grand Gedeh',
-  'Grand Kru',
-  'Lofa',
-  'Margibi',
-  'Maryland',
-  'Montserrado',
-  'Nimba',
-  'River Cess',
-  'River Gee',
-  'Sinoe',
-]
 
-const FIELD_META = {
-  student_id: { label: 'Student ID', locked: true },
-  full_name: { label: 'Full Name', locked: false },
-  year_level: { label: 'Level', locked: false },
-  position: { label: 'Position', locked: false },
-  signature: { label: 'Signature', locked: false },
-}
 
-function RenewCohortSection() {
-  const toast = useToast()
-  const [yearLevel, setYearLevel] = useState(YEARS[0])
-  const [newValidUntil, setNewValidUntil] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  async function handleRenew() {
-    if (!newValidUntil) return toast.error('Please select an expiry date.')
-    setLoading(true)
-    try {
-      const res = await adminJson('/api/students/renew-cohort', 'PUT', {
-        year_level: yearLevel,
-        new_valid_until: newValidUntil,
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success(`Renewed ${data.renewed} student(s) in ${yearLevel}.`)
-        setNewValidUntil('')
-      } else {
-        toast.error(data.error || 'Renewal failed.')
-      }
-    } catch {
-      toast.error('Network error.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: '10px', alignItems: 'end', flexWrap: 'wrap' }}>
-      <div className="field-group" style={{ flex: '0 0 auto' }}>
-        <label className="field-label" htmlFor="renew-year-level">Year level</label>
-        <select
-          id="renew-year-level"
-          className="field-input"
-          value={yearLevel}
-          onChange={(e) => setYearLevel(e.target.value)}
-          style={{ fontSize: '13px', padding: '7px 10px' }}
-        >
-          {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-      </div>
-      <div className="field-group" style={{ flex: '0 0 auto' }}>
-        <label className="field-label" htmlFor="renew-new-expiry-date">New expiry date</label>
-        <input
-          id="renew-new-expiry-date"
-          type="date"
-          className="field-input"
-          value={newValidUntil}
-          onChange={(e) => setNewValidUntil(e.target.value)}
-          style={{ fontSize: '13px', padding: '7px 10px' }}
-        />
-      </div>
-      <button
-        className="btn-gold"
-        onClick={handleRenew}
-        disabled={loading}
-        style={{ fontSize: '12px', padding: '7px 14px', marginBottom: '2px' }}
-      >
-        {loading ? 'Renewing...' : 'Renew Cohort'}
-      </button>
-    </div>
-  )
-}
-
-function humanizeAction(action) {
-  const labels = {
-    renew_cohort: 'Renewed cohort',
-    student_delete: 'Deleted student',
-    student_photo_remove: 'Removed student photo',
-    student_signature_remove: 'Removed student signature',
-    manual_confirmation: 'Manually confirmed student',
-    layout_save: 'Saved layout',
-    layout_revert: 'Reverted layout',
-  }
-  return labels[action] || action
-}
-
-function ActivityLogSection() {
-  const [open, setOpen] = useState(false)
-  const [entries, setEntries] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-
-  async function load() {
-    setLoading(true)
-    try {
-      const res = await adminFetch('/api/admin-actions?limit=50')
-      setEntries(res.ok ? await res.json() : [])
-    } catch {
-      setEntries([])
-    } finally {
-      setLoading(false)
-      setLoaded(true)
-    }
-  }
-
-  useEffect(() => {
-    if (open && !loaded) load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  return (
-    <div
-      style={{
-        background: 'var(--bg)',
-        border: '0.5px solid var(--border)',
-        borderRadius: '8px',
-        padding: '12px',
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          cursor: 'pointer',
-          fontSize: '13px',
-          fontWeight: '600',
-          color: 'var(--text)',
-        }}
-      >
-        Recent admin activity
-        <span style={{ fontSize: '10px', color: 'var(--muted)', transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
-      </button>
-      {open && (
-        <div style={{ marginTop: '10px' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
-            <button
-              type="button"
-              className="btn-outline"
-              onClick={load}
-              disabled={loading}
-              style={{ fontSize: '11px', padding: '4px 10px' }}
-            >
-              {loading ? 'Loading…' : 'Refresh'}
-            </button>
-          </div>
-          {entries.length === 0 && !loading ? (
-            <p style={{ fontSize: '12px', color: 'var(--muted)' }}>No recorded actions yet.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '320px', overflowY: 'auto' }}>
-              {entries.map((e) => (
-                <div key={e.id} style={{ fontSize: '12px', borderBottom: '0.5px solid var(--border)', paddingBottom: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                    <span style={{ fontWeight: '600', color: 'var(--text)' }}>{humanizeAction(e.action)}</span>
-                    <span style={{ color: 'var(--muted)', flexShrink: 0 }}>{new Date(e.created_at).toLocaleString()}</span>
-                  </div>
-                  <div style={{ color: 'var(--muted)', marginTop: '2px' }}>
-                    {e.admin_email || 'unknown admin'}
-                    {e.target_type && ` · ${e.target_type}${e.target_id ? `:${e.target_id}` : ''}`}
-                  </div>
-                  {e.details && Object.keys(e.details).length > 0 && (
-                    <div style={{ color: 'var(--muted)', marginTop: '2px', fontFamily: 'monospace', fontSize: '11px' }}>
-                      {JSON.stringify(e.details)}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function AdminDashboard() {
   const toast = useToast()
@@ -232,7 +48,25 @@ export default function AdminDashboard() {
   const captchaRef = useRef(null)
   const navigate = useNavigate()
 
-  const [activeTab, setActiveTab] = useState('overview')
+  // Tab state lives in the query string so a section is bookmarkable,
+  // shareable, and reachable with the browser Back button.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab = ADMIN_TABS.some((t) => t.id === tabParam) ? tabParam : 'overview'
+  const setActiveTab = useCallback(
+    (tab) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (tab === 'overview') next.delete('tab')
+          else next.set('tab', tab)
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
   const [settingsActive, setSettingsActive] = useState('fields')
   const [uploadMode, setUploadMode] = useState('csv')
 
@@ -340,6 +174,9 @@ export default function AdminDashboard() {
       console.warn('[Draft] Failed to restore draft', err)
     }
     sessionStorage.removeItem(DRAFT_KEY)
+    // Mount-only: this restores a draft once and then clears it. setActiveTab
+    // is stable, and re-running this would resurrect a discarded draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Save form text to sessionStorage when tab goes to background
@@ -1144,9 +981,120 @@ export default function AdminDashboard() {
         s.student_id.toLowerCase().includes(search.toLowerCase())),
   )
 
+  // Single entry point for tab changes so the submissions lazy-load stays in
+  // one place instead of being repeated per nav copy.
+  useDocumentTitle(
+    session
+      ? `${ADMIN_TABS.find((t) => t.id === activeTab)?.label || 'Dashboard'} · Admin`
+      : 'Admin sign in',
+  )
+
+  function selectTab(tab) {
+    setActiveTab(tab)
+    if (tab === 'submissions') loadSubmissions()
+  }
+
   const recentActivity = [...students]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 6)
+
+  // Everything the extracted tab bodies read. Assembled here so the tabs stay
+  // presentational and all state continues to be owned by this component.
+  const dashboard = {
+    PAGE_SIZE,
+    activeTemplateBack,
+    activeTemplateFront,
+    analyticsData,
+    cardLayout,
+    csvFile,
+    currentPage,
+    dataLoading,
+    downloading,
+    fieldSides,
+    fields,
+    fieldsMsg,
+    fieldsSaving,
+    filtered,
+    getInitials,
+    handleApproveSubmission,
+    handleCSVUpload,
+    handleDeleteStudent,
+    handleDeleteSubmission,
+    handleDownload,
+    handleFileZoneKeyDown,
+    handleGenerateAllQR,
+    handleGenerateQR,
+    handleManualAdd,
+    handleRegenerateAllQR,
+    handleRegenerateQR,
+    handleRejectSubmission,
+    handleTemplateUpload,
+    handleToggleSubmissionForm,
+    issueNotes,
+    loadLayoutHistory,
+    loadSubmissions,
+    manualForm,
+    manualMsg,
+    manualPhoto,
+    manualSig,
+    manualSubmitting,
+    navigate,
+    openEdit,
+    openFileInput,
+    qrFields,
+    qrFieldsMsg,
+    qrFieldsSaving,
+    qrGenerating,
+    qrMsg,
+    recentActivity,
+    revertLayout,
+    saveFieldSides,
+    saveFields,
+    saveLayout,
+    saveQrFields,
+    search,
+    selectTab,
+    session,
+    setActiveTab,
+    setCsvFile,
+    setCurrentPage,
+    setDownloading,
+    setManualForm,
+    setManualMsg,
+    setManualPhoto,
+    setManualSig,
+    setSearch,
+    setStatusFilter,
+    setSubmissionMsg,
+    setSubmissionsFilter,
+    setTemplateFileBack,
+    setTemplateFileFront,
+    setUploadMode,
+    setUploadMsg,
+    setYearFilter,
+    setZipFile,
+    settingsActive,
+    stats,
+    statusFilter,
+    statusPill,
+    students,
+    submissionFormEnabled,
+    submissionMsg,
+    submissions,
+    submissionsFilter,
+    submissionsLoading,
+    templateFileBack,
+    templateFileFront,
+    toast,
+    toggleField,
+    toggleQrField,
+    uploadMode,
+    uploadMsg,
+    uploading,
+    userRole,
+    yearFilter,
+    zipFile,
+  }
 
   if (!session)
     return (
@@ -1228,13 +1176,13 @@ export default function AdminDashboard() {
               </button>
             </div>
             {issueNotes[editStudent.student_id] && (
-              <div className="info-box" style={{ marginBottom: '14px' }}>
+              <div className="info-box u-mb-14" >
                 <strong>Student's report:</strong> {issueNotes[editStudent.student_id].note}
               </div>
             )}
             <form
               onSubmit={handleEditSave}
-              style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+              className="u-flex u-col u-gap-12"
             >
               <div className="field-group">
                 <label className="field-label" htmlFor="edit-full-name">Full Name</label>
@@ -1280,10 +1228,10 @@ export default function AdminDashboard() {
                   marginTop: '2px',
                 }}
               >
-                <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                  🔲 QR-encoded details — stored but not printed on card face
+                <p className="u-fs-11 u-c-muted u-mb-10">
+                  QR-encoded details — stored but not printed on card face
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="u-flex u-col u-gap-10">
                   <div className="field-group">
                     <label className="field-label" htmlFor="edit-programme">Programme</label>
                     <input
@@ -1466,7 +1414,7 @@ export default function AdminDashboard() {
           This will replace QR images for <strong>{students.length} student record{students.length === 1 ? '' : 's'}</strong>.
           Use it only after confirming the active signing key and public scanner path are correct.
         </p>
-        <label className="qr-field-toggle" style={{ marginTop: '12px' }}>
+        <label className="qr-field-toggle u-mt-12" >
           <input
             type="checkbox"
             checked={qrRegenerateAcknowledged}
@@ -1491,7 +1439,7 @@ export default function AdminDashboard() {
           This moves <strong>{pendingRejectSubmission?.full_name || 'this student'}</strong> out of the pending review queue.
           Add a clear LMSA-facing reason so another admin understands the decision later.
         </p>
-        <div className="field-group" style={{ marginTop: '12px' }}>
+        <div className="field-group u-mt-12" >
           <label className="field-label" htmlFor="submission-reject-notes">
             Rejection note (optional but recommended)
           </label>
@@ -1538,12 +1486,12 @@ export default function AdminDashboard() {
 
       <div className="admin-topbar">
         <div>
-          <div className="topbar-logo">LMSA ID Portal</div>
+          <h1 className="topbar-logo">LMSA ID Portal</h1>
           <div className="topbar-sub">
             GoldWay Admin Dashboard{userRole === 'support_admin' && ' · Support Admin'}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="u-flex u-ai-center u-gap-8">
           <NotificationCenter
             onNavigateStudent={(studentId, _type) => {
               setStatusFilter('issues')
@@ -1560,1865 +1508,50 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-sidebar-layout">
-        <aside className="admin-sidebar">
-          <nav className="admin-sidebar-nav">
-            {['overview', 'upload', 'layout', 'students', 'submissions', 'settings'].map((tab) => (
-              <button
-                key={tab}
-                className={`admin-sidebar-item ${activeTab === tab ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab(tab)
-                  if (tab === 'submissions') loadSubmissions()
-                }}
-              >
-                <span className="admin-sidebar-label">
-                  {tab === 'settings'
-                    ? 'Settings'
-                    : tab === 'submissions'
-                      ? 'Submissions'
-                      : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </span>
-              </button>
-            ))}
-            {userRole === 'admin' && (
-              <button
-                className="admin-sidebar-item"
-                onClick={() => navigate('/admin/admins')}
-              >
-                <span className="admin-sidebar-label">Admins</span>
-              </button>
-            )}
-            <button
-              className="admin-sidebar-item"
-              onClick={() => navigate('/admin/qr-keys')}
-            >
-              <span className="admin-sidebar-label">QR Keys</span>
-            </button>
-          </nav>
-        </aside>
+        {/* One nav definition, two presentations. The sidebar and the
+            horizontal strip are the same tablist rendered once; CSS swaps
+            which container is visible at the 900px breakpoint. */}
+        <AdminNav
+          tabs={ADMIN_TABS}
+          activeTab={activeTab}
+          onSelect={selectTab}
+          userRole={userRole}
+          onNavigate={navigate}
+        />
 
-        <div className="admin-tabs">
-          {['overview', 'upload', 'layout', 'students', 'submissions', 'settings'].map((tab) => (
-            <button
-              key={tab}
-              className={`admin-tab ${activeTab === tab ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab(tab)
-                if (tab === 'submissions') loadSubmissions()
-              }}
-            >
-              {tab === 'settings'
-                ? 'Settings'
-                : tab === 'submissions'
-                  ? 'Submissions'
-                  : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
-          {userRole === 'admin' && (
-            <button
-              className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`}
-              onClick={() => navigate('/admin/admins')}
-            >
-              Admins
-            </button>
-          )}
-          <button className="admin-tab" onClick={() => navigate('/admin/qr-keys')}>
-            QR Keys
-          </button>
-        </div>
-
-      <div className="admin-body">
+      <main className="admin-body" id="admin-tabpanel" role="tabpanel" tabIndex={-1}>
+        <DashboardProvider value={dashboard}>
         {/* ── OVERVIEW ── */}
         {activeTab === 'overview' && (
-          <div>
-            {/* ── Stats Row ── */}
-            <div className="dashboard-stats">
-              {dataLoading
-                ? [1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="stat-box">
-                      <div className="skeleton skeleton-title" style={{ marginBottom: 8 }} />
-                      <div className="skeleton skeleton-text" style={{ width: '60%' }} />
-                    </div>
-                  ))
-                : (
-                  <>
-                    <div className="stat-box">
-                      <div className="stat-num">{stats.total}</div>
-                      <div className="stat-lbl">Total Students</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-num confirmed">{stats.confirmed}</div>
-                      <div className="stat-lbl">Confirmed</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-num pending">{stats.pending}</div>
-                      <div className="stat-lbl">Pending</div>
-                    </div>
-                    <div
-                      className="stat-box"
-                      style={{ cursor: stats.issues > 0 ? 'pointer' : 'default' }}
-                      onClick={() => {
-                        if (stats.issues > 0) {
-                          setStatusFilter('issues')
-                          setActiveTab('students')
-                        }
-                      }}
-                    >
-                      <div className="stat-num issue">{stats.issues}</div>
-                      <div className="stat-lbl">Issues</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-num issue">{analyticsData?.corrections_by_field?.name || 0}</div>
-                      <div className="stat-lbl">Name Corrections</div>
-                    </div>
-                    <div
-                      className="stat-box"
-                      style={{ cursor: analyticsData?.photo_issues > 0 ? 'pointer' : 'default' }}
-                      onClick={() => {
-                        if (analyticsData?.photo_issues > 0) {
-                          setStatusFilter('issues')
-                          setActiveTab('students')
-                        }
-                      }}
-                    >
-                      <div className="stat-num issue">{analyticsData?.photo_issues || 0}</div>
-                      <div className="stat-lbl">Photo Issues</div>
-                    </div>
-                  </>
-                )
-              }
-            </div>
-
-            {/* ── Charts Row ── */}
-            <div className="dashboard-charts">
-              {/* Status Distribution Doughnut */}
-              <div className="chart-card">
-                <div className="chart-card-title">Status Distribution</div>
-                <div className="chart-card-sub">Overview of all student card statuses</div>
-                <div className="chart-wrap">
-                  {dataLoading ? (
-                    <div className="skeleton skeleton-card" style={{ width: '180px', height: '180px', borderRadius: '50%' }} />
-                  ) : (
-                    <Doughnut
-                      data={{
-                        labels: ['Confirmed', 'Pending', 'Issues'],
-                        datasets: [{
-                          data: [stats.confirmed, stats.pending, stats.issues],
-                          backgroundColor: ['#16805d', '#aa7610', '#c24747'],
-                          borderWidth: 0,
-                          hoverOffset: 6,
-                        }],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        cutout: '68%',
-                        plugins: {
-                          legend: { display: false },
-                          tooltip: {
-                            backgroundColor: '#0D1B2A',
-                            titleFont: { size: 12, weight: '600' },
-                            bodyFont: { size: 11 },
-                            padding: 10,
-                            cornerRadius: 8,
-                            displayColors: true,
-                            boxPadding: 4,
-                          },
-                        },
-                      }}
-                    />
-                  )}
-                </div>
-                {!dataLoading && stats.total > 0 && (
-                  <div className="chart-legend">
-                    <div className="chart-legend-item">
-                      <span className="chart-legend-dot" style={{ background: '#16805d' }} />
-                      Confirmed ({stats.confirmed})
-                    </div>
-                    <div className="chart-legend-item">
-                      <span className="chart-legend-dot" style={{ background: '#aa7610' }} />
-                      Pending ({stats.pending})
-                    </div>
-                    <div className="chart-legend-item">
-                      <span className="chart-legend-dot" style={{ background: '#c24747' }} />
-                      Issues ({stats.issues})
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Corrections Bar Chart */}
-              <div className="chart-card">
-                <div className="chart-card-title">Corrections & Issues</div>
-                <div className="chart-card-sub">Breakdown of correction types and photo problems</div>
-                <div className="chart-wrap" style={{ minHeight: '220px' }}>
-                  {dataLoading ? (
-                    <div className="skeleton skeleton-card" style={{ width: '100%', height: '160px' }} />
-                  ) : (
-                    <Bar
-                      data={{
-                        labels: ['Name Corrections', 'Year Corrections', 'Photo Issues'],
-                        datasets: [{
-                          data: [
-                            analyticsData?.corrections_by_field?.name || 0,
-                            analyticsData?.corrections_by_field?.year || 0,
-                            analyticsData?.photo_issues || 0,
-                          ],
-                          backgroundColor: ['#c24747', '#aa7610', '#5b8def'],
-                          borderRadius: 6,
-                          barThickness: 36,
-                        }],
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        indexAxis: 'y',
-                        plugins: {
-                          legend: { display: false },
-                          tooltip: {
-                            backgroundColor: '#0D1B2A',
-                            titleFont: { size: 12, weight: '600' },
-                            bodyFont: { size: 11 },
-                            padding: 10,
-                            cornerRadius: 8,
-                          },
-                        },
-                        scales: {
-                          x: {
-                            beginAtZero: true,
-                            ticks: {
-                              stepSize: 1,
-                              font: { size: 11 },
-                              color: '#6B7280',
-                            },
-                            grid: { color: '#f0f0f0', drawBorder: false },
-                          },
-                          y: {
-                            ticks: {
-                              font: { size: 12, weight: '500' },
-                              color: '#0D1B2A',
-                            },
-                            grid: { display: false },
-                          },
-                        },
-                      }}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Bottom Row: Template + Quick Actions ── */}
-            <div className="dashboard-bottom">
-              <div className="template-card">
-                <div className="chart-card-title">Active Template</div>
-                <div className="chart-card-sub">Current card design being used</div>
-                {dataLoading ? (
-                  <div className="skeleton skeleton-row" style={{ marginTop: 14 }} />
-                ) : activeTemplateFront || activeTemplateBack ? (
-                  <>
-                    {activeTemplateFront && (
-                      <div className="template-card-inner">
-                        <div className="template-icon">🎨</div>
-                        <div className="template-info">
-                          <div className="template-name">{activeTemplateFront.file_name}</div>
-                          <div className="template-meta">
-                            Front · Uploaded{' '}
-                            {new Date(activeTemplateFront.uploaded_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })}{' '}
-                            · {stats.total} cards
-                          </div>
-                        </div>
-                        <span className="pill pill-green">Active</span>
-                      </div>
-                    )}
-                    {activeTemplateBack && (
-                      <div className="template-card-inner">
-                        <div className="template-icon">🔙</div>
-                        <div className="template-info">
-                          <div className="template-name">{activeTemplateBack.file_name}</div>
-                          <div className="template-meta">
-                            Back · Uploaded{' '}
-                            {new Date(activeTemplateBack.uploaded_at).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })}{' '}
-                            · {stats.total} cards
-                          </div>
-                        </div>
-                        <span className="pill pill-green">Active</span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="error-box" style={{ marginTop: 14 }}>
-                    No template uploaded.{' '}
-                    <span
-                      style={{ textDecoration: 'underline', cursor: 'pointer' }}
-                      onClick={() => setActiveTab('upload')}
-                    >
-                      Upload now →
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="quick-actions-card">
-                <div className="chart-card-title">Quick Actions</div>
-                <div className="chart-card-sub">Jump to common tasks</div>
-                <div className="quick-actions-grid">
-                  <button className="quick-action-btn" onClick={() => setActiveTab('upload')}>
-                    <div className="quick-action-icon" style={{ background: '#eefafb', color: 'var(--teal)' }}>⬆</div>
-                    Upload Data
-                  </button>
-                  <button className="quick-action-btn" onClick={() => { setActiveTab('students'); }}>
-                    <div className="quick-action-icon" style={{ background: '#e6f4ec', color: 'var(--success-text)' }}>👤</div>
-                    View Students
-                  </button>
-                  <button className="quick-action-btn" onClick={() => { setActiveTab('submissions'); loadSubmissions(); }}>
-                    <div className="quick-action-icon" style={{ background: '#fef6e4', color: 'var(--warn-text)' }}>📋</div>
-                    Submissions
-                  </button>
-                  <button className="quick-action-btn" onClick={() => setActiveTab('layout')}>
-                    <div className="quick-action-icon" style={{ background: '#eef2f7', color: 'var(--navy-mid)' }}>🎨</div>
-                    Card Layout
-                  </button>
-                  <button className="quick-action-btn" onClick={() => setActiveTab('settings')}>
-                    <div className="quick-action-icon" style={{ background: '#f3f4f6', color: 'var(--muted)' }}>⚙</div>
-                    Settings
-                  </button>
-                  {userRole === 'admin' && (
-                    <button className="quick-action-btn" onClick={() => navigate('/admin/admins')}>
-                      <div className="quick-action-icon" style={{ background: '#fef6e4', color: 'var(--gold)' }}>👥</div>
-                      Manage Admins
-                    </button>
-                  )}
-                  <button className="quick-action-btn" onClick={() => navigate('/admin/qr-keys')}>
-                    <div className="quick-action-icon" style={{ background: '#eefafb', color: 'var(--teal)' }}>🔐</div>
-                    QR Key Security
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Recent Activity ── */}
-            <div className="recent-activity-card">
-              <div className="chart-card-title">Recent Activity</div>
-              <div className="chart-card-sub">Latest student additions and updates</div>
-              {dataLoading ? (
-                <div style={{ marginTop: 14 }}>
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="skeleton skeleton-row" />
-                  ))}
-                </div>
-              ) : recentActivity.length === 0 ? (
-                <EmptyState>No students yet.</EmptyState>
-              ) : (
-                <div style={{ marginTop: 10 }}>
-                  {recentActivity.map((s) => (
-                    <div className="student-row" key={s.id}>
-                      <div className="avatar">{getInitials(s.full_name)}</div>
-                      <div className="student-info">
-                        <div className="student-name">{s.full_name}</div>
-                        <div className="student-meta">
-                          {s.student_id} · {s.year_level}
-                          {s.position ? ` · ${s.position}` : ''}
-                        </div>
-                      </div>
-                      {statusPill(s.status)}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          <OverviewTab />
         )}
 
         {/* ── UPLOAD ── */}
         {activeTab === 'upload' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* ── Card: Downloads ── */}
-            <div className="chart-card">
-              <div className="chart-card-title">📥 Downloads</div>
-              <div className="chart-card-sub">
-                Get the pre-configured Excel file to fill in student data, and the pre-built
-                image folder to organise your photos before uploading.
-              </div>
-              <div className="download-row">
-                <button
-                  className="download-btn"
-                  onClick={() => handleDownload('download-excel', 'LMSA_Student_Template.xlsx')}
-                  disabled={downloading['download-excel']}
-                >
-                  <div className="download-icon">📊</div>
-                  <div>
-                    <div className="download-title">
-                      {downloading['download-excel'] ? 'Downloading...' : 'Student data template'}
-                    </div>
-                    <div className="download-sub">Excel · pre-formatted columns</div>
-                  </div>
-                </button>
-                <button
-                  className="download-btn"
-                  onClick={() =>
-                    handleDownload('download-image-folder', 'LMSA_Image_Upload_Folder.zip')
-                  }
-                  disabled={downloading['download-image-folder']}
-                >
-                  <div className="download-icon">📁</div>
-                  <div>
-                    <div className="download-title">
-                      {downloading['download-image-folder']
-                        ? 'Downloading...'
-                        : 'Image folder package'}
-                    </div>
-                    <div className="download-sub">ZIP · year subfolders + README</div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* ── Card: Card Templates ── */}
-            <div className="chart-card">
-              <div className="chart-card-title">🎨 ID Card Templates <span className="new-badge">Front & Back</span></div>
-              <div className="chart-card-sub">
-                Upload separate background images for the front and back of the ID card. Each side can have its own design.
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {/* Front Template */}
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
-                    Front Template
-                  </div>
-                  {activeTemplateFront ? (
-                    <div style={{ marginBottom: '10px' }}>
-                      <img
-                        src={activeTemplateFront.file_url}
-                        alt="Front template"
-                        style={{
-                          width: '100%',
-                          height: '120px',
-                          objectFit: 'cover',
-                          borderRadius: '8px',
-                          border: '1px solid var(--border)',
-                          marginBottom: '8px',
-                        }}
-                      />
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>{activeTemplateFront.file_name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--muted)' }}>CR-80 · {new Date(activeTemplateFront.uploaded_at).toLocaleDateString()}</div>
-                        </div>
-                        <span className="pill pill-green">Active</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>No template uploaded</div>
-                  )}
-                  <div
-                    className="upload-zone"
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Choose front card template image"
-                    style={{ padding: '12px' }}
-                    onClick={() => openFileInput('template-input-front')}
-                    onKeyDown={(e) => handleFileZoneKeyDown(e, 'template-input-front')}
-                  >
-                    <input
-                      id="template-input-front"
-                      type="file"
-                      accept=".png,.jpg,.jpeg"
-                      hidden
-                      onChange={(e) => {
-                        setTemplateFileFront(e.target.files[0])
-                        setUploadMsg(null)
-                      }}
-                    />
-                    {templateFileFront ? (
-                      <p className="upload-selected" style={{ fontSize: '12px' }}>📄 {templateFileFront.name}</p>
-                    ) : (
-                      <>
-                        <p className="upload-icon" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
-                        <p className="upload-text" style={{ fontSize: '12px' }}>
-                          Drop or <span className="upload-link">browse</span>
-                        </p>
-                        <p className="upload-hint" style={{ fontSize: '10px' }}>PNG/JPG · 1012×638 px</p>
-                      </>
-                    )}
-                  </div>
-                  {templateFileFront && (
-                    <button className="btn-gold-full" onClick={() => handleTemplateUpload('front')} disabled={uploading} style={{ marginTop: '8px', width: '100%', fontSize: '12px', padding: '8px' }}>
-                      {uploading ? 'Uploading...' : 'Upload Front'}
-                    </button>
-                  )}
-                </div>
-
-                {/* Back Template */}
-                <div>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)', marginBottom: '8px' }}>
-                    Back Template
-                  </div>
-                  {activeTemplateBack ? (
-                    <div style={{ marginBottom: '10px' }}>
-                      <img
-                        src={activeTemplateBack.file_url}
-                        alt="Back template"
-                        style={{
-                          width: '100%',
-                          height: '120px',
-                          objectFit: 'cover',
-                          borderRadius: '8px',
-                          border: '1px solid var(--border)',
-                          marginBottom: '8px',
-                        }}
-                      />
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text)' }}>{activeTemplateBack.file_name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--muted)' }}>CR-80 · {new Date(activeTemplateBack.uploaded_at).toLocaleDateString()}</div>
-                        </div>
-                        <span className="pill pill-green">Active</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>No template uploaded</div>
-                  )}
-                  <div
-                    className="upload-zone"
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Choose back card template image"
-                    style={{ padding: '12px' }}
-                    onClick={() => openFileInput('template-input-back')}
-                    onKeyDown={(e) => handleFileZoneKeyDown(e, 'template-input-back')}
-                  >
-                    <input
-                      id="template-input-back"
-                      type="file"
-                      accept=".png,.jpg,.jpeg"
-                      hidden
-                      onChange={(e) => {
-                        setTemplateFileBack(e.target.files[0])
-                        setUploadMsg(null)
-                      }}
-                    />
-                    {templateFileBack ? (
-                      <p className="upload-selected" style={{ fontSize: '12px' }}>📄 {templateFileBack.name}</p>
-                    ) : (
-                      <>
-                        <p className="upload-icon" style={{ fontSize: '18px', marginBottom: '4px' }}>⬆</p>
-                        <p className="upload-text" style={{ fontSize: '12px' }}>
-                          Drop or <span className="upload-link">browse</span>
-                        </p>
-                        <p className="upload-hint" style={{ fontSize: '10px' }}>PNG/JPG · 1012×638 px</p>
-                      </>
-                    )}
-                  </div>
-                  {templateFileBack && (
-                    <button className="btn-gold-full" onClick={() => handleTemplateUpload('back')} disabled={uploading} style={{ marginTop: '8px', width: '100%', fontSize: '12px', padding: '8px' }}>
-                      {uploading ? 'Uploading...' : 'Upload Back'}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {uploadMsg && (
-                <div
-                  className={uploadMsg.ok ? 'success-box' : 'error-box'}
-                  style={{ marginTop: '12px' }}
-                >
-                  {uploadMsg.text}
-                </div>
-              )}
-            </div>
-
-            {/* ── Card: Add Students ── */}
-            <div className="chart-card">
-              <div className="chart-card-title">👤 Add Students</div>
-              <div className="chart-card-sub">
-                Upload a CSV batch or add students one at a time.
-              </div>
-            <div className="mode-toggle">
-              <button
-                className={`mode-btn ${uploadMode === 'csv' ? 'active' : ''}`}
-                onClick={() => {
-                  setUploadMode('csv')
-                  setUploadMsg(null)
-                }}
-              >
-                CSV batch upload
-              </button>
-              <button
-                className={`mode-btn ${uploadMode === 'manual' ? 'active' : ''}`}
-                onClick={() => {
-                  setUploadMode('manual')
-                  setManualMsg(null)
-                }}
-              >
-                Add manually
-              </button>
-            </div>
-
-            {uploadMode === 'csv' && (
-              <div>
-                <p className="section-desc">
-                  Fill in the Excel template above, save as CSV, then upload it here. Optionally
-                  attach the image folder ZIP.
-                </p>
-                <div
-                  className="upload-zone"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Choose student CSV file"
-                  style={{ marginBottom: '8px' }}
-                  onClick={() => openFileInput('csv-input')}
-                  onKeyDown={(e) => handleFileZoneKeyDown(e, 'csv-input')}
-                >
-                  <input
-                    id="csv-input"
-                    type="file"
-                    accept=".csv"
-                    hidden
-                    onChange={(e) => {
-                      setCsvFile(e.target.files[0])
-                      setUploadMsg(null)
-                    }}
-                  />
-                  {csvFile ? (
-                    <p className="upload-selected">📋 {csvFile.name}</p>
-                  ) : (
-                    <>
-                      <p className="upload-icon">⬆</p>
-                      <p className="upload-text">
-                        Drop CSV or <span className="upload-link">browse</span>
-                      </p>
-                      <p className="upload-hint">Save your Excel file as CSV before uploading</p>
-                    </>
-                  )}
-                </div>
-                <div
-                  className="upload-zone"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Choose optional photo ZIP file"
-                  style={{ marginBottom: '10px', padding: '12px' }}
-                  onClick={() => openFileInput('zip-input')}
-                  onKeyDown={(e) => handleFileZoneKeyDown(e, 'zip-input')}
-                >
-                  <input
-                    id="zip-input"
-                    type="file"
-                    accept=".zip"
-                    hidden
-                    onChange={(e) => {
-                      setZipFile(e.target.files[0])
-                      setUploadMsg(null)
-                    }}
-                  />
-                  {zipFile ? (
-                    <p className="upload-selected">📦 {zipFile.name}</p>
-                  ) : (
-                    <p className="upload-text">
-                      Drop image folder ZIP (optional) · <span className="upload-link">browse</span>
-                    </p>
-                  )}
-                </div>
-                {csvFile && (
-                  <button className="btn-gold-full" onClick={handleCSVUpload} disabled={uploading}>
-                    {uploading ? 'Uploading...' : 'Upload CSV'}
-                    {zipFile ? ' + Photos' : ''}
-                  </button>
-                )}
-                {uploadMsg && (
-                  <div
-                    className={uploadMsg.ok ? 'success-box' : 'error-box'}
-                    style={{ marginTop: '10px' }}
-                  >
-                    {uploadMsg.text}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {uploadMode === 'manual' && (
-              <form onSubmit={handleManualAdd}>
-                <div className="manual-form">
-                  <div className="field-group">
-                    <label className="field-label" htmlFor="manual-full-name">Full Name</label>
-                    <input
-                      id="manual-full-name"
-                      className="field-input"
-                      placeholder="e.g. Josephine K. Freeman"
-                      value={manualForm.full_name}
-                      onChange={(e) => setManualForm({ ...manualForm, full_name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label className="field-label" htmlFor="manual-student-id">Student ID Number</label>
-                    <input
-                      id="manual-student-id"
-                      className="field-input"
-                      placeholder="e.g. 123456"
-                      value={manualForm.student_id}
-                      onChange={(e) => setManualForm({ ...manualForm, student_id: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="field-group">
-                    <label className="field-label" htmlFor="manual-year-level">Year / Level</label>
-                    <select
-                      id="manual-year-level"
-                      className="field-input"
-                      value={manualForm.year_level}
-                      onChange={(e) => setManualForm({ ...manualForm, year_level: e.target.value })}
-                    >
-                      {YEARS.map((y) => (
-                        <option key={y}>{y}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {fields?.position?.enabled && (
-                    <div className="field-group">
-                      <label className="field-label" htmlFor="manual-position">Position</label>
-                      <input
-                        id="manual-position"
-                        className="field-input"
-                        placeholder="e.g. Member"
-                        value={manualForm.position}
-                        onChange={(e) => setManualForm({ ...manualForm, position: e.target.value })}
-                      />
-                    </div>
-                  )}
-                  <div className="field-group">
-                    <label className="field-label" htmlFor="manual-photo-input">Student Photo</label>
-                    <div
-                      className="upload-zone"
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Choose student photo"
-                      style={{ padding: '12px' }}
-                      onClick={() => openFileInput('manual-photo-input')}
-                      onKeyDown={(e) => handleFileZoneKeyDown(e, 'manual-photo-input')}
-                    >
-                      <input
-                        id="manual-photo-input"
-                        type="file"
-                        accept=".jpg,.jpeg,.png"
-                        hidden
-                        onChange={(e) => {
-                          if (e.target.files[0]) setManualPhoto(e.target.files[0])
-                        }}
-                      />
-                      {manualPhoto ? (
-                        <p className="upload-selected">📷 {manualPhoto.name}</p>
-                      ) : (
-                        <p className="upload-text">
-                          Upload photo (optional) · <span className="upload-link">browse</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  {fields?.signature?.enabled && (
-                    <div className="field-group">
-                      <label className="field-label" htmlFor="manual-sig-input">Student Signature</label>
-                      <div
-                        className="upload-zone"
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Choose student signature"
-                        style={{ padding: '12px' }}
-                        onClick={() => openFileInput('manual-sig-input')}
-                        onKeyDown={(e) => handleFileZoneKeyDown(e, 'manual-sig-input')}
-                      >
-                        <input
-                          id="manual-sig-input"
-                          type="file"
-                          accept=".png"
-                          hidden
-                          onChange={(e) => setManualSig(e.target.files[0])}
-                        />
-                        {manualSig ? (
-                          <p className="upload-selected">✍ {manualSig.name}</p>
-                        ) : (
-                          <p className="upload-text">
-                            PNG · transparent background ·{' '}
-                            <span className="upload-link">browse</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* QR-encoded fields */}
-                  <div
-                    style={{
-                      borderTop: '0.5px solid var(--border)',
-                      paddingTop: '12px',
-                      marginTop: '4px',
-                    }}
-                  >
-                    <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                      🔲 QR-encoded details — stored but not printed on card face
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-programme">Programme</label>
-                        <input
-                          id="manual-programme"
-                          className="field-input"
-                          placeholder="e.g. MBBS, Pharm.D"
-                          value={manualForm.programme}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, programme: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-blood-type">Blood Type</label>
-                        <input
-                          id="manual-blood-type"
-                          className="field-input"
-                          placeholder="e.g. O+"
-                          value={manualForm.blood_type}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, blood_type: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-student-email">Student Email</label>
-                        <input
-                          id="manual-student-email"
-                          className="field-input"
-                          type="email"
-                          placeholder="student@email.com"
-                          value={manualForm.student_email}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, student_email: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-emergency-contact-name">Emergency Contact Name</label>
-                        <input
-                          id="manual-emergency-contact-name"
-                          className="field-input"
-                          placeholder="Full name"
-                          value={manualForm.emergency_contact_name}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, emergency_contact_name: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-emergency-contact-phone">Emergency Contact Phone</label>
-                        <input
-                          id="manual-emergency-contact-phone"
-                          className="field-input"
-                          placeholder="+231 xxx xxxx"
-                          value={manualForm.emergency_contact_phone}
-                          onChange={(e) =>
-                            setManualForm({
-                              ...manualForm,
-                              emergency_contact_phone: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-date-of-birth">Date of Birth</label>
-                        <input
-                          id="manual-date-of-birth"
-                          className="field-input"
-                          type="date"
-                          value={manualForm.date_of_birth}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, date_of_birth: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-nationality">Nationality</label>
-                        <input
-                          id="manual-nationality"
-                          className="field-input"
-                          placeholder="Liberian"
-                          value={manualForm.nationality}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, nationality: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-county-of-origin">County of Origin</label>
-                        <input
-                          id="manual-county-of-origin"
-                          className="field-input"
-                          list="liberia-counties-manual"
-                          placeholder="e.g. Montserrado"
-                          value={manualForm.county_of_origin}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, county_of_origin: e.target.value })
-                          }
-                        />
-                        <datalist id="liberia-counties-manual">
-                          {LIBERIA_COUNTIES.map((c) => (
-                            <option key={c} value={c} />
-                          ))}
-                        </datalist>
-                      </div>
-                      <div className="field-group">
-                        <label className="field-label" htmlFor="manual-current-address">Current Address</label>
-                        <input
-                          id="manual-current-address"
-                          className="field-input"
-                          placeholder="e.g. 123 Broad Street, Monrovia"
-                          value={manualForm.current_address}
-                          onChange={(e) =>
-                            setManualForm({ ...manualForm, current_address: e.target.value })
-                          }
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="btn-row">
-                    <button className="btn-gold" type="submit" disabled={manualSubmitting}>
-                      {manualSubmitting ? 'Adding...' : 'Add Student'}
-                    </button>
-                    <button
-                      className="btn-outline"
-                      type="button"
-                      onClick={() => {
-                        setManualForm({
-                          student_id: '',
-                          full_name: '',
-                          year_level: '1st Year',
-                          position: '',
-                          programme: '',
-                          blood_type: '',
-                          student_email: '',
-                          emergency_contact_name: '',
-                          emergency_contact_phone: '',
-                          date_of_birth: '',
-                          nationality: '',
-                          county_of_origin: '',
-                          current_address: '',
-                        })
-                        setManualPhoto(null)
-                        setManualSig(null)
-                        setManualMsg(null)
-                      }}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-                {manualMsg && (
-                  <div
-                    className={manualMsg.ok ? 'success-box' : 'error-box'}
-                    style={{ marginTop: '10px' }}
-                  >
-                    {manualMsg.text}
-                  </div>
-                )}
-              </form>
-            )}
-            </div>
-          </div>
+          <UploadTab />
         )}
 
         {/* ── LAYOUT ── */}
         {activeTab === 'layout' && (
-          <div>
-            <div className="section-title">
-              Card layout mapper <span className="new-badge">Front & Back</span>
-            </div>
-            <p className="section-desc">
-              Configure field positions for both sides of the ID card. Each side uses its own template
-              and layout. Drag fields on the preview, adjust properties in the panel, then save. Use the
-              Front/Back tabs in the mapper to switch sides.
-            </p>
-
-            <LayoutMapper
-              enabledFields={fields}
-              templateUrlFront={activeTemplateFront?.file_url}
-              templateUrlBack={activeTemplateBack?.file_url}
-              templateNameFront={activeTemplateFront?.file_name}
-              templateNameBack={activeTemplateBack?.file_name}
-              initialLayout={cardLayout}
-              onSave={saveLayout}
-              suggestedLayoutFront={activeTemplateFront?.suggested_layout_front}
-              suggestedLayoutBack={activeTemplateBack?.suggested_layout_back}
-              fieldSides={fieldSides}
-              onSaveFieldSides={saveFieldSides}
-              onLoadLayoutHistory={loadLayoutHistory}
-              onRevertLayout={revertLayout}
-            />
-          </div>
+          <LayoutTab />
         )}
 
         {/* ── SUBMISSION FORM ── */}
         {activeTab === 'submissions' && (
-          <div>
-            <div className="section-title">Submissions</div>
-            <div className="mode-toggle">
-              {['pending', 'approved', 'rejected', 'all'].map((f) => (
-                <button
-                  key={f}
-                  className={`mode-btn ${submissionsFilter === f ? 'active' : ''}`}
-                  onClick={() => {
-                    setSubmissionsFilter(f)
-                    setTimeout(() => loadSubmissions(f), 0)
-                  }}
-                  style={{ textTransform: 'capitalize' }}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-            {submissionMsg && (
-              <div
-                className={
-                  submissionMsg.warn ? 'info-box' : submissionMsg.ok ? 'success-box' : 'error-box'
-                }
-                style={{ marginBottom: '10px', fontSize: '13px' }}
-              >
-                {submissionMsg.text}
-              </div>
-            )}
-            {submissionsLoading ? (
-              <div>
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="skeleton skeleton-row" />
-                ))}
-              </div>
-            ) : submissions.length === 0 ? (
-              <EmptyState>No {submissionsFilter} submissions.</EmptyState>
-            ) : (
-              <div>
-                {submissions.map((s) => (
-                  <div key={s.id} className="student-row">
-                    <div className="avatar">
-                      {s.full_name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .filter(Boolean)
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase()}
-                    </div>
-                    <div className="student-info">
-                      <div className="student-name">{s.full_name}</div>
-                      <div className="student-meta">
-                        {s.student_id} · {s.year_level}
-                        {s.position ? ` · ${s.position}` : ''}
-                      </div>
-                      <div className="student-meta" style={{ fontSize: '10px', marginTop: '1px' }}>
-                        Submitted{' '}
-                        {new Date(s.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                        {s.reviewed_at &&
-                          ` · Reviewed ${new Date(s.reviewed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`}
-                      </div>
-                      {s.admin_notes && (
-                        <div className="student-issue-note">Note: {s.admin_notes}</div>
-                      )}
-                    </div>
-                    <StatusBadge status={s.status} />
-                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                      {s.status === 'pending' && (
-                        <>
-                          <button
-                            className="btn-gold"
-                            style={{ fontSize: '10px', padding: '4px 8px' }}
-                            onClick={() => handleApproveSubmission(s.id)}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            className="btn-outline"
-                            style={{
-                              fontSize: '10px',
-                              padding: '4px 8px',
-                              borderColor: 'var(--error-text)',
-                              color: 'var(--error-text)',
-                            }}
-                            onClick={() => handleRejectSubmission(s)}
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
-                      <button
-                        className="btn-outline"
-                        style={{ fontSize: '10px', padding: '4px 8px' }}
-                        onClick={() => handleDeleteSubmission(s)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <SubmissionsTab />
         )}
 
         {/* ── SETTINGS ── */}
         {activeTab === 'settings' && (
-          <div className="settings-view">
-            {(() => {
-              const sections = [
-                { id: 'fields', label: 'Card Fields' },
-                { id: 'qr', label: 'QR Code' },
-                { id: 'form', label: 'Form' },
-                ...(userRole === 'admin'
-                  ? [
-                      { id: 'lifecycle', label: 'Lifecycle' },
-                      { id: 'activity', label: 'Activity' },
-                      { id: 'system', label: 'System' },
-                    ]
-                  : []),
-              ]
-              const go = (id) => {
-                const el = document.getElementById(id)
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-              return (
-                <div className="settings-nav">
-                  {sections.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      className={`settings-nav-pill${settingsActive === s.id ? ' active' : ''}`}
-                      onClick={() => go(s.id)}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              )
-            })()}
-
-            <SettingsCard
-              id="fields"
-              icon="🗂️"
-              title="Card field settings"
-              badge="Template config"
-              desc="Toggle which fields appear on the ID card. This also controls the columns in the downloadable Excel template and the structure of the image folder."
-            >
-              {fields ? (
-                <FieldToggleGroup
-                  items={Object.entries(FIELD_META).map(([key, meta]) => ({
-                    key,
-                    label: meta.label,
-                    enabled: !!fields[key]?.enabled,
-                    locked: meta.locked,
-                  }))}
-                  onToggle={toggleField}
-                  footer={
-                    <>
-                      <button
-                        className="btn-gold"
-                        onClick={saveFields}
-                        disabled={fieldsSaving}
-                        style={{ padding: '7px 16px', fontSize: '13px' }}
-                      >
-                        {fieldsSaving ? 'Saving...' : 'Save field settings'}
-                      </button>
-                      {fieldsMsg && (
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            color: fieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)',
-                          }}
-                        >
-                          {fieldsMsg.text}
-                        </span>
-                      )}
-                    </>
-                  }
-                />
-              ) : (
-                <div className="skeleton skeleton-card" />
-              )}
-            </SettingsCard>
-
-            <SettingsCard
-              id="qr"
-              icon="🔳"
-              title="QR code fields"
-              badge="QR"
-              desc="Toggle which extra fields are encoded into the QR code. Enabled fields are included in the QR payload and appear on the QR verification page."
-            >
-              {qrFields ? (
-                <FieldToggleGroup
-                  items={Object.entries(qrFields).map(([key, meta]) => ({
-                    key,
-                    label: meta.label,
-                    enabled: !!meta.enabled,
-                  }))}
-                  onToggle={toggleQrField}
-                  footer={
-                    <>
-                      <button
-                        className="btn-gold"
-                        onClick={saveQrFields}
-                        disabled={qrFieldsSaving}
-                        style={{ padding: '7px 16px', fontSize: '13px' }}
-                      >
-                        {qrFieldsSaving ? 'Saving...' : 'Save QR fields'}
-                      </button>
-                      {qrFieldsMsg && (
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            color: qrFieldsMsg.ok ? 'var(--success-text)' : 'var(--error-text)',
-                          }}
-                        >
-                          {qrFieldsMsg.text}
-                        </span>
-                      )}
-                    </>
-                  }
-                />
-              ) : (
-                <div className="skeleton skeleton-card" />
-              )}
-            </SettingsCard>
-
-            <SettingsCard
-              id="form"
-              icon="📝"
-              title="Submission form status"
-              desc="Control whether students can submit their details through the public form."
-            >
-              <div
-                style={{
-                  background: 'var(--white)',
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  padding: '14px',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: '500' }}>Form Status</div>
-                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
-                      {submissionFormEnabled
-                        ? 'Students can submit their details'
-                        : 'Form is closed to submissions'}
-                    </div>
-                  </div>
-                  <button
-                    className={`btn-${submissionFormEnabled ? 'outline' : 'gold'}`}
-                    onClick={handleToggleSubmissionForm}
-                    style={{ fontSize: '12px', padding: '7px 14px' }}
-                  >
-                    {submissionFormEnabled ? 'Disable Form' : 'Enable Form'}
-                  </button>
-                </div>
-                {submissionFormEnabled && (
-                  <div
-                    style={{
-                      background: 'var(--bg)',
-                      borderRadius: 'var(--radius)',
-                      padding: '10px 12px',
-                      fontSize: '12px',
-                    }}
-                  >
-                    <div style={{ color: 'var(--muted)', marginBottom: '4px' }}>
-                      Share this link with students:
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <code
-                        style={{
-                          flex: 1,
-                          padding: '6px 10px',
-                          background: 'var(--white)',
-                          border: '0.5px solid var(--border)',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          wordBreak: 'break-all',
-                        }}
-                      >
-                        {window.location.origin}/submit
-                      </code>
-                      <button
-                        className="btn-gold"
-                        style={{ fontSize: '11px', padding: '5px 10px', whiteSpace: 'nowrap' }}
-                        onClick={() => {
-                          navigator.clipboard.writeText(`${window.location.origin}/submit`)
-                          setSubmissionMsg({ ok: true, text: 'Link copied!' })
-                          setTimeout(() => setSubmissionMsg(null), 2000)
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </SettingsCard>
-
-            {userRole === 'admin' && (
-              <SettingsCard
-                id="lifecycle"
-                icon="🔄"
-                title="Card expiry / renewal"
-                admin
-                desc="Renew all cards for a given year level by setting a new expiry date. Confirmation status is left untouched; students still confirm their own card individually."
-              >
-                <RenewCohortSection userRole={userRole} />
-              </SettingsCard>
-            )}
-
-            {userRole === 'admin' && (
-              <SettingsCard id="activity" icon="📊" title="Recent admin activity" admin>
-                <ActivityLogSection />
-              </SettingsCard>
-            )}
-
-            {userRole === 'admin' && (
-              <SettingsCard
-                id="system"
-                icon="💾"
-                title="System backup"
-                admin
-                desc="Download a full backup of all database records and uploaded files (photos, signatures, QR codes, templates). The backup is delivered as a ZIP file."
-              >
-                <button
-                  className="btn-gold"
-                  onClick={async () => {
-                    try {
-                      setDownloading((prev) => ({ ...prev, backup: true }))
-                      const res = await adminFetch('/api/backup')
-                      if (!res.ok) {
-                        const body = await res.json().catch(() => ({}))
-                        toast.error(body.error || 'Backup failed.')
-                        return
-                      }
-                      const blob = await res.blob()
-                      const disposition = res.headers.get('Content-Disposition') || ''
-                      const match = disposition.match(/filename="?(.+?)"?$/)
-                      const filename = match ? match[1] : 'lmsa-backup.zip'
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = filename
-                      document.body.appendChild(a)
-                      a.click()
-                      a.remove()
-                      URL.revokeObjectURL(url)
-                    } catch {
-                      toast.error('Backup failed. Please try again.')
-                    } finally {
-                      setDownloading((prev) => ({ ...prev, backup: false }))
-                    }
-                  }}
-                  disabled={downloading.backup}
-                  style={{ fontSize: '13px', padding: '9px 18px' }}
-                >
-                  {downloading.backup ? 'Generating backup...' : '📦 Download Full Backup'}
-                </button>
-              </SettingsCard>
-            )}
-          </div>
+          <SettingsTab />
         )}
 
         {/* ── STUDENTS ── */}
         {activeTab === 'students' && (
-          <div>
-            {/* QR bulk controls - admin only */}
-            {userRole === 'admin' && (
-              <div
-                style={{
-                  background: 'var(--bg)',
-                  border: '0.5px solid var(--border)',
-                  borderRadius: 'var(--radius)',
-                  padding: '12px',
-                  marginBottom: '14px',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: '500',
-                    color: 'var(--text)',
-                    marginBottom: '8px',
-                  }}
-                >
-                  🔲 QR Code Management
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                  {students.filter((s) => s.qr_url).length} of {students.length} students have QR
-                  codes generated.
-                </div>
-                <div className="btn-row">
-                  <button
-                    className="btn-gold"
-                    onClick={handleGenerateAllQR}
-                    disabled={qrGenerating}
-                    style={{ fontSize: '12px', padding: '7px 14px' }}
-                  >
-                    {qrGenerating ? 'Generating...' : '⚡ Generate missing QR codes'}
-                  </button>
-                  <button
-                    className="btn-outline"
-                    onClick={handleRegenerateAllQR}
-                    disabled={qrGenerating}
-                    style={{
-                      fontSize: '12px',
-                      padding: '7px 14px',
-                      borderColor: '#CC0000',
-                      color: '#CC0000',
-                    }}
-                  >
-                    {qrGenerating ? 'Regenerating...' : '🔄 Regenerate all'}
-                  </button>
-                  <button
-                    className="btn-outline"
-                    onClick={() => handleDownload('/api/qr/export', 'LMSA_QR_Codes.zip')}
-                    disabled={downloading['/api/qr/export']}
-                    style={{ fontSize: '12px', padding: '7px 14px' }}
-                  >
-                    {downloading['/api/qr/export'] ? 'Exporting...' : '⬇ Export all as ZIP'}
-                  </button>
-                </div>
-                {qrMsg && (
-                  <div
-                    className={qrMsg.ok ? 'success-box' : 'error-box'}
-                    style={{ marginTop: '8px', fontSize: '12px' }}
-                  >
-                    {qrMsg.text}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div
-              style={{
-                background: 'var(--bg)',
-                border: '0.5px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                padding: '12px',
-                marginBottom: '14px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  color: 'var(--text)',
-                  marginBottom: '8px',
-                }}
-              >
-                📋 Photoshoot Roster
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                Export a printable roster with student names, ID numbers, and signature spaces for
-                the photoshoot session.
-              </div>
-              <button
-                className="btn-outline"
-                onClick={() =>
-                  handleDownload('/api/students/export/photoshoot', 'LMSA_Photoshoot_Roster.pdf')
-                }
-                disabled={downloading['/api/students/export/photoshoot']}
-                style={{ fontSize: '12px', padding: '7px 14px' }}
-              >
-                {downloading['/api/students/export/photoshoot']
-                  ? 'Exporting...'
-                  : '⬇ Export Photoshoot Roster (PDF)'}
-              </button>
-            </div>
-
-            <div
-              style={{
-                background: 'var(--bg)',
-                border: '0.5px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                padding: '12px',
-                marginBottom: '14px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: '500',
-                  color: 'var(--text)',
-                  marginBottom: '8px',
-                }}
-              >
-                🎨 Card Design Roster
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-                Export a Word document with each student's front- and back-facing card
-                details (QR included) for the design team.
-              </div>
-              <button
-                className="btn-outline"
-                onClick={() =>
-                  handleDownload('/api/students/export/card-design', 'LMSA_Card_Design_Roster.docx')
-                }
-                disabled={downloading['/api/students/export/card-design']}
-                style={{ fontSize: '12px', padding: '7px 14px' }}
-              >
-                {downloading['/api/students/export/card-design']
-                  ? 'Exporting...'
-                  : '⬇ Export Card Design Roster (DOCX)'}
-              </button>
-            </div>
-
-            <div
-              style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center' }}
-            >
-              <input
-                className="field-input"
-                placeholder="Search by name or student ID..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value)
-                  setCurrentPage(1)
-                }}
-                style={{ flex: 1 }}
-              />
-              <select
-                className="field-input"
-                value={yearFilter}
-                onChange={(e) => {
-                  setYearFilter(e.target.value)
-                  setCurrentPage(1)
-                }}
-                style={{ width: 'auto', minWidth: '130px', fontSize: '13px' }}
-              >
-                <option value="all">All Classes</option>
-                {YEARS.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="field-input"
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value)
-                  setCurrentPage(1)
-                }}
-                style={{ width: 'auto', minWidth: '120px', fontSize: '13px' }}
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="issues">Issues</option>
-              </select>
-              <button
-                className="btn-gold"
-                onClick={() => {
-                  setActiveTab('upload')
-                  setUploadMode('manual')
-                }}
-              >
-                + Add
-              </button>
-            </div>
-            {dataLoading ? (
-              [1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="skeleton skeleton-row" />
-              ))
-            ) : filtered.length === 0 ? (
-              <EmptyState>{search ? 'No students match your search.' : 'No students added yet.'}</EmptyState>
-            ) : (() => {
-              const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-              const safePage = Math.min(currentPage, totalPages)
-              const pageStart = (safePage - 1) * PAGE_SIZE
-              const pageEnd = safePage * PAGE_SIZE
-              const pageStudents = filtered.slice(pageStart, pageEnd)
-              const pageNums = Array.from({ length: totalPages }, (_, i) => i + 1)
-              const visiblePages = pageNums.filter(
-                (p) => p === 1 || p === totalPages || Math.abs(p - safePage) <= 1,
-              )
-              const trimmedPages = visiblePages.reduce((acc, p, i) => {
-                if (i > 0 && p - visiblePages[i - 1] > 1) acc.push('…')
-                acc.push(p)
-                return acc
-              }, [])
-              return (
-                <>
-                  {pageStudents.map((s) => (
-                    <div className="student-row" key={s.id}>
-                      {s.photo_url ? (
-                        <img
-                          src={s.photo_url}
-                          alt={s.full_name}
-                          style={{
-                            width: '30px',
-                            height: '36px',
-                            borderRadius: '3px',
-                            objectFit: 'cover',
-                            flexShrink: 0,
-                          }}
-                        />
-                      ) : (
-                        <div className="avatar">{getInitials(s.full_name)}</div>
-                      )}
-                      <div className="student-info">
-                        <div className="student-name">{s.full_name}</div>
-                        <div className="student-meta">
-                          {s.student_id} · {s.year_level}
-                          {s.position ? ` · ${s.position}` : ''}
-                        </div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            marginTop: '2px',
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          {s.qr_url ? (
-                            <>
-                              <span
-                                style={{
-                                  fontSize: '10px',
-                                  color: 'var(--success-text)',
-                                  background: 'var(--success-bg)',
-                                  padding: '1px 7px',
-                                  borderRadius: '20px',
-                                  border: '0.5px solid var(--success-border)',
-                                }}
-                              >
-                                QR ✓
-                              </span>
-                              <button
-                                style={{
-                                  fontSize: '10px',
-                                  color: '#5b8def',
-                                  background: 'transparent',
-                                  padding: '1px 7px',
-                                  borderRadius: '20px',
-                                  border: '0.5px solid #5b8def',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch(
-                                      `/api/students/preview-url/${encodeURIComponent(s.student_id)}`,
-                                      {
-                                        headers: {
-                                          Authorization: `Bearer ${session.access_token}`,
-                                        },
-                                      },
-                                    )
-                                    if (!res.ok) return
-                                    const { url } = await res.json()
-                                    window.open(url, '_blank', 'noopener,noreferrer')
-                                  } catch (err) {
-                                    console.warn('[Preview] Failed to open preview', err)
-                                  }
-                                }}
-                              >
-                                View preview
-                              </button>
-                              <button
-                                style={{
-                                  fontSize: '10px',
-                                  color: 'var(--gold)',
-                                  background: 'transparent',
-                                  padding: '1px 7px',
-                                  borderRadius: '20px',
-                                  border: '0.5px solid var(--gold)',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch(
-                                      `/api/qr/verification-url/${encodeURIComponent(s.student_id)}`,
-                                      {
-                                        headers: {
-                                          Authorization: `Bearer ${session.access_token}`,
-                                        },
-                                      },
-                                    )
-                                    if (!res.ok) return
-                                    const { url } = await res.json()
-                                    window.open(url, '_blank', 'noopener,noreferrer')
-                                  } catch (err) {
-                                    console.warn('[QR Page] Failed to open verification page', err)
-                                  }
-                                }}
-                              >
-                                View page
-                              </button>
-                              {userRole === 'admin' && (
-                                <button
-                                  style={{
-                                    fontSize: '10px',
-                                    color: '#CC0000',
-                                    background: 'transparent',
-                                    padding: '1px 7px',
-                                    borderRadius: '20px',
-                                    border: '0.5px solid #CC0000',
-                                    cursor: 'pointer',
-                                  }}
-                                  onClick={async () => {
-                                    await handleRegenerateQR(s.student_id)
-                                  }}
-                                >
-                                  Regenerate
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            userRole === 'admin' && (
-                              <button
-                                style={{
-                                  fontSize: '10px',
-                                  color: 'var(--warn-text)',
-                                  background: 'var(--warn-bg)',
-                                  padding: '1px 7px',
-                                  borderRadius: '20px',
-                                  border: '0.5px solid var(--warn-border)',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={async () => {
-                                  await handleGenerateQR(s.student_id)
-                                }}
-                              >
-                                Generate QR
-                              </button>
-                            )
-                          )}
-                          {s.student_id && userRole === 'admin' && (
-                            <button
-                              type="button"
-                              style={{
-                                fontSize: '10px',
-                                color: '#CC0000',
-                                background: 'transparent',
-                                padding: '1px 7px',
-                                borderRadius: '20px',
-                                border: '0.5px solid #CC0000',
-                                cursor: 'pointer',
-                              }}
-                              onClick={() => handleDeleteStudent(s)}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                        {issueNotes[s.student_id] && (
-                          <div className="student-issue-note">{issueNotes[s.student_id].note}</div>
-                        )}
-                      </div>
-                      {statusPill(s.status)}
-                      <button className="btn-edit" onClick={() => openEdit(s)}>
-                        Edit
-                      </button>
-                    </div>
-                  ))}
-
-                  {/* Pagination */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px',
-                      marginTop: '14px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={safePage === 1}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: '12px',
-                        border: '0.5px solid var(--border)',
-                        borderRadius: '6px',
-                        background: 'var(--bg)',
-                        cursor: safePage === 1 ? 'not-allowed' : 'pointer',
-                        opacity: safePage === 1 ? 0.4 : 1,
-                      }}
-                    >
-                      ‹ Prev
-                    </button>
-                    {trimmedPages.map((p, i) =>
-                      p === '…' ? (
-                        <span
-                          key={`ellipsis-${i}`}
-                          style={{ padding: '4px 4px', fontSize: '12px', color: 'var(--muted)' }}
-                        >
-                          …
-                        </span>
-                      ) : (
-                        <button
-                          key={p}
-                          onClick={() => setCurrentPage(p)}
-                          style={{
-                            padding: '4px 10px',
-                            fontSize: '12px',
-                            border: '0.5px solid',
-                            borderColor: safePage === p ? 'var(--gold)' : 'var(--border)',
-                            borderRadius: '6px',
-                            background: safePage === p ? 'var(--gold)' : 'var(--bg)',
-                            color: safePage === p ? '#0D1B2A' : 'var(--text)',
-                            cursor: 'pointer',
-                            fontWeight: safePage === p ? '600' : '400',
-                          }}
-                        >
-                          {p}
-                        </button>
-                      ),
-                    )}
-                    <button
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={safePage === totalPages}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: '12px',
-                        border: '0.5px solid var(--border)',
-                        borderRadius: '6px',
-                        background: 'var(--bg)',
-                        cursor: safePage === totalPages ? 'not-allowed' : 'pointer',
-                        opacity: safePage === totalPages ? 0.4 : 1,
-                      }}
-                    >
-                      Next ›
-                    </button>
-                    <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '6px' }}>
-                      {pageStart + 1}–{Math.min(pageEnd, filtered.length)} of {filtered.length}
-                    </span>
-                  </div>
-                </>
-              )
-            })()}
-          </div>
+          <StudentsTab />
         )}
-
-      </div>
+        </DashboardProvider>
+      </main>
       </div>
 
       <SessionTimeout />

@@ -1,19 +1,28 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { detectZonesFromImage } from '../lib/detectZones'
 import CardCanvas from './CardCanvas'
 import Panel from './Panel'
+import ConfirmDialog from './ConfirmDialog'
 import {
   CALIBRATED_LAYOUT_FRONT,
   CALIBRATED_LAYOUT_BACK,
-  EST_CHARS,
   VALID_LAYOUT_FIELDS,
-  CARD_WIDTH_MM,
-  CARD_HEIGHT_MM,
+  cardDimensionsMm,
 } from '../lib/layoutConstants'
+import {
+  imagePlacementForZone,
+  isImageField,
+  suggestLayout,
+  textPlacementForZone,
+} from '../lib/layoutMath'
+import { SAMPLE_PHOTO_URL, SAMPLE_QR_URL, SAMPLE_SIGNATURE_URL } from '../lib/previewAssets'
 
 const DISPLAY_W = 260
 
 // Placeholder data for the live preview panel — never real student data.
+// The three asset URLs are bundled sample graphics (see lib/previewAssets):
+// without them CardCanvas silently skips photo, signature and QR, leaving the
+// preview blind for exactly the fields whose size and clipping matter most.
 const PREVIEW_STUDENT = {
   full_name: 'Jane K. Doe',
   student_id: 'AMD-2024-0001',
@@ -23,6 +32,9 @@ const PREVIEW_STUDENT = {
   emergency_contact_phone: '+231 77 000 0000',
   issue_date: new Date().toISOString().slice(0, 10),
   valid_until: new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10),
+  photo_url: SAMPLE_PHOTO_URL,
+  signature_url: SAMPLE_SIGNATURE_URL,
+  qr_url: SAMPLE_QR_URL,
 }
 
 // All fields that can be positioned on the card, in display order
@@ -68,85 +80,24 @@ const FONT_OPTIONS = [
   { label: 'Sans', value: 'sans-serif' },
 ]
 
-const IMAGE_FIELDS = ['photo', 'qr', 'signature']
+// One set of movement bounds for every path that can move a field: drag,
+// arrow-key nudge, and the numeric X/Y inputs. These previously disagreed —
+// drag clamped to 92/95 while the inputs accepted 95/95 — so the same value
+// had two ceilings depending on how you set it.
+const MAX_X = 0.92
+const MAX_Y = 0.95
+const COARSE_STEP = 0.01
+const FINE_STEP = 0.002
 
-// Build a proposed layout from detected zones using canonical heuristics.
-// Returns { layout, rows } where rows describe the field→zone mapping for the
-// Auto-Map preview dialog. Mirrors backend/utils/detectZones.js generateSuggestedLayout.
+const clampX = (v) => Math.max(0, Math.min(MAX_X, v))
+const clampY = (v) => Math.max(0, Math.min(MAX_Y, v))
+
+// Build a proposed layout from detected zones. The heuristics themselves live
+// in lib/layoutMath so click-to-snap and Auto-Map resolve a field into a box
+// the same way.
 function buildSuggestedLayout(zones, side, imgSize) {
-  if (!zones || zones.length === 0) return null
   const aspect = imgSize.height / imgSize.width
-  const charEstimates = {
-    full_name: 18, student_id: 16, year_level: 14, position: 20,
-    blood_type: 6, emergency_contact_phone: 12, issue_date: 10, valid_until: 10,
-    signature: 20,
-  }
-  const sorted = zones
-    .map((z, i) => ({ ...z, area: z.width * z.height, zoneIndex: i }))
-    .sort((a, b) => b.area - a.area)
-
-  const layout = {}
-  const rows = []
-  const used = new Set()
-
-  const placeImage = (z, field) => {
-    // Image fields render from their top-left corner in CardCanvas, so store
-    // the box's top-left (not its center) to match drag/snap behavior.
-    layout[field] = {
-      type: 'image',
-      x: z.left,
-      y: z.top,
-      width: z.width,
-      height: z.height,
-    }
-    rows.push({ field, label: FIELD_META[field].label, zone: z.zoneIndex + 1 })
-  }
-  const placeText = (z, field) => {
-    const chars = charEstimates[field] || 12
-    const fontSize = Math.min(z.width / (chars * 0.62), z.height * aspect * 0.8, 0.12)
-    layout[field] = {
-      type: 'text',
-      x: z.left + z.width / 2,
-      y: z.top + z.height / 2,
-      fontSize,
-      textAlign: 'center',
-      maxWidth: z.width,
-      color: '#1A1A1A',
-      bold: field === 'full_name' || field === 'position' || field === 'blood_type',
-    }
-    rows.push({ field, label: FIELD_META[field].label, zone: z.zoneIndex + 1 })
-  }
-
-  if (side === 'front') {
-    if (sorted[0]) { placeImage(sorted[0], 'photo'); used.add(0) }
-    let qrIdx = -1
-    for (let i = 1; i < sorted.length; i++) {
-      const z = sorted[i]
-      const a = z.width / z.height
-      if (a > 0.7 && a < 1.4 && z.top > 0.6 && z.area < 0.1) { qrIdx = i; break }
-    }
-    if (qrIdx >= 0) { placeImage(sorted[qrIdx], 'qr'); used.add(qrIdx) }
-    const textFields = ['full_name', 'student_id', 'position', 'year_level', 'signature']
-    const remaining = sorted
-      .map((z, i) => ({ ...z, origIdx: i }))
-      .filter((z) => !used.has(z.origIdx))
-      .sort((a, b) => a.top - b.top)
-    remaining.forEach((z, i) => {
-      if (textFields[i]) placeText(z, textFields[i])
-    })
-  } else {
-    if (sorted[0]) { placeImage(sorted[0], 'qr'); used.add(0) }
-    const textFields = ['blood_type', 'emergency_contact_phone', 'issue_date', 'valid_until']
-    const remaining = sorted
-      .map((z, i) => ({ ...z, origIdx: i }))
-      .filter((z) => !used.has(z.origIdx))
-      .sort((a, b) => a.top - b.top)
-    remaining.forEach((z, i) => {
-      if (textFields[i]) placeText(z, textFields[i])
-    })
-  }
-
-  return { layout, rows }
+  return suggestLayout(zones, side, aspect, (field) => FIELD_META[field]?.label || field)
 }
 
 export default function LayoutMapper({
@@ -199,14 +150,20 @@ export default function LayoutMapper({
   const [zones, setZones] = useState([])
   const [imgSize, setImgSize] = useState({ width: 590, height: 1004 })
   const [zonesLoading, setZonesLoading] = useState(false)
+  const [zonesError, setZonesError] = useState(null) // 'load' | 'detect' | null
   const [activeZone, setActiveZone] = useState(null)
   const [autoMap, setAutoMap] = useState(null) // { side, layout, rows }
+  // Which side(s) hold edits that have not been saved yet.
+  const [dirty, setDirty] = useState({ front: false, back: false })
+  // A destructive action staged for confirmation: 'reset' | 'automap' | { switchTo }
+  const [pendingAction, setPendingAction] = useState(null)
   const [fieldSidesOpen, setFieldSidesOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [revertingId, setRevertingId] = useState(null)
   const containerRef = useRef(null)
+  const autoMapDialogRef = useRef(null)
 
   // Editing aids
   const [showGrid, setShowGrid] = useState(false)
@@ -216,9 +173,57 @@ export default function LayoutMapper({
 
   const templateUrl = side === 'front' ? templateUrlFront : templateUrlBack
   const layout = side === 'front' ? frontLayout : backLayout
-  const setLayout = side === 'front' ? setFrontLayout : setBackLayout
+  const setLayoutState = side === 'front' ? setFrontLayout : setBackLayout
+  // Every edit routes through here so the side is flagged dirty. Without this
+  // an admin could nudge for twenty minutes and lose all of it to Reset, a
+  // side switch, or a tab change with no warning — version history only ever
+  // holds saved states.
+  const setLayout = useCallback(
+    (updater) => {
+      setLayoutState(updater)
+      setDirty((prev) => (prev[side] ? prev : { ...prev, [side]: true }))
+    },
+    [setLayoutState, side],
+  )
   const defaultLayout = side === 'front' ? CALIBRATED_LAYOUT_FRONT : CALIBRATED_LAYOUT_BACK
   const resolvedSuggested = side === 'front' ? suggestedLayoutFront : suggestedLayoutBack
+  const hasUnsaved = dirty.front || dirty.back
+
+  // Physical card size derived from the template's own aspect ratio, so the mm
+  // readouts stay true whether the template is portrait (LMSA's production
+  // card) or landscape. Hardcoding one orientation made every measurement in
+  // the property panel wrong by a factor of ~1.59.
+  const { widthMm, heightMm } = useMemo(() => cardDimensionsMm(imgSize), [imgSize])
+
+  // Auto-Map is a modal: it takes focus on open and closes on Escape, so a
+  // keyboard admin is not trapped behind an overlay they cannot dismiss.
+  useEffect(() => {
+    if (!autoMap) return undefined
+    const previousActive = document.activeElement
+    window.setTimeout(() => autoMapDialogRef.current?.focus(), 0)
+    function onKeyDown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setAutoMap(null)
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      if (previousActive && typeof previousActive.focus === 'function') previousActive.focus()
+    }
+  }, [autoMap])
+
+  // Warn before a browser navigation/refresh discards unsaved layout work.
+  useEffect(() => {
+    if (!hasUnsaved) return undefined
+    function onBeforeUnload(event) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [hasUnsaved])
 
   // Re-init field sides once from the persisted prop (when it first arrives or
   // on mount). After that, local state is authoritative so a stale server echo
@@ -272,6 +277,7 @@ export default function LayoutMapper({
     let cancelled = false
     setZones([])
     setActiveZone(null)
+    setZonesError(null)
     if (!templateUrl) return undefined
     setZonesLoading(true)
     const img = new Image()
@@ -283,15 +289,23 @@ export default function LayoutMapper({
           setZones(res.zones)
           setImgSize({ width: res.width, height: res.height })
         })
-        .catch(() => {
-          /* detection failed — fields can still be dragged manually */
+        .catch((err) => {
+          // "we could not read your template" and "your template has no boxes"
+          // are different problems with different fixes; reporting the first
+          // as the second sends admins off re-exporting artwork to work
+          // around a missing CORS header.
+          if (cancelled) return
+          console.warn('[LayoutMapper] zone detection failed:', err?.message)
+          setZonesError('detect')
         })
         .finally(() => {
           if (!cancelled) setZonesLoading(false)
         })
     }
     img.onerror = () => {
-      if (!cancelled) setZonesLoading(false)
+      if (cancelled) return
+      setZonesLoading(false)
+      setZonesError('load')
     }
     img.src = templateUrl
     return () => {
@@ -299,13 +313,17 @@ export default function LayoutMapper({
     }
   }, [templateUrl])
 
-  // Fields assigned to the current side
+  // Fields assigned to the current side. A field set to 'none' matches
+  // neither side, so it drops out of the canvas, the legend, the snap-to-box
+  // list, and the property panel without any further filtering.
   const sideFields = LAYOUT_FIELD_ORDER.filter(
     (f) => fieldSides[f] === side || fieldSides[f] === 'both',
   )
   const activeFields = sideFields.filter(
     (k) => k === 'qr' || enabledFields?.[k]?.enabled !== false,
   )
+  // Fields the admin has explicitly taken off the card, for the summary line.
+  const offFields = LAYOUT_FIELD_ORDER.filter((f) => fieldSides[f] === 'none')
 
   // ── Drag ──
   function startDrag(e, field) {
@@ -339,8 +357,8 @@ export default function LayoutMapper({
         ...prev,
         [dragging.field]: {
           ...prev[dragging.field],
-          x: Math.max(0, Math.min(0.92, nx)),
-          y: Math.max(0, Math.min(0.95, ny)),
+          x: clampX(nx),
+          y: clampY(ny),
         },
       }))
     },
@@ -363,17 +381,20 @@ export default function LayoutMapper({
     setLayout((prev) => ({ ...prev, [field]: { ...prev[field], [key]: value } }))
   }
 
-  // ── Nudge a field by a small step (snaps to grid when enabled) ──
-  function nudge(field, dx, dy) {
-    const step = snapGrid ? GRID_STEP : 0.01
+  // ── Nudge a field by a step (snaps to grid when enabled, fine with Shift) ──
+  // Fine is 0.2% ≈ 0.11mm horizontally on the production card, so an admin can
+  // close the last hair of a misalignment instead of overshooting by a whole
+  // percent in each direction.
+  function nudge(field, dx, dy, fine = false) {
+    const step = fine ? FINE_STEP : snapGrid ? GRID_STEP : COARSE_STEP
     setLayout((prev) => {
       const cur = prev[field] || {}
       return {
         ...prev,
         [field]: {
           ...cur,
-          x: Math.max(0, Math.min(0.92, (cur.x ?? 0) + dx * step)),
-          y: Math.max(0, Math.min(0.95, (cur.y ?? 0) + dy * step)),
+          x: clampX((cur.x ?? 0) + dx * step),
+          y: clampY((cur.y ?? 0) + dy * step),
         },
       }
     })
@@ -396,7 +417,7 @@ export default function LayoutMapper({
     if (!move) return
     event.preventDefault()
     setSelected(field)
-    nudge(field, move[0], move[1])
+    nudge(field, move[0], move[1], event.shiftKey)
   }
 
   function handleZoneKeyDown(event, index) {
@@ -433,13 +454,21 @@ export default function LayoutMapper({
       if (templateUrlFront) payload.front = cleanLayout(frontLayout)
       if (templateUrlBack) payload.back = cleanLayout(backLayout)
       await onSave(payload)
-      setMsg({ ok: true, text: '✓ Layout saved — live for students now.' })
+      // Only the sides actually sent are clean now.
+      setDirty((prev) => ({
+        front: templateUrlFront ? false : prev.front,
+        back: templateUrlBack ? false : prev.back,
+      }))
+      setMsg({ ok: true, text: 'Layout saved — live for students now.' })
       if (historyOpen) loadHistory()
-    } catch {
-      setMsg({ ok: false, text: 'Failed to save layout.' })
+    } catch (err) {
+      // Surface the server's reason instead of collapsing auth, validation and
+      // network failures into one unactionable sentence.
+      const detail = err?.message && err.message !== 'Save failed' ? ` ${err.message}` : ''
+      setMsg({ ok: false, text: `Failed to save layout.${detail} Your changes are still here — try again.` })
     } finally {
       setSaving(false)
-      setTimeout(() => setMsg(null), 2500)
+      setTimeout(() => setMsg(null), 6000)
     }
   }
 
@@ -467,47 +496,34 @@ export default function LayoutMapper({
       const { side: revertedSide, value } = await onRevertLayout(entry.id)
       if (revertedSide === 'front') setFrontLayout({ ...CALIBRATED_LAYOUT_FRONT, ...value })
       else setBackLayout({ ...CALIBRATED_LAYOUT_BACK, ...value })
-      setMsg({ ok: true, text: `✓ Reverted to ${new Date(entry.created_at).toLocaleString()}` })
+      // A revert persists server-side, so that side is clean again.
+      setDirty((prev) => ({ ...prev, [revertedSide === 'front' ? 'front' : 'back']: false }))
+      setMsg({ ok: true, text: `Reverted to ${new Date(entry.created_at).toLocaleString()}` })
       loadHistory()
-    } catch {
-      setMsg({ ok: false, text: 'Failed to revert.' })
+    } catch (err) {
+      const detail = err?.message && err.message !== 'Revert failed' ? ` ${err.message}` : ''
+      setMsg({ ok: false, text: `Failed to revert.${detail}` })
     } finally {
       setRevertingId(null)
-      setTimeout(() => setMsg(null), 2500)
+      setTimeout(() => setMsg(null), 6000)
     }
   }
 
   // ── Snap a field into a detected template box ──
   function snapFieldToZone(field, zone) {
-    const isImage = IMAGE_FIELDS.includes(field)
-    if (isImage) {
+    if (isImageField(field)) {
       setLayout((prev) => ({
         ...prev,
-        [field]: {
-          ...prev[field],
-          type: 'image',
-          x: zone.left,
-          y: zone.top,
-          width: zone.width,
-          height: zone.height,
-        },
+        [field]: { ...prev[field], ...imagePlacementForZone(zone) },
       }))
       return
     }
     const aspect = imgSize.height / imgSize.width
-    const chars = EST_CHARS[field] || 12
-    const fontSize = Math.min(zone.width / (chars * 0.62), zone.height * aspect * 0.8, 0.12)
-    const y = zone.top + zone.height / 2
     setLayout((prev) => ({
       ...prev,
       [field]: {
         ...prev[field],
-        type: 'text',
-        x: zone.left + zone.width / 2,
-        y,
-        fontSize,
-        textAlign: 'center',
-        maxWidth: zone.width,
+        ...textPlacementForZone(zone, field, aspect),
         color: prev[field]?.color || '#1A1A1A',
         bold: prev[field]?.bold ?? false,
       },
@@ -516,9 +532,21 @@ export default function LayoutMapper({
 
   // ── Field-side assignment ──
   function assignSide(field, newSide) {
+    // QR verification is a product guarantee — /qr/:studentId depends on the
+    // code being physically on the card — so the QR may move sides but may
+    // not be switched off. The server rejects this too.
+    if (field === 'qr' && newSide === 'none') {
+      setMsg({
+        ok: false,
+        text: 'The QR code cannot be removed from the card — public verification depends on it.',
+      })
+      setTimeout(() => setMsg(null), 6000)
+      return
+    }
     const next = { ...fieldSides, [field]: newSide }
     setFieldSides(next)
-    // Deselect if the field no longer belongs to this side
+    // Deselect if the field no longer belongs to this side (including 'none',
+    // where it belongs to no side at all).
     if (selected === field && newSide !== 'both' && newSide !== side) setSelected(null)
     if (onSaveFieldSides) onSaveFieldSides(next)
   }
@@ -542,11 +570,34 @@ export default function LayoutMapper({
       }
     }
     if (!proposed) {
-      setMsg({ ok: false, text: 'No suggested layout available. Detect zones first or upload a template.' })
-      setTimeout(() => setMsg(null), 2500)
+      setMsg({
+        ok: false,
+        text:
+          zonesError
+            ? 'No suggested layout available — the template could not be scanned. See the note under the card.'
+            : 'No suggested layout available. Upload a template with printed field boxes first.',
+      })
+      setTimeout(() => setMsg(null), 6000)
       return
     }
-    setAutoMap({ side, layout: proposed, rows })
+
+    // Never propose a position for a field the admin has taken off the card,
+    // or one that belongs to the other side.
+    const placeable = new Set(activeFields)
+    const filtered = Object.fromEntries(
+      Object.entries(proposed).filter(([field]) => placeable.has(field)),
+    )
+    const filteredRows = rows.filter((r) => placeable.has(r.field))
+    if (Object.keys(filtered).length === 0) {
+      setMsg({
+        ok: false,
+        text: `Every field the boxes matched is either on the other side or set to "Not printed", so there is nothing to map on the ${side}.`,
+      })
+      setTimeout(() => setMsg(null), 6000)
+      return
+    }
+
+    setAutoMap({ side, layout: filtered, rows: filteredRows })
   }
 
   function applyAutoMap() {
@@ -560,11 +611,23 @@ export default function LayoutMapper({
   const sel = selected ? layout[selected] : null
   const selMeta = selected ? FIELD_META[selected] : null
 
+  // Both sides' layouts live in state simultaneously, so switching sides keeps
+  // unsaved edits — only the stale status message needs clearing.
   function switchSide(next) {
     setSide(next)
     setSelected(null)
     setActiveZone(null)
     setAutoMap(null)
+    setMsg(null)
+  }
+
+  function confirmReset() {
+    setLayoutState({ ...defaultLayout })
+    setDirty((prev) => ({ ...prev, [side]: true }))
+    setSelected(null)
+    setPendingAction(null)
+    setMsg({ ok: true, text: `${side === 'front' ? 'Front' : 'Back'} layout reset to the calibrated default. Save to make it live.` })
+    setTimeout(() => setMsg(null), 6000)
   }
 
   return (
@@ -573,16 +636,28 @@ export default function LayoutMapper({
       <div className="layout-toolbar">
         <div className="layout-side-toggle">
           <button
+            type="button"
             className={`mode-btn ${side === 'front' ? 'active' : ''}`}
             onClick={() => switchSide('front')}
+            aria-pressed={side === 'front'}
           >
-            🎨 Front
+            Front
+            {dirty.front && (
+              <span className="layout-dirty-dot" title="Unsaved changes on the front" aria-hidden="true" />
+            )}
+            {dirty.front && <span className="sr-only"> — unsaved changes</span>}
           </button>
           <button
+            type="button"
             className={`mode-btn ${side === 'back' ? 'active' : ''}`}
             onClick={() => switchSide('back')}
+            aria-pressed={side === 'back'}
           >
-            🔙 Back
+            Back
+            {dirty.back && (
+              <span className="layout-dirty-dot" title="Unsaved changes on the back" aria-hidden="true" />
+            )}
+            {dirty.back && <span className="sr-only"> — unsaved changes</span>}
           </button>
         </div>
         <span
@@ -592,29 +667,37 @@ export default function LayoutMapper({
           {side === 'front' ? templateNameFront || 'Front template' : templateNameBack || 'Back template'}
         </span>
         <div className="layout-actions">
-          <button className="btn-outline" onClick={openAutoMap}>
-            ✨ Auto-Map
+          {hasUnsaved && (
+            <span className="layout-unsaved-note">
+              Unsaved changes
+            </span>
+          )}
+          <button type="button" className="btn-outline" onClick={openAutoMap}>
+            Auto-Map
           </button>
-          <button
-            className="btn-outline"
-            onClick={() => {
-              setLayout({ ...defaultLayout })
-              setSelected(null)
-            }}
-          >
+          <button type="button" className="btn-outline" onClick={() => setPendingAction('reset')}>
             Reset
           </button>
-          <button className="btn-gold" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+          <button
+            type="button"
+            className={`btn-gold${hasUnsaved ? ' btn-gold--attention' : ''}`}
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? 'Saving…' : hasUnsaved ? 'Save changes' : 'Save'}
           </button>
         </div>
       </div>
 
-      {msg && (
-        <div className={msg.ok ? 'success-box' : 'error-box'} style={{ fontSize: '12px' }}>
-          {msg.text}
-        </div>
-      )}
+      {/* Status is announced, not just shown: the banner clears itself, and a
+          screen-reader admin would otherwise never learn a save failed. */}
+      <div aria-live="polite" role="status">
+        {msg && (
+          <div className={msg.ok ? 'success-box' : 'error-box'} style={{ fontSize: '12px' }}>
+            {msg.text}
+          </div>
+        )}
+      </div>
 
       <div className="layout-columns">
         {/* ── Left: template editor + its property panel ── */}
@@ -673,15 +756,18 @@ export default function LayoutMapper({
           </p>
 
           <p
+            aria-live="polite"
             style={{
               fontSize: '11px',
               lineHeight: '1.5',
               marginBottom: '8px',
               color: zonesLoading
                 ? 'var(--muted)'
-                : zones.length > 0
-                  ? 'var(--gold)'
-                  : '#B45309',
+                : zonesError
+                  ? '#B42318'
+                  : zones.length > 0
+                    ? 'var(--gold)'
+                    : '#B45309',
               width: '100%',
               maxWidth: `${DISPLAY_W * zoom}px`,
               overflowWrap: 'break-word',
@@ -689,9 +775,13 @@ export default function LayoutMapper({
           >
             {zonesLoading
               ? 'Scanning the template for field boxes…'
-              : zones.length > 0
-                ? `Detected ${zones.length} template box${zones.length === 1 ? '' : 'es'}. Click a blue box, then choose a field to snap it in place.`
-                : 'No field boxes detected. Drag each field to its spot — text centers itself on the drop point.'}
+              : zonesError === 'load'
+                ? 'Could not read the template image, so it was not scanned for field boxes. This is usually a storage permission (CORS) problem rather than a problem with the artwork. You can still place every field by dragging.'
+                : zonesError === 'detect'
+                  ? 'The template loaded but could not be scanned for field boxes. You can still place every field by dragging — nothing is blocked.'
+                  : zones.length > 0
+                    ? `Detected ${zones.length} template box${zones.length === 1 ? '' : 'es'}. Click a blue box, then choose a field to snap it in place.`
+                    : 'Scanned this template and found no printed field boxes. Drag each field to its spot — text centers itself on the drop point.'}
           </p>
 
           <div
@@ -753,7 +843,7 @@ export default function LayoutMapper({
                 tabIndex={0}
                 className="layout-chip-focus"
                 aria-pressed={activeZone === i}
-                aria-label={`Template box ${i + 1}. Press Enter to assign a field.`}
+                aria-label={`Template box ${i + 1}: ${(z.width * widthMm).toFixed(0)} by ${(z.height * heightMm).toFixed(0)} millimetres, ${(z.left * widthMm).toFixed(0)} millimetres from the left and ${(z.top * heightMm).toFixed(0)} from the top. Press Enter to assign a field to it.`}
                 onKeyDown={(e) => handleZoneKeyDown(e, i)}
                 onPointerDown={(e) => {
                   e.stopPropagation()
@@ -775,7 +865,7 @@ export default function LayoutMapper({
                   touchAction: 'none',
                   pointerEvents: 'auto',
                 }}
-                title={`Template box ${i + 1} — click to assign a field`}
+                title={`Template box ${i + 1} — ${(z.width * widthMm).toFixed(0)} × ${(z.height * heightMm).toFixed(0)} mm. Click to assign a field.`}
               />
             ))}
 
@@ -791,7 +881,13 @@ export default function LayoutMapper({
               const chipH = isImg ? pos.height : (pos.fontSize || 0.04) / aspect
               const anchorLeft =
                 isImg || align === 'left' ? pos.x : align === 'right' ? pos.x - chipW : pos.x - chipW / 2
-              const anchorTop = isImg || align !== 'center' ? pos.y : pos.y - chipH / 2
+              // CardCanvas draws every text field with textBaseline 'middle',
+              // so pos.y is the vertical CENTER of the glyph box for all three
+              // alignments — textAlign only affects the horizontal anchor
+              // above. Treating pos.y as the chip's top for left/right-aligned
+              // text (the default alignment) drew those chips half a
+              // line-height below where the card actually prints them.
+              const anchorTop = isImg ? pos.y : pos.y - chipH / 2
 
               return (
                 <div
@@ -800,7 +896,7 @@ export default function LayoutMapper({
                   tabIndex={0}
                   className="layout-chip-focus"
                   aria-pressed={isSel}
-                  aria-label={`${label} field. Drag with pointer or use arrow keys to nudge.`}
+                  aria-label={`${label} field at ${(pos.x * widthMm).toFixed(1)} millimetres from the left, ${(pos.y * heightMm).toFixed(1)} from the top. Drag with the pointer, or use arrow keys to nudge and Shift with an arrow key for a fine step.`}
                   onKeyDown={(e) => handleFieldKeyDown(e, field)}
                   onPointerDown={(e) => startDrag(e, field)}
                   style={{
@@ -812,8 +908,16 @@ export default function LayoutMapper({
                     minWidth: isImg ? undefined : '34px',
                     background: bg + 'CC',
                     border: `${isSel ? 2 : 1}px ${isSel ? 'solid' : 'dashed'} ${color}`,
+                    // CardCanvas traces a CIRCULAR radius of
+                    // borderRadius × cardWidth px. A CSS percentage resolves
+                    // per-axis and draws an ELLIPSE on any non-square box, so
+                    // the editor showed a different curve than it printed.
+                    // Same pixel basis, same clamp (half the shorter side).
                     borderRadius: isImg
-                      ? `${Math.min((pos.borderRadius || 0) / Math.min(pos.width, pos.height), 0.5) * 100}%`
+                      ? `${Math.min(
+                          (pos.borderRadius || 0) * DISPLAY_W * zoom,
+                          (Math.min(pos.width * DISPLAY_W, pos.height * displayH) * zoom) / 2,
+                        )}px`
                       : '3px',
                     cursor: 'grab',
                     display: 'flex',
@@ -869,7 +973,7 @@ export default function LayoutMapper({
         <div className="layout-panel-col" style={{ flex: 1, minWidth: '200px' }}>
           {/* Field-side assignment */}
           <Panel
-            icon="🧩"
+            icon="◫"
             title="Field sides"
             collapsible
             open={fieldSidesOpen}
@@ -878,39 +982,67 @@ export default function LayoutMapper({
             {fieldSidesOpen && (
               <>
                 <p style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px', lineHeight: '1.5' }}>
-                  Choose which side each field is printed on.
+                  Choose which side each field is printed on. <strong>Not printed</strong> keeps the
+                  field in the student&rsquo;s record and in the QR code, but leaves it off the card
+                  entirely.
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {LAYOUT_FIELD_ORDER.map((f) => (
-                    <div
-                      key={f}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div
-                          style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '2px',
-                            background: FIELD_META[f].color,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <span style={{ fontSize: '11px', color: 'var(--text)' }}>{FIELD_META[f].label}</span>
-                      </div>
-                      <select
-                        className="field-input"
-                        value={fieldSides[f] || 'front'}
-                        onChange={(e) => assignSide(f, e.target.value)}
-                        style={{ fontSize: '11px', padding: '4px 6px', flexShrink: 0 }}
+                  {LAYOUT_FIELD_ORDER.map((f) => {
+                    const value = fieldSides[f] || 'front'
+                    const isOff = value === 'none'
+                    const selectId = `field-side-${f}`
+                    return (
+                      <div
+                        key={f}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}
                       >
-                        <option value="front">Front</option>
-                        <option value="back">Back</option>
-                        <option value="both">Both</option>
-                      </select>
-                    </div>
-                  ))}
+                        <label
+                          htmlFor={selectId}
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}
+                        >
+                          <span
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '2px',
+                              background: isOff ? 'transparent' : FIELD_META[f].color,
+                              border: isOff ? `1px dashed ${FIELD_META[f].color}` : 'none',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              color: isOff ? 'var(--muted)' : 'var(--text)',
+                            }}
+                          >
+                            {FIELD_META[f].label}
+                          </span>
+                        </label>
+                        <select
+                          id={selectId}
+                          className="field-input"
+                          value={value}
+                          onChange={(e) => assignSide(f, e.target.value)}
+                          style={{ fontSize: '11px', padding: '4px 6px', flexShrink: 0 }}
+                        >
+                          <option value="front">Front</option>
+                          <option value="back">Back</option>
+                          <option value="both">Both</option>
+                          {/* The QR must stay on the card: /qr/:studentId
+                              verification depends on it being scannable. */}
+                          {f !== 'qr' && <option value="none">Not printed</option>}
+                        </select>
+                      </div>
+                    )
+                  })}
                 </div>
+                {offFields.length > 0 && (
+                  <p className="layout-off-summary">
+                    Not printed on the card: {offFields.map((f) => FIELD_META[f].label).join(', ')}.
+                    {' '}Still stored on the student record.
+                  </p>
+                )}
               </>
             )}
           </Panel>
@@ -918,7 +1050,7 @@ export default function LayoutMapper({
           {/* Version history */}
           {onLoadLayoutHistory && (
             <Panel
-              icon="🕑"
+              icon="↺"
               title="Version history"
               collapsible
               open={historyOpen}
@@ -976,7 +1108,7 @@ export default function LayoutMapper({
           )}
 
           {activeZone !== null && zones[activeZone] && (
-            <Panel icon="📐" title={`Snap to template box #${activeZone + 1}`}>
+            <Panel icon="⌗" title={`Snap to template box #${activeZone + 1}`}>
               <div
                 style={{
                   fontSize: '12px',
@@ -1014,7 +1146,7 @@ export default function LayoutMapper({
           )}
 
           {sel && selMeta ? (
-            <Panel icon="⚙️" title={selMeta.label}>
+            <Panel icon="◉" title={selMeta.label}>
               <div
                 style={{
                   fontSize: '11px',
@@ -1038,11 +1170,16 @@ export default function LayoutMapper({
               </div>
               <div className="layout-nudge">
                 <span className="layout-nudge-label">Nudge</span>
-                <button type="button" className="nudge-btn" onClick={() => nudge(selected, 0, -1)} aria-label="Nudge up">↑</button>
-                <button type="button" className="nudge-btn" onClick={() => nudge(selected, -1, 0)} aria-label="Nudge left">←</button>
-                <button type="button" className="nudge-btn" onClick={() => nudge(selected, 1, 0)} aria-label="Nudge right">→</button>
-                <button type="button" className="nudge-btn" onClick={() => nudge(selected, 0, 1)} aria-label="Nudge down">↓</button>
+                <button type="button" className="nudge-btn" onClick={(e) => nudge(selected, 0, -1, e.shiftKey)} aria-label="Nudge up">↑</button>
+                <button type="button" className="nudge-btn" onClick={(e) => nudge(selected, -1, 0, e.shiftKey)} aria-label="Nudge left">←</button>
+                <button type="button" className="nudge-btn" onClick={(e) => nudge(selected, 1, 0, e.shiftKey)} aria-label="Nudge right">→</button>
+                <button type="button" className="nudge-btn" onClick={(e) => nudge(selected, 0, 1, e.shiftKey)} aria-label="Nudge down">↓</button>
               </div>
+              <p className="layout-nudge-hint">
+                Hold Shift for a fine step ({(FINE_STEP * widthMm).toFixed(2)} mm) instead of{' '}
+                {((snapGrid ? GRID_STEP : COARSE_STEP) * widthMm).toFixed(2)} mm. Arrow keys work on a
+                selected field too.
+              </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div className="field-group">
@@ -1052,13 +1189,13 @@ export default function LayoutMapper({
                     className="field-input"
                     style={{ fontSize: '12px', padding: '5px 8px' }}
                     min="0"
-                    max="95"
+                    max={MAX_X * 100}
                     step="0.1"
                     value={Math.round(sel.x * 1000) / 10}
-                    onChange={(e) => set(selected, 'x', parseFloat(e.target.value) / 100)}
+                    onChange={(e) => set(selected, 'x', clampX(parseFloat(e.target.value) / 100))}
                   />
                   <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
-                    {(sel.x * CARD_WIDTH_MM).toFixed(1)} mm from left
+                    {(sel.x * widthMm).toFixed(1)} mm from left
                   </div>
                 </div>
 
@@ -1069,13 +1206,13 @@ export default function LayoutMapper({
                     className="field-input"
                     style={{ fontSize: '12px', padding: '5px 8px' }}
                     min="0"
-                    max="95"
+                    max={MAX_Y * 100}
                     step="0.1"
                     value={Math.round(sel.y * 1000) / 10}
-                    onChange={(e) => set(selected, 'y', parseFloat(e.target.value) / 100)}
+                    onChange={(e) => set(selected, 'y', clampY(parseFloat(e.target.value) / 100))}
                   />
                   <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
-                    {(sel.y * CARD_HEIGHT_MM).toFixed(1)} mm from top
+                    {(sel.y * heightMm).toFixed(1)} mm from top
                   </div>
                 </div>
 
@@ -1094,7 +1231,7 @@ export default function LayoutMapper({
                         onChange={(e) => set(selected, 'width', parseFloat(e.target.value) / 100)}
                       />
                       <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
-                        {(sel.width * CARD_WIDTH_MM).toFixed(1)} mm wide
+                        {(sel.width * widthMm).toFixed(1)} mm wide
                       </div>
                     </div>
                     <div className="field-group">
@@ -1110,7 +1247,7 @@ export default function LayoutMapper({
                         onChange={(e) => set(selected, 'height', parseFloat(e.target.value) / 100)}
                       />
                       <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
-                        {(sel.height * CARD_HEIGHT_MM).toFixed(1)} mm tall
+                        {(sel.height * heightMm).toFixed(1)} mm tall
                       </div>
                     </div>
                     <div className="field-group" style={{ gridColumn: '1 / -1' }}>
@@ -1127,7 +1264,7 @@ export default function LayoutMapper({
                       />
                       <div style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>
                         {selected === 'qr'
-                          ? 'Rounds the photo/image corners to match a rounded template frame. Keep this at 0 for QR — rounding the corners can reduce scan reliability.'
+                          ? 'Keep this at 0 for the QR code — rounding its corners can reduce scan reliability.'
                           : "Rounds the image's corners to match a rounded template frame — 0 keeps square corners, higher values round more."}
                       </div>
                     </div>
@@ -1232,7 +1369,7 @@ export default function LayoutMapper({
               </div>
             </Panel>
           ) : (
-            <Panel icon="👆" title="No field selected">
+            <Panel icon="◇" title="No field selected">
               <div style={{ fontSize: '12px', color: 'var(--hint)', lineHeight: '1.6' }}>
                 Click a colored box on the card to select it, then adjust its position, size, and text
                 style here. Use the Front/Back tabs above to edit each side.
@@ -1277,10 +1414,12 @@ export default function LayoutMapper({
           style={{ zIndex: 1000, background: 'rgba(0,0,0,0.45)' }}
         >
           <div
+            ref={autoMapDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="automap-dialog-title"
             aria-describedby="automap-dialog-desc"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
             style={{
               background: 'var(--surface)',
@@ -1297,7 +1436,9 @@ export default function LayoutMapper({
               Auto-Map {autoMap.side} layout
             </div>
             <p id="automap-dialog-desc" style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px', lineHeight: '1.5' }}>
-              Proposed field positions from detected template boxes. Confirm to apply, or close to keep your current layout.
+              Proposed field positions from detected template boxes. Applying overwrites the current
+              position of every field listed below on the {autoMap.side} side; fields not listed keep
+              their positions. Nothing is saved until you press Save.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px' }}>
               {autoMap.rows.length === 0 && (
@@ -1335,6 +1476,27 @@ export default function LayoutMapper({
           </div>
         </div>
       )}
+
+      {/* ── Reset confirmation ── Reset discards every position on this side,
+          and version history only holds saved states, so an unsaved session's
+          work would be unrecoverable. ── */}
+      <ConfirmDialog
+        open={pendingAction === 'reset'}
+        title={`Reset the ${side} layout?`}
+        confirmLabel="Reset layout"
+        cancelLabel="Keep my layout"
+        onConfirm={confirmReset}
+        onCancel={() => setPendingAction(null)}
+      >
+        <p>
+          Every field position on the <strong>{side}</strong> side goes back to the calibrated
+          default.
+          {dirty[side]
+            ? ' This side has unsaved changes, and they cannot be recovered afterwards — version history only holds layouts that were saved.'
+            : ' The last saved version stays in version history, so you can revert to it.'}
+        </p>
+        <p>Nothing changes for students until you press Save.</p>
+      </ConfirmDialog>
     </div>
   )
 }

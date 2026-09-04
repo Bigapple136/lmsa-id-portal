@@ -88,6 +88,12 @@ export default function App() {
     <ErrorBoundary>
       <ToastProvider>
         <BrowserRouter>
+          {/* Lets keyboard and screen-reader users jump the navbar straight to
+              the page content. Every page marks its content region with
+              id="main-content". */}
+          <a className="skip-link" href="#main-content">
+            Skip to main content
+          </a>
           <Suspense fallback={<RouteLoadingFallback />}>
             <Routes>
               <Route path="/" element={<LandingPage />} />

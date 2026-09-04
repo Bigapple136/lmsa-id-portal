@@ -74,6 +74,24 @@ function checkFieldsConfig(value) {
   return null
 }
 
+// Which side of the card each field prints on.
+//   front / back — printed on that side only
+//   both         — printed on both sides
+//   none         — not printed at all; the field is kept in the record and in
+//                  the QR payload, it just has no place on the physical card
+const FIELD_SIDE_VALUES = ['front', 'back', 'both', 'none']
+
+function checkFieldSidesConfig(value) {
+  const valueErr = isObject(value)
+  if (valueErr) return valueErr
+  for (const [key, side] of Object.entries(value)) {
+    if (typeof side !== 'string' || !FIELD_SIDE_VALUES.includes(side)) {
+      return `Field "${key}" side must be one of: ${FIELD_SIDE_VALUES.join(', ')}.`
+    }
+  }
+  return null
+}
+
 function checkLayoutConfig(value) {
   const valueErr = isObject(value)
   if (valueErr) return valueErr
@@ -108,8 +126,10 @@ module.exports = {
   isBoolean,
   isObject,
   checkFieldsConfig,
+  checkFieldSidesConfig,
   checkLayoutConfig,
   firstError,
+  FIELD_SIDE_VALUES,
   MAX_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
   ALLOWED_YEARS,

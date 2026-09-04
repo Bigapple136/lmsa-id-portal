@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import Footer from '../components/Footer'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const STATUS_DETAILS = {
   approved: {
@@ -45,6 +46,7 @@ function StatusSeal({ tone = 'info' }) {
 }
 
 export default function StudentStatusPage() {
+  useDocumentTitle('Correction status')
   const [params] = useSearchParams()
   const token = params.get('token')
   const [status, setStatus] = useState('loading')
@@ -85,7 +87,7 @@ export default function StudentStatusPage() {
   return (
     <div className="page-outer">
       <Navbar showLogin={false} />
-      <main className="public-status-shell">
+      <main className="public-status-shell" id="main-content">
         <section className="public-status-card" aria-live="polite">
           {status === 'loading' ? (
             <>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Footer from '../components/Footer'
 import { apiFetch } from '../lib/api'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
@@ -47,8 +48,49 @@ const INITIAL_FORM = {
   current_address: '',
 }
 
+// INITIAL_FORM ships two prefilled defaults (year_level, nationality), so
+// "has any non-empty value" is true on a pristine form. Dirtiness has to be
+// measured against the starting state, not against emptiness.
+function isFormDirty(form) {
+  return Object.keys(INITIAL_FORM).some(
+    (key) => (form[key] ?? '') !== (INITIAL_FORM[key] ?? ''),
+  )
+}
+
 function isEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+}
+
+const DRAFT_KEY = 'lmsa:submission-draft:v1'
+
+function readDraft() {
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed.form !== 'object' || !parsed.form) return null
+    return parsed
+  } catch {
+    // Private mode, disabled storage, or corrupt JSON — drafts are a
+    // convenience, never a requirement.
+    return null
+  }
+}
+
+function writeDraft(payload) {
+  try {
+    window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(payload))
+  } catch {
+    /* storage unavailable or full — carry on without a draft */
+  }
+}
+
+function clearDraft() {
+  try {
+    window.sessionStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* nothing to clean up */
+  }
 }
 
 function formatServerError(message) {
@@ -57,6 +99,7 @@ function formatServerError(message) {
 }
 
 export default function StudentSubmissionForm() {
+  useDocumentTitle('Submit your details')
   const [enabled, setEnabled] = useState(null)
   const [statusError, setStatusError] = useState(false)
   const [retry, setRetry] = useState(0)
@@ -71,6 +114,54 @@ export default function StudentSubmissionForm() {
   const [fieldsConfig, setFieldsConfig] = useState(null)
   const [qrFieldsConfig, setQrFieldsConfig] = useState(null)
   const [form, setForm] = useState(INITIAL_FORM)
+  const [draftRestored, setDraftRestored] = useState(false)
+
+  // Draft persistence. This wizard collects up to thirteen fields across four
+  // steps, and students fill it on phones and shared machines — a backgrounded
+  // tab or a stray back gesture used to cost the entire submission, right at
+  // the point where the most work had been invested.
+  //
+  // sessionStorage, not localStorage, on purpose: the draft survives a reload
+  // or an accidental navigation, but a shared browser does not keep the
+  // student's personal details after the tab is closed.
+  useEffect(() => {
+    if (loading || submitted) return
+    const saved = readDraft()
+    if (!saved) return
+    setForm((prev) => ({ ...prev, ...saved.form }))
+    if (typeof saved.step === 'number' && saved.step >= 0 && saved.step < STEPS.length) {
+      setStep(saved.step)
+    }
+    setDraftRestored(true)
+    // Restore once per mount, after the config load settles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
+  useEffect(() => {
+    if (loading || submitted) return
+    // Only persist once the student has actually changed something.
+    if (!isFormDirty(form)) return
+    writeDraft({ form, step })
+  }, [form, step, loading, submitted])
+
+  // Warn before a reload or tab close discards an in-progress submission.
+  useEffect(() => {
+    if (submitted || !isFormDirty(form)) return undefined
+    function onBeforeUnload(event) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [form, submitted])
+
+  function discardDraft() {
+    clearDraft()
+    setForm(INITIAL_FORM)
+    setStep(0)
+    setFieldErrors({})
+    setDraftRestored(false)
+  }
 
   useEffect(() => {
     async function init() {
@@ -258,6 +349,8 @@ export default function StudentSubmissionForm() {
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
+        // The record is with LMSA now; the local draft has served its purpose.
+        clearDraft()
         setSubmitted(true)
       } else {
         setError(formatServerError(data.error))
@@ -269,37 +362,46 @@ export default function StudentSubmissionForm() {
     }
   }
 
+  // `step` on each row powers the per-row Edit link: the review step should
+  // let a student fix a wrong value in place, not force them to walk back
+  // through the wizard hunting for it.
   const reviewRows = [
-    { label: 'Student ID', value: form.student_id || 'Not provided' },
-    { label: 'Full Name', value: form.full_name || 'Not provided' },
-    { label: 'Year / Level', value: form.year_level || 'Not provided' },
-    visibleFields.position && { label: 'Position', value: form.position || 'Not provided' },
-    visibleFields.programme && { label: 'Programme', value: form.programme || 'Not provided' },
-    visibleFields.student_email && { label: 'Email', value: form.student_email || 'Not provided' },
+    { label: 'Student ID', value: form.student_id || 'Not provided', step: 0 },
+    { label: 'Full Name', value: form.full_name || 'Not provided', step: 0 },
+    { label: 'Year / Level', value: form.year_level || 'Not provided', step: 0 },
+    visibleFields.position && { label: 'Position', value: form.position || 'Not provided', step: 0 },
+    visibleFields.programme && { label: 'Programme', value: form.programme || 'Not provided', step: 1 },
+    visibleFields.student_email && { label: 'Email', value: form.student_email || 'Not provided', step: 2 },
     visibleFields.date_of_birth && {
       label: 'Date of Birth',
       value: form.date_of_birth || 'Not provided',
+      step: 2,
     },
     visibleFields.nationality && {
       label: 'Nationality',
       value: form.nationality || 'Not provided',
+      step: 2,
     },
     visibleFields.county_of_origin && {
       label: 'County of Origin',
       value: form.county_of_origin || 'Not provided',
+      step: 2,
     },
     visibleFields.current_address && {
       label: 'Address',
       value: form.current_address || 'Not provided',
+      step: 2,
     },
-    visibleFields.blood_type && { label: 'Blood Type', value: form.blood_type || 'Not provided' },
+    visibleFields.blood_type && { label: 'Blood Type', value: form.blood_type || 'Not provided', step: 2 },
     visibleFields.emergency_contact_name && {
       label: 'Emergency Contact',
       value: form.emergency_contact_name || 'Not provided',
+      step: 2,
     },
     visibleFields.emergency_contact_phone && {
       label: 'Emergency Phone',
       value: form.emergency_contact_phone || 'Not provided',
+      step: 2,
     },
   ].filter(Boolean)
 
@@ -389,6 +491,18 @@ export default function StudentSubmissionForm() {
 
       <div className="submission-wizard-body">
         <div className="submission-wizard-card">
+          {draftRestored && !submitted && (
+            <div className="draft-restored-note" role="status">
+              <span>
+                We restored the details you started earlier on this device. Check them before
+                submitting.
+              </span>
+              <button type="button" className="draft-restored-clear" onClick={discardDraft}>
+                Start over
+              </button>
+            </div>
+          )}
+
           <div className="step-indicator" aria-label="Submission progress">
             {STEPS.map((s, i) => (
               <div
@@ -696,12 +810,24 @@ export default function StudentSubmissionForm() {
                     <div key={row.label} className="review-row">
                       <span className="review-label">{row.label}</span>
                       <span className="review-value">{row.value}</span>
+                      <button
+                        type="button"
+                        className="review-edit"
+                        onClick={() => {
+                          setError('')
+                          setStep(row.step)
+                        }}
+                      >
+                        Edit
+                        <span className="sr-only"> {row.label}</span>
+                      </button>
                     </div>
                   ))}
                 </div>
                 <p className="review-note">
                   Blank optional details are recorded as “Not provided” and can be clarified during
-                  LMSA review.
+                  LMSA review. Once submitted, changing these details needs a correction request or
+                  a visit to the faculty office — so it is worth a second look now.
                 </p>
                 <div className="review-agree">
                   <input
@@ -741,7 +867,7 @@ export default function StudentSubmissionForm() {
                 onClick={doSubmit}
                 disabled={!agreed || submitting}
               >
-                {submitting ? 'Submitting…' : 'Submit details'}
+                {submitting ? 'Submitting…' : 'Submit details to LMSA'}
               </button>
             )}
           </div>
@@ -802,7 +928,7 @@ function SubmissionState({ title, message, tone = 'info', children }) {
   return (
     <div className="submission-page">
       <SubmissionTopbar />
-      <main className="submission-wizard-body">
+      <main className="submission-wizard-body" id="main-content">
         <div className={`submission-state-card submission-state-card--${tone}`} role="status">
           <div className="submission-state-seal" aria-hidden="true">
             <SealIcon tone={tone} />
