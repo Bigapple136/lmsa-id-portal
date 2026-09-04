@@ -2,6 +2,7 @@
 import { Link } from 'react-router-dom'
 import Footer from '../components/Footer'
 import Navbar from '../components/Navbar'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const SERVICES = [
   {
@@ -27,6 +28,7 @@ const SERVICES = [
 ]
 
 export default function AboutPage() {
+  useDocumentTitle('About')
   return (
     <div className="about-wrapper">
       <Navbar showLogin={false} />
@@ -46,7 +48,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <main className="about-body">
+      <main className="about-body" id="main-content">
         <section className="about-section">
           <h2 className="about-section-title">About this portal</h2>
           <p className="about-section-text">

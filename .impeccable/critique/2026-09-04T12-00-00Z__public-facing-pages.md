@@ -3,12 +3,12 @@ target: public-facing pages
 total_score: 29
 max_score: 40
 na_heuristics:
-p0_count: 1
-p1_count: 4
+p0_count: 0
+p1_count: 0
 target_identity: "file:/home/user/lmsa-id-portal/public-facing-pages"
 timestamp: 2026-09-04T12-00-00Z
 slug: public-facing-pages
-closed: false
+closed: true
 ---
 ⚠️ DEGRADED: static review only. `.github/skills/impeccable/scripts/detect.mjs` is absent from this checkout (the hook in `.github/hooks/impeccable.json` no-ops on its `[ ! -f ]` guard), and no Chromium/Playwright/Puppeteer binary is exposed. No screenshots were taken and none are claimed; no detector or overlay evidence. Findings are derived from source plus targeted greps.
 
@@ -165,3 +165,39 @@ Snapshot path: `/home/user/lmsa-id-portal/.impeccable/critique/2026-09-04T12-00-
 2. Should a `rejected` or `pending` student record verify at all, or return the same "not verified" state as a bad signature?
 3. For draft persistence, is `sessionStorage` acceptable given shared-device use, or should drafts be avoided entirely for identity data?
 4. Is `lmsa-id-portal.vercel.app` still the production domain the legal pages should name?
+
+## Resolution — 2026-09-04, follow-up implementation pass
+
+All six items in the recommended fix order are implemented. This snapshot is closed.
+
+| Item | State | What shipped |
+|---|---|---|
+| P0-1 credential validity | **Fixed** | `buildCredentialState()` in `backend/routes/qr.js` classifies `valid` / `expired` / `inactive`. `/verify/:token` returns `verified` (true only when `valid`), `credential_state`, `credential_reason`, and always includes `issue_date` / `valid_until`. `QrViewPage` renders a state-dependent badge, an `role="alert"` note for non-valid states, and an Issued / Valid-until strip. |
+| P1-1 landmarks | **Fixed** | All 10 public page regions are `<main id="main-content">`; `PreviewPage` gained an `sr-only` `<h1>`; a shared `.skip-link` sits in `App.jsx`. |
+| P1-4 document titles | **Fixed** | New `frontend/src/lib/useDocumentTitle.js`, called by all 9 public pages. |
+| P1-2 draft persistence | **Fixed** | `sessionStorage` key `lmsa:submission-draft:v1` (shape `{ form, step }`), restore-on-mount banner with "Start over", `beforeunload` guard, cleared on successful submit. All storage access is try/caught so private mode degrades silently. |
+| P1-3 review-step editing | **Fixed** | Every review row carries a `step` and a `.review-edit` button that jumps back to it; the review note and submit button now state the consequence ("Submit details to LMSA"). |
+| Inline styles | **Fixed** | `PreviewPage.jsx` is down from 31 inline `style={{}}` blocks to **0**; the rules live in `index.css` as named classes. |
+
+### Policy decisions taken
+
+The four targeted questions went unanswered, so the recommended defaults were applied and are recorded here as the shipped behaviour:
+
+1. An expired card **still returns the record**, labelled honestly — a verifier needs to see *what* expired rather than an unexplained refusal.
+2. `pending` and `rejected` records verify as `inactive`; `inactive` takes precedence over `expired`.
+3. Drafts use **`sessionStorage`**, not `localStorage`, so a shared device retains nothing after the tab closes.
+4. The `lmsa-id-portal.vercel.app` domain question remains **open** and untouched; it needs a human answer before the legal pages are edited.
+
+Fail-open note: a missing or unparseable `valid_until`, or an absent `status`, resolves to `valid`. This is deliberate so incomplete records do not read as forgeries, and it is commented as such in the source.
+
+### Verification
+
+- Backend: **55 passed / 5 files** (10 new tests for `buildCredentialState` and the payload shape).
+- Frontend: **82 passed / 13 files** (13 new tests across `QrViewPage.test.jsx` and a new `submissionDraft.test.jsx`).
+- `npx vite build` clean; `npm run lint` **0 errors** (121 pre-existing warnings, unchanged).
+- Still DEGRADED in the same way as the audit above: no detector script and no browser binary in this checkout, so there is no screenshot or overlay evidence. The claims here are source- and test-backed only.
+
+Two bugs were caught by the new tests rather than by review, and are worth recording:
+
+- The draft was being written on a pristine form, because `INITIAL_FORM` ships two prefilled defaults (`year_level`, `nationality`) and the guard tested for "any non-empty value". Replaced with `isFormDirty()`, which compares against the initial state.
+- The extracted `.expiry-banner` base rule was appended *after* the existing `max-width: 600px` override, silently defeating it. The override is now restated after the base rule.

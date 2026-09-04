@@ -202,11 +202,17 @@ describe('QR module — public verification record', () => {
       },
     )
 
+    // issue_date / valid_until are part of what a credential check IS, so they
+    // are always present (null when unset) rather than gated behind the
+    // optional QR-field toggles. Everything else stays allow-listed: note
+    // position, qr_url, admin_notes and the disabled fields are all absent.
     expect(publicRecord).toEqual({
       full_name: 'Ada Test Student',
       student_id: 'AMD-2026-001',
       year_level: '4th Year',
       photo_url: 'https://example.test/photo.jpg',
+      issue_date: null,
+      valid_until: null,
       programme: 'Medicine',
       student_email: 'ada@example.test',
     })
@@ -217,5 +223,81 @@ describe('QR module — init defaults', () => {
   it('exposes the deterministic legacy key id', () => {
     const { LEGACY_KID } = require('../qr-keys')
     expect(LEGACY_KID).toBe('k_legacy')
+  })
+})
+
+describe('buildCredentialState', () => {
+  function load() {
+    return require('../routes/qr').buildCredentialState
+  }
+
+  const future = () => new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10)
+  const past = () => new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
+
+  it('reports an approved, in-date card as valid', () => {
+    expect(load()({ status: 'approved', valid_until: future() })).toEqual({
+      state: 'valid',
+      reason: null,
+    })
+  })
+
+  it('reports an approved card past its validity date as expired', () => {
+    const result = load()({ status: 'approved', valid_until: past() })
+    expect(result.state).toBe('expired')
+    expect(result.reason).toBeTruthy()
+  })
+
+  it('treats the validity date as good through the end of that day', () => {
+    const today = new Date().toISOString().slice(0, 10)
+    expect(load()({ status: 'approved', valid_until: today }).state).toBe('valid')
+  })
+
+  it('reports a non-approved record as inactive regardless of dates', () => {
+    expect(load()({ status: 'pending', valid_until: future() }).state).toBe('inactive')
+    expect(load()({ status: 'rejected', valid_until: future() }).state).toBe('inactive')
+  })
+
+  it('prefers inactive over expired when a record is both', () => {
+    expect(load()({ status: 'rejected', valid_until: past() }).state).toBe('inactive')
+  })
+
+  it('treats a card with no validity date as valid rather than guessing', () => {
+    expect(load()({ status: 'approved', valid_until: null }).state).toBe('valid')
+  })
+
+  it('ignores an unparseable validity date instead of failing closed', () => {
+    expect(load()({ status: 'approved', valid_until: 'not-a-date' }).state).toBe('valid')
+  })
+
+  it('does not require a status field to be present', () => {
+    expect(load()({ valid_until: future() }).state).toBe('valid')
+  })
+})
+
+describe('buildPublicVerificationStudent', () => {
+  it('always exposes the validity dates, independent of QR field toggles', () => {
+    const { buildPublicVerificationStudent } = require('../routes/qr')
+    const record = buildPublicVerificationStudent(
+      {
+        full_name: 'Jane Doe',
+        student_id: 'AMD-1',
+        year_level: '3rd Year',
+        issue_date: '2026-01-05',
+        valid_until: '2027-01-05',
+        blood_type: 'O+',
+      },
+      {}, // every optional QR field disabled
+    )
+    expect(record.issue_date).toBe('2026-01-05')
+    expect(record.valid_until).toBe('2027-01-05')
+    // The optional field stays gated.
+    expect(record.blood_type).toBeUndefined()
+  })
+
+  it('nulls missing dates rather than omitting them', () => {
+    const { buildPublicVerificationStudent } = require('../routes/qr')
+    const record = buildPublicVerificationStudent({ full_name: 'A', student_id: 'B' }, {})
+    expect(record.issue_date).toBeNull()
+    expect(record.valid_until).toBeNull()
   })
 })

@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Footer from '../components/Footer'
 import { apiFetch } from '../lib/api'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const FORM_HELP_ID = 'landing-form-help'
 const FORM_ERROR_ID = 'landing-form-error'
 
 export default function LandingPage() {
+  useDocumentTitle('Look up your ID card')
   const [studentId, setStudentId] = useState('')
   const [fullName, setFullName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -50,7 +52,7 @@ export default function LandingPage() {
 
   return (
     <div className="page-outer">
-      <div className="split-landing">
+      <main className="split-landing" id="main-content">
         <div className="split-brand" aria-label="LMSA and A.M. Dogliotti identity">
           <div className="split-emblem">
             <img
@@ -171,7 +173,7 @@ export default function LandingPage() {
             </form>
           </div>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   )

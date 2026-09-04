@@ -1,11 +1,13 @@
 import Footer from '../components/Footer'
 import Navbar from '../components/Navbar'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 export default function TermsPage() {
+  useDocumentTitle('Terms of Service')
   return (
     <div className="legal-page">
       <Navbar showLogin={false} />
-      <div className="legal-container">
+      <main className="legal-container" id="main-content">
         <div className="legal-brand">
           LMSA ID Portal — Operated by GoldWay Creative Design &amp; Production Services
         </div>
@@ -220,7 +222,7 @@ export default function TermsPage() {
             lmsa-id-portal.vercel.app
           </a>
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   )

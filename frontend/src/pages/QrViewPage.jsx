@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const DETAIL_FIELDS = [
   { key: 'full_name', mark: 'NM', label: 'Full Name', highlight: true },
@@ -19,6 +20,40 @@ const DETAIL_FIELDS = [
   { key: 'county_of_origin', mark: 'CO', label: 'County of Origin' },
   { key: 'current_address', mark: 'AD', label: 'Current Address' },
 ]
+
+// Dates arrive as ISO date strings; render them the way a person reading a
+// printed card would expect, and never silently show "Invalid Date".
+function formatCardDate(value) {
+  if (!value) return null
+  const parsed = new Date(`${String(value).slice(0, 10)}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+// How each credential state presents. The badge is the single most-read
+// element on this page — it is the whole reason a stranger scanned the code —
+// so it states the card's actual standing, not merely that the QR parsed.
+const CREDENTIAL_PRESENTATION = {
+  valid: {
+    tone: 'gold',
+    badge: 'Credential verified',
+    note: null,
+  },
+  expired: {
+    tone: 'error',
+    badge: 'Card expired',
+    note: 'This card is past its validity date. The record below is genuine, but the card should be renewed by LMSA before it is accepted as current.',
+  },
+  inactive: {
+    tone: 'error',
+    badge: 'Card not active',
+    note: 'This student record is not currently active. The QR code is genuine, but the card should not be accepted until LMSA reactivates the record.',
+  },
+}
 
 function getInitials(name = '') {
   return name
@@ -53,7 +88,7 @@ function QrStateShell({ title, message, tone = 'gold', children, live = 'polite'
   return (
     <div className="qr-page">
       <Navbar showLogin={false} />
-      <main className="qr-state-container" aria-live={live}>
+      <main className="qr-state-container" id="main-content" aria-live={live}>
         <div className={`qr-state-card qr-state-card--${tone}`}>
           <div className="qr-state-seal">
             <QrSeal tone={tone} />
@@ -68,11 +103,14 @@ function QrStateShell({ title, message, tone = 'gold', children, live = 'polite'
 }
 
 export default function QrViewPage() {
+  useDocumentTitle('Verify credential')
   const { token } = useParams()
   const [student, setStudent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [isVerified, setIsVerified] = useState(false)
+  const [credentialState, setCredentialState] = useState('valid')
+  const [credentialReason, setCredentialReason] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -82,6 +120,8 @@ export default function QrViewPage() {
       setError('')
       setStudent(null)
       setIsVerified(false)
+      setCredentialState('valid')
+      setCredentialReason('')
 
       try {
         const response = await apiFetch(`/api/qr/verify/${encodeURIComponent(token || '')}`, {
@@ -89,7 +129,10 @@ export default function QrViewPage() {
         })
         const data = await response.json().catch(() => ({}))
 
-        if (!response.ok || !data.verified || !data.student) {
+        // A bad signature or a missing record is a hard failure. An expired
+        // or inactive card is NOT: the server still returns the record so a
+        // verifier can see what expired, and the page says so plainly.
+        if (!response.ok || !data.student) {
           if (!cancelled) {
             setError(data.error || 'This QR credential could not be verified.')
           }
@@ -98,6 +141,8 @@ export default function QrViewPage() {
 
         if (!cancelled) {
           setStudent(data.student)
+          setCredentialState(data.credential_state || (data.verified ? 'valid' : 'inactive'))
+          setCredentialReason(data.credential_reason || '')
           window.setTimeout(() => {
             if (!cancelled) setIsVerified(true)
           }, 300)
@@ -121,6 +166,10 @@ export default function QrViewPage() {
   }, [token])
 
   const detailRows = useMemo(() => DETAIL_FIELDS.filter((row) => student?.[row.key]), [student])
+  const presentation =
+    CREDENTIAL_PRESENTATION[credentialState] || CREDENTIAL_PRESENTATION.inactive
+  const issuedOn = formatCardDate(student?.issue_date)
+  const validUntil = formatCardDate(student?.valid_until)
 
   if (loading) {
     return (
@@ -173,12 +222,20 @@ export default function QrViewPage() {
     <div className="qr-page">
       <Navbar showLogin={false} />
 
-      <main className="qr-container" aria-label="Verified LMSA student credential">
+      <main className="qr-container" id="main-content" aria-label="LMSA student credential">
         {isVerified && (
-          <div className="qr-badge" role="status">
-            <QrSeal />
-            Credential verified
-          </div>
+          <>
+            <div className={`qr-badge qr-badge--${presentation.tone}`} role="status">
+              <QrSeal tone={presentation.tone} />
+              {presentation.badge}
+            </div>
+            {presentation.note && (
+              <p className="qr-credential-note" role="alert">
+                {credentialReason ? `${credentialReason} ` : ''}
+                {presentation.note}
+              </p>
+            )}
+          </>
         )}
 
         <section className="qr-card">
@@ -224,6 +281,24 @@ export default function QrViewPage() {
             <div className="qr-divider-line" />
             <div className="qr-divider-dot" />
             <div className="qr-divider-line" />
+          </div>
+
+          {/* Validity is the fact a verifier came here for, so it sits above
+              the personal details rather than among them. */}
+          <div className={`qr-validity qr-validity--${presentation.tone}`}>
+            <div className="qr-validity-item">
+              <span className="qr-validity-label">Issued</span>
+              <span className="qr-validity-value">{issuedOn || 'Not recorded'}</span>
+            </div>
+            <div className="qr-validity-divider" aria-hidden="true" />
+            <div className="qr-validity-item">
+              <span className="qr-validity-label">
+                {credentialState === 'expired' ? 'Expired' : 'Valid until'}
+              </span>
+              <span className="qr-validity-value qr-validity-value--strong">
+                {validUntil || 'Not recorded'}
+              </span>
+            </div>
           </div>
 
           <div className="qr-details">

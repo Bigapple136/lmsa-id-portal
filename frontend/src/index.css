@@ -3298,7 +3298,23 @@ textarea:focus-visible {
 .submission-form-body .field-input:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgba(8, 127, 140, 0.1); }
 
 .review-grid { gap: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.review-row { min-height: 68px; padding: 16px 18px; background: #fff; border-bottom: 1px solid #edf0f4; }
+.review-row {
+  min-height: 68px;
+  padding: 16px 18px;
+  background: #fff;
+  border-bottom: 1px solid #edf0f4;
+  /* label + value stack in column 1; the Edit action sits right, centred. */
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'label edit'
+    'value edit';
+  align-items: center;
+  column-gap: 12px;
+}
+.review-row .review-label { grid-area: label; align-self: end; }
+.review-row .review-value { grid-area: value; align-self: start; }
+.review-row .review-edit { grid-area: edit; align-self: center; }
 .review-row:nth-child(even) { background: #fbfcfe; }
 .review-row:last-child { border-bottom: 0; }
 .review-value { overflow-wrap: anywhere; font-size: 15px; line-height: 1.5; }
@@ -3895,11 +3911,8 @@ textarea:focus-visible {
     min-height: 44px;
   }
 
-  /* Expiry banner */
-  .expiry-banner {
-    padding: 10px 12px;
-    font-size: 12px;
-  }
+  /* Expiry banner: see the base rule near the end of this file. The mobile
+     override is restated there so it wins on source order. */
 }
 
 /* Student Status Check page mobile improvements */
@@ -4469,6 +4482,78 @@ textarea:focus-visible {
   line-height: 1.5;
   color: var(--muted);
   margin: 6px 0 10px;
+}
+
+/* Per-row Edit affordance on the submission review step. */
+.review-edit {
+  flex-shrink: 0;
+  justify-self: end;
+  border: 0;
+  background: transparent;
+  color: var(--navy-light, #1b4b7d);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.review-edit:hover { color: var(--gold-deep, #a97f22); }
+.review-edit:focus-visible {
+  outline: 3px solid rgba(8, 127, 140, 0.28);
+  outline-offset: 2px;
+}
+
+/* Restored-draft notice on the public submission wizard. */
+.draft-restored-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 0.5px solid rgba(213, 168, 61, 0.55);
+  border-radius: 10px;
+  background: rgba(213, 168, 61, 0.12);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.draft-restored-clear {
+  flex-shrink: 0;
+  border: 0.5px solid var(--border);
+  background: var(--white, #fff);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.draft-restored-clear:hover { border-color: var(--gold, #d5a83d); }
+
+/* Skip link: visually hidden until focused, then pinned top-left so a
+   keyboard user can bypass the navbar on every public and admin route. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10000;
+  padding: 10px 18px;
+  background: var(--navy-mid, #12345d);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 0 0 8px 0;
+  text-decoration: none;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0;
+  outline: 3px solid var(--gold, #d5a83d);
+  outline-offset: 2px;
 }
 
 /* Screen-reader-only text. Used where a visual cue (the unsaved dot) carries
@@ -5339,6 +5424,72 @@ textarea:focus-visible {
 .qr-detail-value--accent { color: var(--teal-dark); background: #eefafb; }
 .qr-verify-btn { text-decoration: none; }
 
+/* Credential state: an expired or inactive card must never read as verified.
+   The badge switches tone, and the validity strip carries the dates a
+   verifier actually came to check. */
+.qr-badge--error {
+  color: #ffb4ad;
+  background: rgba(226, 75, 74, 0.14);
+  border-color: rgba(226, 75, 74, 0.42);
+}
+
+.qr-credential-note {
+  max-width: 440px;
+  margin: -4px auto 18px;
+  padding: 10px 14px;
+  border: 1px solid rgba(226, 75, 74, 0.38);
+  border-radius: 10px;
+  background: rgba(226, 75, 74, 0.1);
+  color: #ffcdc7;
+  font-size: 12.5px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.qr-validity {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin: 0 20px 16px;
+  padding: 12px 16px;
+  border: 1px solid rgba(244, 212, 131, 0.26);
+  border-radius: 12px;
+  background: rgba(244, 212, 131, 0.07);
+}
+.qr-validity--error {
+  border-color: rgba(226, 75, 74, 0.4);
+  background: rgba(226, 75, 74, 0.1);
+}
+.qr-validity-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  text-align: center;
+}
+.qr-validity-divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+.qr-validity-label {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9fb2c9;
+}
+.qr-validity-value {
+  font-size: 13px;
+  color: #e8eef6;
+}
+.qr-validity-value--strong {
+  font-weight: 700;
+}
+.qr-validity--error .qr-validity-value--strong {
+  color: #ffb4ad;
+}
+
 .qr-privacy-note {
   max-width: 440px;
   margin: 14px auto 0;
@@ -5563,3 +5714,132 @@ textarea:focus-visible {
   margin-bottom: 4px;
 }
 .qr-key-posture-stat span { font-size: 12px; color: var(--muted); }
+
+/* ==========================================================================
+   PreviewPage — extracted inline styles.
+   These rules replace style={{…}} objects that previously lived in
+   PreviewPage.jsx, so the preview surface can be themed and overridden
+   (including by the mobile media queries above) like the rest of the app.
+   ========================================================================== */
+
+/* Loading skeleton */
+.preview-skeleton-body { padding: 16px; }
+.preview-skeleton-body .skeleton-card,
+.preview-skeleton-body .skeleton-title,
+.preview-skeleton-body .skeleton-text { margin-bottom: 8px; }
+.preview-skeleton-body .skeleton-card { margin-bottom: 16px; }
+.preview-skeleton-body .skeleton-title { margin-bottom: 12px; }
+.preview-skeleton-body .skeleton-text:last-child { margin-bottom: 0; }
+.skeleton-w-40 { width: 40%; }
+.skeleton-w-50 { width: 50%; }
+.skeleton-w-60 { width: 60px; }
+.skeleton-w-65 { width: 65%; }
+.skeleton-w-80 { width: 80%; }
+
+/* Preview-link expiry banner. Default = informational; the .expiring-soon
+   and .expired modifiers escalate the tone. */
+.expiry-banner {
+  padding: 12px 16px;
+  margin: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--info-bg, #dbeafe);
+  color: var(--info-text, #1e40af);
+}
+.expiry-banner.expiring-soon {
+  background: var(--warning-bg, #fef3c7);
+  color: var(--warning-text, #92400e);
+}
+.expiry-banner.expired {
+  background: var(--error-bg, #fee2e2);
+  color: var(--error-text, #991b1b);
+}
+
+/* Card stage + panels */
+.preview-card-stage { padding: 16px 16px 44px; }
+.preview-actions-pad { padding: 0 16px 16px; }
+.preview-template-note {
+  font-size: 11px;
+  color: var(--warning);
+  margin-top: 8px;
+  padding: 0 16px;
+}
+.preview-panel-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.preview-panel-hint--lg { font-size: 13px; }
+
+/* Metadata table */
+.meta-row--last { border-bottom: none; }
+.meta-table--tight { margin-bottom: 4px; }
+.meta-value--unset { color: var(--muted); font-style: italic; }
+
+/* Issue-type checklist */
+.issue-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.accent-gold { accent-color: var(--gold); }
+
+/* Correction report tabs */
+.report-panel--flush { padding: 0; }
+.report-tabs-shell {
+  position: relative;
+  max-height: none;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.report-tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+.report-tab {
+  flex: 1;
+  padding: 12px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.report-tab:hover { color: var(--text); }
+.report-tab.is-active {
+  color: var(--gold);
+  border-bottom-color: var(--gold);
+}
+.report-tab:focus-visible {
+  outline: 3px solid rgba(8, 127, 140, 0.28);
+  outline-offset: -3px;
+}
+.report-tab-panel { padding: 16px; }
+.report-tab-form {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Shared small utilities used by the preview flow */
+.btn-row--padded { padding: 0 16px 16px; }
+.stacked-form { display: flex; flex-direction: column; gap: 12px; }
+.info-box--spaced { margin-bottom: 14px; }
+.mt-12 { margin-top: 12px; }
+.btn-full { width: 100%; }
+
+/* Restated after the base .expiry-banner rule above so source order keeps the
+   mobile sizing winning on small screens. */
+@media (max-width: 600px) {
+  .expiry-banner {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+}

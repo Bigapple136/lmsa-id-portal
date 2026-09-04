@@ -7,6 +7,7 @@ import PrintPreviewModal from '../components/PrintPreviewModal'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
 import { useToast } from '../components/Toast'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
@@ -54,6 +55,7 @@ function formatExpiry(exp) {
 }
 
 export default function PreviewPage() {
+  useDocumentTitle('Your ID card')
   const { token } = useParams()
   const navigate = useNavigate()
   const toast = useToast()
@@ -407,15 +409,15 @@ export default function PreviewPage() {
         <div className="page-center">
           <div className="preview-card">
             <div className="preview-topbar">
-              <div className="skeleton skeleton-text" style={{ width: 60 }} />
+              <div className="skeleton skeleton-text skeleton-w-60" />
             </div>
-            <div style={{ padding: 16 }}>
-              <div className="skeleton skeleton-card" style={{ marginBottom: 16 }} />
-              <div className="skeleton skeleton-title" style={{ marginBottom: 12 }} />
-              <div className="skeleton skeleton-text" style={{ marginBottom: 8, width: '80%' }} />
-              <div className="skeleton skeleton-text" style={{ marginBottom: 8, width: '65%' }} />
-              <div className="skeleton skeleton-text" style={{ marginBottom: 8, width: '50%' }} />
-              <div className="skeleton skeleton-text" style={{ width: '40%' }} />
+            <div className="preview-skeleton-body">
+              <div className="skeleton skeleton-card" />
+              <div className="skeleton skeleton-title" />
+              <div className="skeleton skeleton-text skeleton-w-80" />
+              <div className="skeleton skeleton-text skeleton-w-65" />
+              <div className="skeleton skeleton-text skeleton-w-50" />
+              <div className="skeleton skeleton-text skeleton-w-40" />
             </div>
           </div>
         </div>
@@ -449,30 +451,15 @@ export default function PreviewPage() {
   return (
     <div className="page-outer">
       <Navbar showLogin={false} hideMenu />
-      <div className="page-center">
+      <main className="page-center" id="main-content">
         <div className="preview-card">
+          <h1 className="sr-only">
+            Your LMSA student ID card — review, confirm, or report a correction
+          </h1>
           {/* Expiry warning banner for preview links (v2 tokens only) */}
           {tokenInfo.version === 'v2' && tokenInfo.expInfo && (
             <div
               className={`expiry-banner ${tokenInfo.expInfo.expired ? 'expired' : tokenInfo.expInfo.days <= 1 ? 'expiring-soon' : ''}`}
-              style={{
-                padding: '12px 16px',
-                margin: '0',
-                borderRadius: 0,
-                borderBottom: '1px solid var(--border)',
-                background: tokenInfo.expInfo.expired
-                  ? 'var(--error-bg, #fee2e2)'
-                  : tokenInfo.expInfo.days <= 1
-                    ? 'var(--warning-bg, #fef3c7)'
-                    : 'var(--info-bg, #dbeafe)',
-                color: tokenInfo.expInfo.expired
-                  ? 'var(--error-text, #991b1b)'
-                  : tokenInfo.expInfo.days <= 1
-                    ? 'var(--warning-text, #92400e)'
-                    : 'var(--info-text, #1e40af)',
-                fontSize: '13px',
-                fontWeight: 500,
-              }}
             >
               {tokenInfo.expInfo.expired ? (
                 <>
@@ -502,7 +489,7 @@ export default function PreviewPage() {
           </div>
 
           {useDisplayCanvas ? (
-            <div style={{ padding: '16px 16px 44px' }}>
+            <div className="preview-card-stage">
               <CardCanvas
                 student={student}
                 templateUrlFront={templateUrlFront}
@@ -517,19 +504,14 @@ export default function PreviewPage() {
               <IDCardDisplay student={student} />
               {!templateUrl && (
                 <p
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--warning)',
-                    marginTop: '8px',
-                    padding: '0 16px',
-                  }}
+                  className="preview-template-note"
                 >
                   No card template uploaded yet — showing the fallback layout.
                 </p>
               )}
             </div>
           )}
-          <div style={{ padding: '0 16px 16px' }}>
+          <div className="preview-actions-pad">
             <button className="btn-print" onClick={() => setShowPrint(true)}>
               View print preview
             </button>
@@ -562,7 +544,7 @@ export default function PreviewPage() {
                     <span className="meta-key">Year / Level</span>
                     <span className="meta-val">{student.year_level}</span>
                   </div>
-                  <div className="meta-row" style={{ borderBottom: 'none' }}>
+                  <div className="meta-row meta-row--last">
                     <span className="meta-key">Status</span>
                     <span className="meta-val status-pending">
                       {student.status === 'photo_issue'
@@ -575,20 +557,16 @@ export default function PreviewPage() {
                 <div className="divider" />
 
                 <div className="section-title">QR Code details</div>
-                <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
+                <p className="preview-panel-hint">
                   These details will appear when someone scans your ID card QR code. Please review
                   carefully.
                 </p>
-                <div className="meta-table" style={{ marginBottom: '4px' }}>
+                <div className="meta-table meta-table--tight">
                   {enabledQrFields().map((field) => (
                     <div key={field} className="meta-row">
                       <span className="meta-key">{QR_FIELD_META[field].label}</span>
                       <span
-                        className="meta-val"
-                        style={{
-                          color: student[field] ? 'var(--text)' : 'var(--muted)',
-                          fontStyle: student[field] ? 'normal' : 'italic',
-                        }}
+                        className={`meta-val${student[field] ? '' : ' meta-value--unset'}`}
                       >
                         {student[field] || '— not set'}
                       </span>
@@ -617,16 +595,11 @@ export default function PreviewPage() {
             {step === 'select' && (
               <div className="report-panel">
                 <div className="section-title">What needs correcting?</div>
-                <p style={{ fontSize: '13px', color: 'var(--muted)', marginBottom: '12px' }}>
+                <p className="preview-panel-hint preview-panel-hint--lg">
                   Select all that apply — you can fix multiple things at once.
                 </p>
                 <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    marginBottom: '16px',
-                  }}
+                  className="issue-type-list"
                 >
                   {ISSUE_TYPES.map((issue) => (
                     <label
@@ -637,7 +610,7 @@ export default function PreviewPage() {
                         type="checkbox"
                         checked={selectedIssues.includes(issue.id)}
                         onChange={() => toggleIssue(issue.id)}
-                        style={{ accentColor: 'var(--gold)' }}
+                        className="accent-gold"
                       />
                       <span>{issue.label}</span>
                     </label>
@@ -701,40 +674,20 @@ export default function PreviewPage() {
 
             {/* ── STEP: REPORT MODAL (QR + other issues) ── */}
             {step === 'report_modal' && (
-              <div className="report-panel" style={{ padding: '0' }}>
+              <div className="report-panel report-panel--flush">
                 <div
-                  className="modal"
-                  style={{
-                    position: 'relative',
-                    maxHeight: 'none',
-                    borderRadius: '16px',
-                    overflow: 'hidden',
-                  }}
+                  className="modal report-tabs-shell"
                 >
                   <div
-                    style={{
-                      display: 'flex',
-                      borderBottom: '1px solid #e5e7eb',
-                      background: '#f9fafb',
-                    }}
+                    className="report-tabs"
                   >
                     <button
                       onClick={() => {
                         setCorrectionError('')
                         setReportTab('qr')
                       }}
-                      style={{
-                        flex: 1,
-                        padding: '12px 8px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        borderBottom:
-                          reportTab === 'qr' ? '2px solid var(--gold)' : '2px solid transparent',
-                        color: reportTab === 'qr' ? 'var(--gold)' : 'var(--muted)',
-                      }}
+                      type="button"
+                      className={`report-tab${reportTab === 'qr' ? ' is-active' : ''}`}
                     >
                       QR Code Details
                     </button>
@@ -743,25 +696,15 @@ export default function PreviewPage() {
                         setCorrectionError('')
                         setReportTab('other')
                       }}
-                      style={{
-                        flex: 1,
-                        padding: '12px 8px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        border: 'none',
-                        background: 'transparent',
-                        cursor: 'pointer',
-                        borderBottom:
-                          reportTab === 'other' ? '2px solid var(--gold)' : '2px solid transparent',
-                        color: reportTab === 'other' ? 'var(--gold)' : 'var(--muted)',
-                      }}
+                      type="button"
+                      className={`report-tab${reportTab === 'other' ? ' is-active' : ''}`}
                     >
                       Other Issues
                     </button>
                   </div>
 
                   {reportTab === 'qr' && (
-                    <div style={{ padding: '16px' }}>
+                    <div className="report-tab-panel">
                       <p className="correction-help">
                         Select every incorrect QR detail and enter the value LMSA should review.
                       </p>
@@ -801,12 +744,7 @@ export default function PreviewPage() {
                   {reportTab === 'other' && (
                     <form onSubmit={handleCorrectionSubmit}>
                       <div
-                        style={{
-                          padding: '16px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '12px',
-                        }}
+                        className="report-tab-form"
                       >
                         {correctionError && (
                           <div className="error-box" role="alert">
@@ -860,7 +798,7 @@ export default function PreviewPage() {
                           </div>
                         )}
                       </div>
-                      <div className="btn-row" style={{ padding: '0 16px 16px' }}>
+                      <div className="btn-row btn-row--padded">
                         <button className="btn-gold" type="submit" disabled={submitting}>
                           {submitting ? 'Submitting...' : 'Submit Correction'}
                         </button>
@@ -884,7 +822,7 @@ export default function PreviewPage() {
                 <div className="section-title">Enter the correct details</div>
                 <form
                   onSubmit={handleCorrectionSubmit}
-                  style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}
+                  className="stacked-form"
                 >
                   {correctionError && (
                     <div className="error-box" role="alert">
@@ -950,7 +888,7 @@ export default function PreviewPage() {
             {step === 'photo_notice' && (
               <div className="report-panel">
                 <div className="section-title">Wrong photo</div>
-                <div className="info-box" style={{ marginBottom: '14px' }}>
+                <div className="info-box info-box--spaced">
                   For security, photo corrections cannot be made online. Submitting this report will
                   notify LMSA who will arrange a re-shoot with you.
                 </div>
@@ -976,12 +914,11 @@ export default function PreviewPage() {
                   ? 'Photo issue reported. LMSA will contact you to arrange a re-shoot.'
                   : 'Corrections submitted. Please review your updated card above and confirm if everything looks correct now.'}
                 {selectedIssues.some((i) => i !== 'photo_issue') && !confirmed && (
-                  <div style={{ marginTop: '12px' }}>
+                  <div className="mt-12">
                     <button
-                      className="btn-gold"
+                      className="btn-gold btn-full"
                       onClick={handleConfirm}
                       disabled={submitting}
-                      style={{ width: '100%' }}
                     >
                       {submitting ? 'Confirming...' : 'Confirm — now looks correct'}
                     </button>
@@ -991,7 +928,7 @@ export default function PreviewPage() {
             )}
           </div>
         </div>
-      </div>
+      </main>
 
       {showPrint && <PrintPreviewModal student={student} onClose={() => setShowPrint(false)} />}
     </div>

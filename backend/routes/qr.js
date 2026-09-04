@@ -101,12 +101,44 @@ async function generateForStudent(student) {
   return url
 }
 
+// A signed token only proves LMSA issued this QR and the student record
+// exists. It says nothing about whether the card is still good. Verifiers —
+// a clinic receptionist, a security officer, an examiner — need the second
+// fact, and it is the stronger claim the page was making without checking.
+//
+// Returns one of:
+//   valid    — approved record, not past its validity date
+//   expired  — approved record whose valid_until has passed
+//   inactive — record not in the approved state (pending / rejected)
+// The record is still served for 'expired' and 'inactive' so a verifier can
+// see WHAT expired rather than facing an unexplained refusal, but the page
+// must never present those states as verified.
+function buildCredentialState(student) {
+  if (student.status && student.status !== 'approved') {
+    return { state: 'inactive', reason: 'This student record is not currently active.' }
+  }
+
+  if (student.valid_until) {
+    // valid_until is a DATE: the card is good through the end of that day.
+    const expiry = new Date(`${String(student.valid_until).slice(0, 10)}T23:59:59.999Z`)
+    if (!Number.isNaN(expiry.getTime()) && expiry.getTime() < Date.now()) {
+      return { state: 'expired', reason: 'This card passed its validity date.' }
+    }
+  }
+
+  return { state: 'valid', reason: null }
+}
+
 function buildPublicVerificationStudent(student, qrFields) {
   const record = {
     full_name: student.full_name,
     student_id: student.student_id,
     year_level: student.year_level,
     photo_url: student.photo_url || null,
+    // Validity dates are part of what a credential check IS, so they are not
+    // behind the optional QR-field allow-list below.
+    issue_date: student.issue_date || null,
+    valid_until: student.valid_until || null,
   }
 
   const publicQrFields = [
@@ -148,8 +180,17 @@ router.get('/verify/:token', async (req, res) => {
     if (!student) return res.status(404).json({ error: 'Student not found.' })
 
     const qrFields = await getQRFields()
+    const { state, reason } = buildCredentialState(student)
     res.setHeader('Cache-Control', 'no-store')
-    res.json({ verified: true, student: buildPublicVerificationStudent(student, qrFields) })
+    // `verified` now means what it says: signature good AND card currently
+    // valid. An expired or inactive card returns verified:false with the
+    // record attached, so the page can explain rather than just deny.
+    res.json({
+      verified: state === 'valid',
+      credential_state: state,
+      credential_reason: reason,
+      student: buildPublicVerificationStudent(student, qrFields),
+    })
   } catch (err) {
     logger.error({ err }, 'Public QR verification failed')
     res.status(500).json({ error: 'Failed to verify credential.' })
@@ -883,5 +924,6 @@ module.exports.deleteQRFile = deleteQRFile
 module.exports.signStudentToken = signStudentToken
 module.exports.verifyStudentToken = verifyStudentToken
 module.exports.buildPublicVerificationStudent = buildPublicVerificationStudent
+module.exports.buildCredentialState = buildCredentialState
 // v2 surface re-exported for tests and future QR-key operations.
 module.exports.signV2 = signV2

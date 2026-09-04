@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import Footer from '../components/Footer'
 import Navbar from '../components/Navbar'
 import { apiFetch } from '../lib/api'
+import useDocumentTitle from '../lib/useDocumentTitle'
 
 const STATUS_INFO = {
   confirmed: {
@@ -49,6 +50,7 @@ function StatusMark({ tone }) {
 }
 
 export default function StudentStatusCheck() {
+  useDocumentTitle('Check card status')
   const [studentId, setStudentId] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
@@ -88,7 +90,7 @@ export default function StudentStatusCheck() {
   return (
     <div className="page-outer">
       <Navbar showLogin={false} />
-      <main className="status-check-shell">
+      <main className="status-check-shell" id="main-content">
         <section className="status-check-card">
           <div className="status-check-header">
             <div className="landing-emblem status-check-emblem" aria-hidden="true">
