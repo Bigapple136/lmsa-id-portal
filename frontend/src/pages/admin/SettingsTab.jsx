@@ -279,17 +279,22 @@ export default function SettingsTab() {
                           setDownloading((prev) => ({ ...prev, backup: false }))
                           return
                         }
-                        // Poll for ready status
+                        // Poll for ready status — try generic jobs endpoint first, fallback to backup
                         let attempts = 0
                         const maxAttempts = 60 // up to 5 minutes
                         const poll = async () => {
                           attempts++
                           try {
-                            const statusRes = await adminFetch(`/api/backup/${jobId}?status=true`)
-                            const statusData = await statusRes.json().catch(() => ({}))
+                            let statusRes = await adminFetch(`/api/jobs/${jobId}?status=true`)
+                            let statusData = await statusRes.json().catch(() => ({}))
+                            if (!statusRes.ok || !statusData.status) {
+                              statusRes = await adminFetch(`/api/backup/${jobId}?status=true`)
+                              statusData = await statusRes.json().catch(() => ({}))
+                            }
                             if (statusData.status === 'ready') {
-                              // Download file
-                              const dlRes = await adminFetch(`/api/backup/${jobId}`)
+                              // Download file — try jobs first, then backup
+                              let dlRes = await adminFetch(`/api/jobs/${jobId}`)
+                              if (!dlRes.ok) dlRes = await adminFetch(`/api/backup/${jobId}`)
                               if (!dlRes.ok) throw new Error('Download failed')
                               const blob = await dlRes.blob()
                               const disposition = dlRes.headers.get('Content-Disposition') || ''
