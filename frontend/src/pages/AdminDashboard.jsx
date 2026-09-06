@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { supabase } from '../lib/supabase'
@@ -303,18 +303,33 @@ export default function AdminDashboard() {
     }
   }
 
+  // Filtered list — memoized to avoid re-filter on pagination changes and preserve stable reference
+  // Defined early so effects can reference its length
+  const filtered = useMemo(
+    () =>
+      students.filter(
+        (s) =>
+          (yearFilter === 'all' || s.year_level === yearFilter) &&
+          (statusFilter === 'all' ||
+            (statusFilter === 'issues' ? ['issue', 'photo_issue'].includes(s.status) : s.status === statusFilter)) &&
+          (s.full_name.toLowerCase().includes(search.toLowerCase()) ||
+            s.student_id.toLowerCase().includes(search.toLowerCase())),
+      ),
+    [students, yearFilter, statusFilter, search],
+  )
+
   async function loadAll() {
     setDataLoading(true)
     try {
       await eachLimit(
         [
-          safeLoad(loadStudents),
+          safeLoad(() => loadStudents({ silent: true, preservePage: true })),
           safeLoad(loadTemplate),
           safeLoad(loadFields),
           safeLoad(loadQrFields),
           safeLoad(loadLayout),
           safeLoad(loadFieldSides),
-          safeLoad(loadSubmissions),
+          safeLoad(() => loadSubmissions(undefined, { silent: true })),
           safeLoad(loadSubmissionForm),
           safeLoad(loadAnalytics),
         ],
@@ -325,35 +340,188 @@ export default function AdminDashboard() {
     }
   }
 
-  async function loadStudents() {
-    const res = await adminFetch('/api/students')
-    if (!res.ok) return
-    const data = await res.json()
-    setStudents(data)
-    setCurrentPage(1)
-    setStats({
-      total: data.length,
-      confirmed: data.filter((s) => s.status === 'confirmed').length,
-      pending: data.filter((s) => ['pending', 'self_corrected'].includes(s.status)).length,
-      issues: data.filter((s) => ['issue', 'photo_issue'].includes(s.status)).length,
-    })
-    const issueStudents = data.filter((s) => ['issue', 'photo_issue'].includes(s.status))
-    if (issueStudents.length) {
-      const { data: confs } = await supabase
-        .from('confirmations')
-        .select('student_id, note, action')
-        .in(
-          'student_id',
-          issueStudents.map((s) => s.student_id),
-        )
-        .order('confirmed_at', { ascending: false })
-      if (confs) {
-        const map = {}
-        confs.forEach((c) => {
-          if (!map[c.student_id]) map[c.student_id] = c
-        })
-        setIssueNotes(map)
+  // Preserve pagination/filter state across background refreshes
+  // Load persisted filters from localStorage / URL on first mount
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const savedPage = params.get('page')
+      const savedYear = params.get('year')
+      const savedStatus = params.get('status')
+      const savedSearch = params.get('q')
+      const savedSubFilter = params.get('sub')
+
+      let hasUrlPrefs = false
+      if (savedPage) {
+        const p = parseInt(savedPage, 10)
+        if (!Number.isNaN(p) && p >= 1) {
+          setCurrentPage(p)
+          hasUrlPrefs = true
+        }
       }
+      if (savedYear && (savedYear === 'all' || YEARS.includes(savedYear))) {
+        setYearFilter(savedYear)
+        hasUrlPrefs = true
+      }
+      if (savedStatus && ['all', 'pending', 'confirmed', 'issues'].includes(savedStatus)) {
+        setStatusFilter(savedStatus)
+        hasUrlPrefs = true
+      }
+      if (savedSearch) {
+        setSearch(savedSearch)
+        hasUrlPrefs = true
+      }
+      if (savedSubFilter && ['pending', 'approved', 'rejected', 'all'].includes(savedSubFilter)) {
+        setSubmissionsFilter(savedSubFilter)
+        hasUrlPrefs = true
+      }
+
+      // Fallback to localStorage if URL has no values
+      if (!hasUrlPrefs) {
+        const raw = localStorage.getItem('admin_students_prefs')
+        if (raw) {
+          const prefs = JSON.parse(raw)
+          if (prefs.currentPage) setCurrentPage(prefs.currentPage)
+          if (prefs.yearFilter) setYearFilter(prefs.yearFilter)
+          if (prefs.statusFilter) setStatusFilter(prefs.statusFilter)
+          if (prefs.search) setSearch(prefs.search)
+          if (prefs.submissionsFilter) setSubmissionsFilter(prefs.submissionsFilter)
+        }
+      } else {
+        // Also restore submissions filter from separate storage if URL didn't have it
+        const subRaw = localStorage.getItem('admin_submissions_prefs')
+        if (subRaw && !savedSubFilter) {
+          try {
+            const subPrefs = JSON.parse(subRaw)
+            if (subPrefs.submissionsFilter) setSubmissionsFilter(subPrefs.submissionsFilter)
+          } catch {}
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist filters + pagination to URL and localStorage without triggering reload
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'admin_students_prefs',
+        JSON.stringify({ currentPage, yearFilter, statusFilter, search, submissionsFilter }),
+      )
+      localStorage.setItem(
+        'admin_submissions_prefs',
+        JSON.stringify({ submissionsFilter }),
+      )
+      // Update URL search params without navigation — preserve tab param
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (currentPage > 1) next.set('page', String(currentPage))
+          else next.delete('page')
+          if (yearFilter !== 'all') next.set('year', yearFilter)
+          else next.delete('year')
+          if (statusFilter !== 'all') next.set('status', statusFilter)
+          else next.delete('status')
+          if (search) next.set('q', search)
+          else next.delete('q')
+          if (submissionsFilter !== 'pending') next.set('sub', submissionsFilter)
+          else next.delete('sub')
+          return next
+        },
+        { replace: true },
+      )
+    } catch {}
+  }, [currentPage, yearFilter, statusFilter, search, submissionsFilter, setSearchParams])
+
+  // Clamp currentPage when filtered length shrinks (e.g., after delete) but don't reset to 1
+  // Avoid clamping on initial empty state before data loads — preserve saved page
+  useEffect(() => {
+    if (students.length === 0) return
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+    if (filtered.length === 0) {
+      // If filter yields no results, reset to page 1 (explicit empty state)
+      if (currentPage !== 1) setCurrentPage(1)
+      return
+    }
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length, students.length])
+
+  async function loadStudents(options = {}) {
+    const { silent = false, preservePage = true } = options
+    if (!silent) {
+      // Only show full skeleton on initial load when students empty
+      if (students.length === 0) setDataLoading(true)
+    }
+    try {
+      const res = await adminFetch('/api/students')
+      if (!res.ok) return
+      const data = await res.json()
+
+      // Smart merge: preserve optimistic records and _qrGenerating flags
+      // so background refresh doesn't wipe out in-flight UI states
+      setStudents((prev) => {
+        if (prev.length === 0) return data // initial load
+
+        // Build map of fresh data by student_id
+        const freshMap = new Map(data.map((s) => [s.student_id, s]))
+
+        // Keep optimistic temp records that aren't yet in fresh data
+        const optimisticKept = prev.filter((s) => s._optimistic && !freshMap.has(s.student_id))
+
+        // Merge fresh data with preserved flags
+        const merged = data.map((fresh) => {
+          const existing = prev.find((p) => p.student_id === fresh.student_id)
+          if (existing) {
+            // Preserve _qrGenerating if we were showing spinner
+            if (existing._qrGenerating && !fresh.qr_url) {
+              return { ...fresh, _qrGenerating: true, qr_url: existing.qr_url }
+            }
+            // Preserve _optimistic until real record fully replaces it
+            if (existing._optimistic && !fresh.qr_url && existing.qr_url === 'generating') {
+              return { ...fresh, _optimistic: true, qr_url: 'generating' }
+            }
+          }
+          return fresh
+        })
+
+        return [...optimisticKept, ...merged]
+      })
+
+      // Don't reset pagination — preserve user's current page
+      // Only reset if explicitly requested (e.g., initial load with no page)
+      if (!preservePage) {
+        setCurrentPage(1)
+      }
+
+      setStats({
+        total: data.length,
+        confirmed: data.filter((s) => s.status === 'confirmed').length,
+        pending: data.filter((s) => ['pending', 'self_corrected'].includes(s.status)).length,
+        issues: data.filter((s) => ['issue', 'photo_issue'].includes(s.status)).length,
+      })
+      const issueStudents = data.filter((s) => ['issue', 'photo_issue'].includes(s.status))
+      if (issueStudents.length) {
+        const { data: confs } = await supabase
+          .from('confirmations')
+          .select('student_id, note, action')
+          .in(
+            'student_id',
+            issueStudents.map((s) => s.student_id),
+          )
+          .order('confirmed_at', { ascending: false })
+        if (confs) {
+          const map = {}
+          confs.forEach((c) => {
+            if (!map[c.student_id]) map[c.student_id] = c
+          })
+          setIssueNotes(map)
+        }
+      }
+    } finally {
+      if (!silent) setDataLoading(false)
     }
   }
 
@@ -469,17 +637,54 @@ export default function AdminDashboard() {
     })
   }
 
-  async function loadSubmissions(statusFilterParam) {
-    setSubmissionsLoading(true)
+  async function loadSubmissions(statusFilterParam, options = {}) {
+    // Support both signatures: loadSubmissions(filter) and loadSubmissions(filter, {silent})
+    // If first arg is an object with silent property, treat as options
+    let filter = submissionsFilter
+    let silent = false
+    if (typeof statusFilterParam === 'object' && statusFilterParam !== null && 'silent' in statusFilterParam) {
+      silent = Boolean(statusFilterParam.silent)
+    } else if (typeof statusFilterParam === 'string') {
+      filter = statusFilterParam
+      if (options && typeof options.silent === 'boolean') silent = options.silent
+    } else if (options && typeof options.silent === 'boolean') {
+      silent = options.silent
+    }
+
+    if (!silent) setSubmissionsLoading(true)
     try {
-      const filter = statusFilterParam ?? submissionsFilter
       const statusParam = filter !== 'all' ? `?status=${filter}` : ''
       const res = await adminFetch(`/api/submissions${statusParam}`)
-      if (res.ok) setSubmissions(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        // Smart merge to avoid full flicker: preserve optimistic _ flags if any
+        setSubmissions((prev) => {
+          if (prev.length === 0 || silent === false) return data
+          // For silent background refresh, merge without losing local optimistic states
+          const freshMap = new Map(data.map((s) => [s.id, s]))
+          const kept = prev.filter((s) => s._optimistic && !freshMap.has(s.id))
+          return [...kept, ...data]
+        })
+      }
     } finally {
-      setSubmissionsLoading(false)
+      if (!silent) setSubmissionsLoading(false)
     }
   }
+
+  // Track previous submissions filter to detect explicit user changes
+  const prevSubFilterRef = useRef(submissionsFilter)
+  useEffect(() => {
+    if (!session) return
+    // Skip initial mount — loadAll already triggered a load
+    // Only reload when filter actually changes
+    if (prevSubFilterRef.current !== submissionsFilter) {
+      prevSubFilterRef.current = submissionsFilter
+      // Explicit filter change — preserve current list visually but fetch new data
+      // Use non-silent to show subtle loading, but SubmissionsTab keeps old data until new arrives
+      loadSubmissions(submissionsFilter, { silent: false })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submissionsFilter, session])
 
   async function loadSubmissionForm() {
     const res = await adminFetch('/api/settings/submission-form')
@@ -884,9 +1089,9 @@ export default function AdminDashboard() {
 
       // Reload students after a short delay to show imported records
       // Poll a few times as background import completes
-      setTimeout(() => loadStudents(), 2000)
-      setTimeout(() => loadStudents(), 5000)
-      setTimeout(() => loadStudents(), 10000)
+      setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+      setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
+      setTimeout(() => loadStudents({ silent: true, preservePage: true }), 10000)
     } catch (err) {
       setUploadMsg({ ok: false, text: err.message || 'Upload failed.' })
       bgJobs.updateJob(job.id, { status: 'error', error: err.message })
@@ -987,8 +1192,8 @@ export default function AdminDashboard() {
         if (optimisticStudent.photo_url) URL.revokeObjectURL(optimisticStudent.photo_url)
         if (optimisticStudent.signature_url) URL.revokeObjectURL(optimisticStudent.signature_url)
         // Reload to get accurate stats and QR (poll as QR generates in background)
-        setTimeout(() => loadStudents(), 2000)
-        setTimeout(() => loadStudents(), 5000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
       },
       onError: (err) => {
         setManualMsg({ ok: false, text: err.message || 'Could not add student.' })
@@ -1104,8 +1309,8 @@ export default function AdminDashboard() {
           URL.revokeObjectURL(optimisticUpdated.signature_url)
         }
         // QR regeneration is background — poll for updated QR
-        setTimeout(() => loadStudents(), 2000)
-        setTimeout(() => loadStudents(), 6000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 6000)
       },
       jobsApi: bgJobs,
       toast,
@@ -1141,15 +1346,15 @@ export default function AdminDashboard() {
         if (data.queued || data.background) {
           // Backend queued — keep spinner and poll for real QR
           toast.info(`QR generation queued for ${studentId} — background processing`)
-          setTimeout(() => loadStudents(), 2000)
-          setTimeout(() => loadStudents(), 5000)
-          setTimeout(() => loadStudents(), 10000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 10000)
           return
         }
         setStudents((prev) =>
           prev.map((s) => (s.student_id === studentId ? { ...s, qr_url: data.qr_url, _qrGenerating: false } : s))
         )
-        loadStudents()
+        loadStudents({ silent: true, preservePage: true })
       },
       jobsApi: bgJobs,
       toast,
@@ -1185,15 +1390,15 @@ export default function AdminDashboard() {
       onSuccess: (data) => {
         if (data.queued || data.background) {
           toast.info(`QR regeneration queued for ${studentId} — background processing`)
-          setTimeout(() => loadStudents(), 2000)
-          setTimeout(() => loadStudents(), 5000)
-          setTimeout(() => loadStudents(), 10000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 10000)
           return
         }
         setStudents((prev) =>
           prev.map((s) => (s.student_id === studentId ? { ...s, qr_url: data.qr_url, _qrGenerating: false } : s))
         )
-        loadStudents()
+        loadStudents({ silent: true, preservePage: true })
       },
       jobsApi: bgJobs,
       toast,
@@ -1229,8 +1434,8 @@ export default function AdminDashboard() {
         bgJobs.updateJob(job.id, { status: 'success' })
         setTimeout(() => bgJobs.removeJob(job.id), 3000)
         // Poll for completion
-        setTimeout(() => loadStudents(), 3000)
-        setTimeout(() => loadStudents(), 8000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 3000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 8000)
       } else {
         setQrMsg({
           ok: true,
@@ -1238,7 +1443,7 @@ export default function AdminDashboard() {
         })
         bgJobs.updateJob(job.id, { status: 'success' })
         setTimeout(() => bgJobs.removeJob(job.id), 3000)
-        loadStudents()
+        loadStudents({ silent: true, preservePage: true })
       }
       setTimeout(() => setQrMsg(null), 5000)
     } catch (err) {
@@ -1275,8 +1480,8 @@ export default function AdminDashboard() {
         })
         bgJobs.updateJob(job.id, { status: 'success' })
         setTimeout(() => bgJobs.removeJob(job.id), 3000)
-        setTimeout(() => loadStudents(), 3000)
-        setTimeout(() => loadStudents(), 8000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 3000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 8000)
       } else {
         setQrMsg({
           ok: true,
@@ -1284,7 +1489,7 @@ export default function AdminDashboard() {
         })
         bgJobs.updateJob(job.id, { status: 'success' })
         setTimeout(() => bgJobs.removeJob(job.id), 3000)
-        loadStudents()
+        loadStudents({ silent: true, preservePage: true })
       }
       setTimeout(() => setQrMsg(null), 6000)
     } catch (err) {
@@ -1393,7 +1598,7 @@ export default function AdminDashboard() {
         if (data.student) {
           setStudents((prev) => prev.map((s) => (s.id === optimisticStudent.id ? data.student : s)))
         }
-        loadStudents()
+        loadStudents({ silent: true, preservePage: true })
         setTimeout(() => setSubmissionMsg(null), 5000)
       },
       onError: (err) => {
@@ -1444,7 +1649,7 @@ export default function AdminDashboard() {
       },
       onSuccess: () => {
         setSubmissionMsg({ ok: true, text: 'Submission rejected.' })
-        loadSubmissions()
+        loadSubmissions(undefined, { silent: true })
         setTimeout(() => setSubmissionMsg(null), 3000)
       },
       onError: (err) => {
@@ -1541,7 +1746,7 @@ export default function AdminDashboard() {
         return true
       },
       onSuccess: () => {
-        loadStudents()
+        loadStudents({ silent: true, preservePage: true })
       },
       jobsApi: bgJobs,
       toast,
@@ -1563,15 +1768,6 @@ export default function AdminDashboard() {
     return <StatusBadge status={status} />
   }
 
-  const filtered = students.filter(
-    (s) =>
-      (yearFilter === 'all' || s.year_level === yearFilter) &&
-      (statusFilter === 'all' ||
-        (statusFilter === 'issues' ? ['issue', 'photo_issue'].includes(s.status) : s.status === statusFilter)) &&
-      (s.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        s.student_id.toLowerCase().includes(search.toLowerCase())),
-  )
-
   useDocumentTitle(
     session
       ? `${ADMIN_TABS.find((t) => t.id === activeTab)?.label || 'Dashboard'} · Admin`
@@ -1580,7 +1776,7 @@ export default function AdminDashboard() {
 
   function selectTab(tab) {
     setActiveTab(tab)
-    if (tab === 'submissions') loadSubmissions()
+    if (tab === 'submissions') loadSubmissions(undefined, { silent: true })
   }
 
   const recentActivity = [...students]
