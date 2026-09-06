@@ -691,6 +691,58 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 })
 
 router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
+  if (req.query.background === 'true' || req.query.async === 'true') {
+    const { createJob, setJobReady, setJobFailed, setJobProcessing } = require('../jobStore')
+    const job = createJob({ type: 'qr-export', filename: 'LMSA_QR_Codes.zip', mimeType: 'application/zip' })
+
+    res.json({
+      queued: true,
+      jobId: job.id,
+      background: true,
+      message: 'QR export queued — processing in background.',
+    })
+
+    enqueueImport(async () => {
+      setJobProcessing(job.id)
+      try {
+        const { data: students, error } = await supabase
+          .from('students')
+          .select('student_id, full_name, year_level, qr_url')
+          .not('qr_url', 'is', null)
+          .order('year_level')
+
+        if (error) throw new Error(error.message)
+        if (!students?.length) throw new Error('No QR codes generated yet.')
+
+        const zip = new JSZip()
+        const root = zip.folder('qr-codes')
+        const CONCURRENCY = 10
+        let idx = 0
+        async function downloadWorker() {
+          while (idx < students.length) {
+            const i = idx++
+            const s = students[i]
+            try {
+              const resp = await fetch(s.qr_url)
+              if (!resp.ok) continue
+              const buffer = Buffer.from(await resp.arrayBuffer())
+              const yearFolder = (s.year_level || 'unknown').toLowerCase().replace(/\s+/g, '-')
+              root.folder(yearFolder).file(`${s.student_id}.png`, buffer)
+            } catch (err) {
+              logger.warn({ studentId: s.student_id, err: err.message }, 'QR export fetch failed (background)')
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, students.length) }, downloadWorker))
+        const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+        setJobReady(job.id, { buffer: zipBuffer, filename: 'LMSA_QR_Codes.zip', mimeType: 'application/zip' })
+      } catch (err) {
+        setJobFailed(job.id, err)
+      }
+    })
+    return
+  }
+
   const { data: students, error } = await supabase
     .from('students')
     .select('student_id, full_name, year_level, qr_url')

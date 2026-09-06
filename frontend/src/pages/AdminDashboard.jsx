@@ -623,14 +623,92 @@ export default function AdminDashboard() {
 
   // ── Optimistic: handle download ──
   // Downloads are non-blocking — admin can continue working while file prepares
+  // Heavy exports (QR, photoshoot, card-design) support background mode: queue + poll
   async function handleDownload(endpoint, filename) {
     const label = `Download ${filename}`
     const job = createJob({ label, type: 'download' })
     bgJobs.addJob(job)
     setDownloading((prev) => ({ ...prev, [endpoint]: true }))
-    toast.info(`${label} — preparing...`)
+    toast.info(`${label} — queued in background, you can continue working...`)
+
+    const isHeavyExport =
+      endpoint.includes('/export') || endpoint.includes('/api/qr/export')
 
     try {
+      // Try background mode first for heavy exports
+      if (isHeavyExport) {
+        const bgEndpoint = endpoint.includes('?') ? `${endpoint}&background=true` : `${endpoint}?background=true`
+        const queueRes = await adminFetch(
+          bgEndpoint.startsWith('/api/') ? bgEndpoint : `/api/settings/${bgEndpoint}`,
+        )
+        const queueData = await queueRes.json().catch(() => null)
+        if (queueRes.ok && queueData?.queued && queueData?.jobId) {
+          // Poll generic jobs endpoint (shared store) + backup endpoint as fallback
+          let attempts = 0
+          const maxAttempts = 60
+          const poll = async () => {
+            attempts++
+            try {
+              // Try generic jobs endpoint first
+              let statusRes = await adminFetch(`/api/jobs/${queueData.jobId}?status=true`)
+              let statusData = await statusRes.json().catch(() => ({}))
+              // Fallback to backup endpoint which also serves jobStore
+              if (!statusRes.ok || !statusData.status) {
+                statusRes = await adminFetch(`/api/backup/${queueData.jobId}?status=true`)
+                statusData = await statusRes.json().catch(() => ({}))
+              }
+
+              if (statusData.status === 'ready') {
+                const dlRes = await adminFetch(`/api/jobs/${queueData.jobId}`)
+                const dlResFallback = dlRes.ok ? dlRes : await adminFetch(`/api/backup/${queueData.jobId}`)
+                const finalRes = dlRes.ok ? dlRes : dlResFallback
+                if (!finalRes.ok) throw new Error('Download failed')
+                const blob = await finalRes.blob()
+                const disposition = finalRes.headers.get('Content-Disposition') || ''
+                const match = disposition.match(/filename="?(.+?)"?$/)
+                const finalFilename = match ? match[1] : filename
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = finalFilename
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                bgJobs.updateJob(job.id, { status: 'success' })
+                setTimeout(() => bgJobs.removeJob(job.id), 2000)
+                toast.success(`${finalFilename} ready — download started`)
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+                return
+              } else if (statusData.status === 'failed') {
+                throw new Error(statusData.error || 'Export failed in background')
+              }
+
+              if (attempts < maxAttempts) {
+                setTimeout(poll, 4000)
+              } else {
+                toast.info(`${label} still processing — job ${queueData.jobId}`)
+                bgJobs.updateJob(job.id, { status: 'success' })
+                setTimeout(() => bgJobs.removeJob(job.id), 3000)
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+              }
+            } catch (err) {
+              if (attempts < maxAttempts) {
+                setTimeout(poll, 4000)
+              } else {
+                bgJobs.updateJob(job.id, { status: 'error', error: err.message })
+                setTimeout(() => bgJobs.removeJob(job.id), 4000)
+                toast.error(err.message || 'Download failed')
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+              }
+            }
+          }
+          setTimeout(poll, 3000)
+          return
+        }
+        // If background mode not supported or returned direct file, fall through to direct download
+      }
+
       const res = await adminFetch(
         endpoint.startsWith('/api/') ? endpoint : `/api/settings/${endpoint}`,
       )
@@ -638,6 +716,52 @@ export default function AdminDashboard() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Download failed')
       }
+      // Check if response is JSON with queued job (background mode returned JSON even without ?background param)
+      const contentType = res.headers.get('Content-Type') || ''
+      if (contentType.includes('application/json')) {
+        const json = await res.json().catch(() => null)
+        if (json?.queued && json?.jobId) {
+          toast.info(`${label} queued — processing in background...`)
+          // Poll as above
+          let attempts = 0
+          const maxAttempts = 60
+          const poll = async () => {
+            attempts++
+            try {
+              const statusRes = await adminFetch(`/api/jobs/${json.jobId}?status=true`)
+              const statusData = await statusRes.json().catch(() => ({}))
+              if (statusData.status === 'ready') {
+                const dlRes = await adminFetch(`/api/jobs/${json.jobId}`)
+                if (!dlRes.ok) throw new Error('Download failed')
+                const blob = await dlRes.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = filename
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                bgJobs.updateJob(job.id, { status: 'success' })
+                setTimeout(() => bgJobs.removeJob(job.id), 2000)
+                toast.success(`${filename} ready`)
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+                return
+              }
+              if (attempts < maxAttempts) setTimeout(poll, 4000)
+              else {
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+              }
+            } catch {
+              if (attempts < maxAttempts) setTimeout(poll, 4000)
+              else setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+            }
+          }
+          setTimeout(poll, 3000)
+          return
+        }
+      }
+
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -655,7 +779,11 @@ export default function AdminDashboard() {
       setTimeout(() => bgJobs.removeJob(job.id), 4000)
       toast.error(err.message || 'Download failed. Please try again.')
     } finally {
-      setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+      // For direct downloads we clear immediately; for background polled downloads,
+      // the poll callback clears itself. Avoid double-clear by checking heavy export.
+      if (!isHeavyExport) {
+        setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+      }
     }
   }
 

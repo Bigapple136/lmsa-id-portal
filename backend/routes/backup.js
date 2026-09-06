@@ -1,11 +1,11 @@
 const express = require('express')
 const router = express.Router()
 const JSZip = require('jszip')
-const crypto = require('crypto')
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const logger = require('../logger')
 const { enqueueImport } = require('../queue')
+const { createJob, getJob, setJobReady, setJobFailed, setJobProcessing } = require('../jobStore')
 
 const TABLES = [
   'students',
@@ -27,19 +27,6 @@ const STORAGE_BUCKETS = [
   { bucket: 'qr-codes', folder: 'files/qr-codes' },
   { bucket: 'templates', folder: 'files/templates' },
 ]
-
-// In-memory backup job store for optimistic UX
-const backupJobs = new Map()
-const BACKUP_TTL_MS = 1000 * 60 * 30 // 30 min
-
-function cleanupOldJobs() {
-  const now = Date.now()
-  for (const [id, job] of backupJobs.entries()) {
-    if (now - job.createdAt > BACKUP_TTL_MS) {
-      backupJobs.delete(id)
-    }
-  }
-}
 
 async function buildBackupZip() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
@@ -122,81 +109,63 @@ async function buildBackupZip() {
 
 // POST /api/backup — optimistic: queue backup and return jobId immediately
 router.post('/', requireAdmin, requireFullAdmin, async (req, res) => {
-  cleanupOldJobs()
-  const jobId = crypto.randomBytes(8).toString('hex')
-  backupJobs.set(jobId, { status: 'queued', createdAt: Date.now(), filename: `lmsa-backup-${jobId}.zip` })
+  const job = createJob({ type: 'backup', filename: `lmsa-backup-${Date.now()}.zip`, mimeType: 'application/zip' })
 
   res.json({
     queued: true,
-    jobId,
+    jobId: job.id,
     background: true,
-    message: 'Backup queued — processing in background. Poll /api/backup/' + jobId + ' for status.',
+    message: 'Backup queued — processing in background. Poll /api/backup/' + job.id + ' for status.',
   })
 
   enqueueImport(async () => {
-    const job = backupJobs.get(jobId)
-    if (!job) return
-    job.status = 'processing'
+    setJobProcessing(job.id)
     try {
       const { buffer, filename } = await buildBackupZip()
-      job.buffer = buffer
-      job.filename = filename
-      job.status = 'ready'
-      logger.info({ jobId, size: buffer.length }, 'Background backup completed')
+      setJobReady(job.id, { buffer, filename, mimeType: 'application/zip' })
     } catch (err) {
-      logger.error({ err: err.message, jobId }, 'Background backup failed')
-      job.status = 'failed'
-      job.error = err.message
+      setJobFailed(job.id, err)
     }
   })
 })
 
 // GET /api/backup/:jobId — check status or download when ready
 router.get('/:jobId', requireAdmin, requireFullAdmin, async (req, res) => {
-  const job = backupJobs.get(req.params.jobId)
+  const job = getJob(req.params.jobId)
   if (!job) return res.status(404).json({ error: 'Backup job not found or expired.' })
   if (job.status === 'ready' && job.buffer) {
     if (req.query.status === 'true') {
-      return res.json({ status: 'ready', jobId: req.params.jobId, filename: job.filename, size: job.buffer.length })
+      return res.json({ status: 'ready', jobId: job.id, filename: job.filename, size: job.buffer.length, type: job.type })
     }
-    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Type', job.mimeType)
     res.setHeader('Content-Disposition', `attachment; filename="${job.filename}"`)
     return res.send(job.buffer)
   }
   if (job.status === 'failed') {
     return res.status(500).json({ status: 'failed', error: job.error || 'Backup failed' })
   }
-  res.json({ status: job.status, jobId: req.params.jobId, message: 'Backup still processing...' })
+  res.json({ status: job.status, jobId: job.id, message: 'Backup still processing...', type: job.type })
 })
 
 // GET /api/backup — legacy direct download, but also supports ?background=true for optimistic
 router.get('/', requireAdmin, requireFullAdmin, async (req, res) => {
   if (req.query.background === 'true' || req.query.async === 'true') {
-    cleanupOldJobs()
-    const jobId = crypto.randomBytes(8).toString('hex')
-    backupJobs.set(jobId, { status: 'queued', createdAt: Date.now(), filename: `lmsa-backup-${jobId}.zip` })
+    const job = createJob({ type: 'backup', filename: `lmsa-backup-${Date.now()}.zip`, mimeType: 'application/zip' })
 
     res.json({
       queued: true,
-      jobId,
+      jobId: job.id,
       background: true,
       message: 'Backup queued — processing in background.',
     })
 
     enqueueImport(async () => {
-      const job = backupJobs.get(jobId)
-      if (!job) return
-      job.status = 'processing'
+      setJobProcessing(job.id)
       try {
         const { buffer, filename } = await buildBackupZip()
-        job.buffer = buffer
-        job.filename = filename
-        job.status = 'ready'
-        logger.info({ jobId, size: buffer.length }, 'Background backup (GET) completed')
+        setJobReady(job.id, { buffer, filename, mimeType: 'application/zip' })
       } catch (err) {
-        logger.error({ err: err.message, jobId }, 'Background backup (GET) failed')
-        job.status = 'failed'
-        job.error = err.message
+        setJobFailed(job.id, err)
       }
     })
     return
