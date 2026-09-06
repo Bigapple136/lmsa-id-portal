@@ -303,9 +303,16 @@ router.delete('/:studentId', requireAdmin, requireFullAdmin, async (req, res) =>
   if (fetchErr) return res.status(500).json({ error: 'Failed to load student.' })
   if (!student) return res.status(404).json({ error: 'Student not found.' })
 
+  // Optimistic UX: delete DB record immediately so UI can reflect removal,
+  // then clean up storage files + audit log in background.
+  const { error: deleteErr } = await supabase.from('students').delete().eq('student_id', studentId)
+  if (deleteErr) return res.status(500).json({ error: 'Failed to delete student.' })
+
+  // Immediate response — admin can continue working
+  res.status(204).send()
+
   const safeSid = studentId.replace(/[^a-zA-Z0-9_-]/g, '_')
   const yearFolder = normaliseYearFolder(student.year_level)
-
   const filesToRemove = [
     `photos/${yearFolder}/${safeSid}.jpg`,
     `photos/${yearFolder}/${safeSid}.png`,
@@ -313,25 +320,31 @@ router.delete('/:studentId', requireAdmin, requireFullAdmin, async (req, res) =>
     `qr-codes/${yearFolder}/${studentId}.png`,
   ]
 
-  await Promise.allSettled([
-    supabase.storage.from('id-cards').remove(filesToRemove.slice(0, 3)),
-    supabase.storage.from('qr-codes').remove([filesToRemove[3]]),
-  ])
-
-  const { error: deleteErr } = await supabase.from('students').delete().eq('student_id', studentId)
-  if (deleteErr) return res.status(500).json({ error: 'Failed to delete student.' })
-
-  await supabase.from('confirmations').delete().eq('student_id', studentId)
-
-  // Capture identifying info now — target_id alone is useless to look up
-  // once the record is actually gone.
-  await logAdminAction(req, 'student_delete', {
-    targetType: 'student',
-    targetId: studentId,
-    details: { full_name: student.full_name, year_level: student.year_level },
+  enqueueImport(async () => {
+    try {
+      await Promise.allSettled([
+        supabase.storage.from('id-cards').remove(filesToRemove.slice(0, 3)),
+        supabase.storage.from('qr-codes').remove([filesToRemove[3]]),
+      ])
+    } catch (err) {
+      logger.warn({ studentId, err: err.message }, 'Background file cleanup failed on delete')
+    }
+    try {
+      await supabase.from('confirmations').delete().eq('student_id', studentId)
+    } catch (err) {
+      logger.warn({ studentId, err: err.message }, 'Background confirmations cleanup failed')
+    }
+    try {
+      await logAdminAction(req, 'student_delete', {
+        targetType: 'student',
+        targetId: studentId,
+        details: { full_name: student.full_name, year_level: student.year_level, background: true },
+      })
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Background delete audit log failed')
+    }
+    logger.info({ studentId }, 'Background student delete cleanup completed')
   })
-
-  res.status(204).send()
 })
 
 // ── ADMIN: list all ──
@@ -438,14 +451,17 @@ router.post(
       .single()
     if (error) return res.status(400).json({ error: error.message })
 
-    // Auto-generate QR
-    try {
-      await getQRGenerator()(data)
-    } catch (err) {
-      logger.warn({ studentId: data.student_id, err: err.message }, 'QR auto-generate failed')
-    }
-
+    // Optimistic UX: return immediately, generate QR in background
     res.status(201).json(data)
+
+    // Background QR generation — don't block admin
+    enqueueImport(async () => {
+      try {
+        await getQRGenerator()(data)
+      } catch (err) {
+        logger.warn({ studentId: data.student_id, err: err.message }, 'QR auto-generate failed (background)')
+      }
+    })
   },
 )
 
@@ -739,46 +755,57 @@ router.patch(
       .single()
     if (error) return res.status(400).json({ error: error.message })
 
-    // Handle year level change — migrate files and QR
-    if (yearLevelChanged) {
-      try {
-        await migrateStudentFiles(req.params.studentId, oldYearLevel, newYearLevel)
-      } catch (err) {
-        logger.warn({ studentId: req.params.studentId, err: err.message }, 'File migration failed')
-      }
-      try {
-        const { deleteQRFile } = require('./qr')
-        await deleteQRFile(req.params.studentId, oldYearLevel)
-      } catch (err) {
-        logger.warn({ studentId: req.params.studentId, err: err.message }, 'QR deletion failed')
-      }
-    }
-
-    // Regenerate QR after edit
-    try {
-      await getQRGenerator()(data)
-    } catch (err) {
-      logger.warn({ studentId: data.student_id, err: err.message }, 'QR regenerate failed')
-    }
-
-    // Asset removals are destructive and not recoverable from the portal, so
-    // they get their own audit trail entries.
-    if (wantRemovePhoto && current.photo_url) {
-      await logAdminAction(req, 'student_photo_remove', {
-        targetType: 'student',
-        targetId: req.params.studentId,
-        details: { previous_url: current.photo_url },
-      })
-    }
-    if (wantRemoveSignature && current.signature_url) {
-      await logAdminAction(req, 'student_signature_remove', {
-        targetType: 'student',
-        targetId: req.params.studentId,
-        details: { previous_url: current.signature_url },
-      })
-    }
-
+    // Optimistic UX: return updated record immediately so admin can continue
+    // Heavy operations (file migration, QR regen, audit logs) happen in background
     res.json(data)
+
+    // Background: handle year level change — migrate files and QR
+    enqueueImport(async () => {
+      if (yearLevelChanged) {
+        try {
+          await migrateStudentFiles(req.params.studentId, oldYearLevel, newYearLevel)
+        } catch (err) {
+          logger.warn({ studentId: req.params.studentId, err: err.message }, 'Background file migration failed')
+        }
+        try {
+          const { deleteQRFile } = require('./qr')
+          await deleteQRFile(req.params.studentId, oldYearLevel)
+        } catch (err) {
+          logger.warn({ studentId: req.params.studentId, err: err.message }, 'Background QR deletion failed')
+        }
+      }
+
+      // Background QR regeneration
+      try {
+        await getQRGenerator()(data)
+      } catch (err) {
+        logger.warn({ studentId: data.student_id, err: err.message }, 'Background QR regenerate failed')
+      }
+
+      // Asset removals audit trail — background
+      if (wantRemovePhoto && current.photo_url) {
+        try {
+          await logAdminAction(req, 'student_photo_remove', {
+            targetType: 'student',
+            targetId: req.params.studentId,
+            details: { previous_url: current.photo_url },
+          })
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Background photo_remove audit failed')
+        }
+      }
+      if (wantRemoveSignature && current.signature_url) {
+        try {
+          await logAdminAction(req, 'student_signature_remove', {
+            targetType: 'student',
+            targetId: req.params.studentId,
+            details: { previous_url: current.signature_url },
+          })
+        } catch (err) {
+          logger.warn({ err: err.message }, 'Background signature_remove audit failed')
+        }
+      }
+    })
   },
 )
 
@@ -1247,24 +1274,56 @@ router.get('/export/card-design', requireAdmin, async (req, res) => {
   }
 })
 
-// Card expiry / renewal
+// Card expiry / renewal — optimistic: return immediately, process in background
 router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => {
   const { year_level, new_valid_until } = req.body
   if (!year_level || !new_valid_until) return res.status(400).json({ error: 'Missing fields' })
   if (!/^\d{4}-\d{2}-\d{2}$/.test(new_valid_until))
     return res.status(400).json({ error: 'new_valid_until must be YYYY-MM-DD format.' })
-  const { data, error } = await supabase
+
+  // Quick count for immediate response
+  const { count, error: countErr } = await supabase
     .from('students')
-    .update({ valid_until: new_valid_until })
+    .select('student_id', { count: 'exact', head: true })
     .eq('year_level', year_level)
-    .select()
-  if (error) return res.status(500).json({ error: error.message })
-  await logAdminAction(req, 'renew_cohort', {
-    targetType: 'cohort',
-    targetId: year_level,
-    details: { new_valid_until, affected_count: data?.length || 0 },
+
+  if (countErr) return res.status(500).json({ error: countErr.message })
+
+  const queued = count || 0
+
+  // Immediate optimistic response — admin can continue working
+  res.json({
+    renewed: queued,
+    queued,
+    background: true,
+    message: `${queued} student(s) queued for renewal to ${new_valid_until}.`,
   })
-  res.json({ renewed: data?.length || 0 })
+
+  // Background processing
+  enqueueImport(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .update({ valid_until: new_valid_until })
+        .eq('year_level', year_level)
+        .select('student_id')
+
+      if (error) {
+        logger.error({ err: error.message, year_level }, 'Background renew-cohort failed')
+        return
+      }
+
+      await logAdminAction(req, 'renew_cohort', {
+        targetType: 'cohort',
+        targetId: year_level,
+        details: { new_valid_until, affected_count: data?.length || 0, background: true },
+      })
+
+      logger.info({ year_level, new_valid_until, affected: data?.length || 0 }, 'Background renew-cohort completed')
+    } catch (err) {
+      logger.error({ err, year_level }, 'Background renew-cohort exception')
+    }
+  })
 })
 
 module.exports = router

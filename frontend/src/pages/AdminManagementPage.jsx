@@ -6,10 +6,14 @@ import SessionTimeout from '../components/SessionTimeout'
 import { useToast } from '../components/Toast'
 import NotificationCenter from '../components/NotificationCenter'
 import ConfirmDialog from '../components/ConfirmDialog'
+import useBackgroundJobs from '../hooks/useBackgroundJobs'
+import BackgroundJobsIndicator from '../components/BackgroundJobsIndicator'
+import { runOptimistic } from '../lib/optimistic'
 
 export default function AdminManagementPage() {
   const navigate = useNavigate()
   const toast = useToast()
+  const bgJobs = useBackgroundJobs()
   const [admins, setAdmins] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -59,28 +63,58 @@ export default function AdminManagementPage() {
   async function handleInvite(e) {
     e.preventDefault()
     if (!email.trim()) return
-    setSubmitting(true)
-    setInviteMsg('')
-    try {
-      const res = await adminFetch('/api/admins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), name: name.trim() || undefined, role }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setInviteMsg(data.error || 'Failed to invite admin.')
-        return
-      }
-      setAdmins((prev) => [...prev, data])
-      setEmail('')
-      setName('')
-      setInviteMsg('Invite sent! They will receive an email to set their password.')
-    } catch {
-      setInviteMsg('Something went wrong. Please try again.')
-    } finally {
-      setSubmitting(false)
+
+    const emailSnapshot = email.trim()
+    const nameSnapshot = name.trim()
+    const roleSnapshot = role
+    const prevAdmins = [...admins]
+
+    // Optimistic: show invited admin immediately with pending state
+    const optimisticAdmin = {
+      id: `temp_${Date.now()}`,
+      email: emailSnapshot,
+      name: nameSnapshot || null,
+      role: roleSnapshot,
+      created_at: new Date().toISOString(),
+      _optimistic: true,
     }
+
+    setAdmins((prev) => [...prev, optimisticAdmin])
+    setEmail('')
+    setName('')
+    setInviteMsg('')
+    toast.info(`Inviting ${emailSnapshot} — syncing in background...`)
+
+    runOptimistic({
+      label: `Invite admin ${emailSnapshot}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setAdmins(prevAdmins)
+        setEmail(emailSnapshot)
+        setName(nameSnapshot)
+        setInviteMsg('Invite failed — reverted')
+      },
+      action: async () => {
+        const res = await adminFetch('/api/admins', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailSnapshot, name: nameSnapshot || undefined, role: roleSnapshot }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to invite admin.')
+        return data
+      },
+      onSuccess: (data) => {
+        setAdmins((prev) => prev.map((a) => (a.id === optimisticAdmin.id ? data : a)))
+        setInviteMsg('Invite sent! They will receive an email to set their password.')
+      },
+      onError: (err) => {
+        setInviteMsg(err.message || 'Failed to invite admin.')
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'create',
+    })
   }
 
   function handleRemove(admin) {
@@ -89,21 +123,34 @@ export default function AdminManagementPage() {
 
   async function confirmRemove() {
     if (!pendingRemove) return
-    setAdminActionLoading(true)
-    try {
-      const res = await adminFetch(`/api/admins/${pendingRemove.id}`, { method: 'DELETE' })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to remove admin.')
-        return
-      }
-      setAdmins((prev) => prev.filter((a) => a.id !== pendingRemove.id))
-      setPendingRemove(null)
-    } catch {
-      toast.error('Failed to remove admin.')
-    } finally {
-      setAdminActionLoading(false)
-    }
+    const adminToRemove = pendingRemove
+    const prevAdmins = [...admins]
+
+    // Optimistic: remove immediately and close modal
+    setAdmins((prev) => prev.filter((a) => a.id !== adminToRemove.id))
+    setPendingRemove(null)
+    toast.info(`Removing ${adminToRemove.email} — syncing...`)
+
+    runOptimistic({
+      label: `Remove admin ${adminToRemove.email}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setAdmins(prevAdmins)
+        toast.error('Remove failed — reverted')
+      },
+      action: async () => {
+        const res = await adminFetch(`/api/admins/${adminToRemove.id}`, { method: 'DELETE' })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to remove admin.')
+        return data
+      },
+      onSuccess: () => {
+        toast.success(`${adminToRemove.email} removed`)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'delete',
+    })
   }
 
   function handleRoleChange(admin, newRole) {
@@ -113,29 +160,41 @@ export default function AdminManagementPage() {
 
   async function confirmRoleChange() {
     if (!pendingRoleChange) return
-    setAdminActionLoading(true)
-    try {
-      const res = await adminFetch(`/api/admins/${pendingRoleChange.admin.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: pendingRoleChange.newRole }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to update role.')
-        return
-      }
-      setAdmins((prev) =>
-        prev.map((a) =>
-          a.id === pendingRoleChange.admin.id ? { ...a, role: pendingRoleChange.newRole } : a,
-        ),
-      )
-      setPendingRoleChange(null)
-    } catch {
-      toast.error('Failed to update role.')
-    } finally {
-      setAdminActionLoading(false)
-    }
+    const { admin, newRole } = pendingRoleChange
+    const prevAdmins = [...admins]
+    const oldRole = admin.role
+
+    // Optimistic: update role immediately and close modal
+    setAdmins((prev) =>
+      prev.map((a) => (a.id === admin.id ? { ...a, role: newRole } : a)),
+    )
+    setPendingRoleChange(null)
+    toast.info(`Updating role for ${admin.email} — syncing...`)
+
+    runOptimistic({
+      label: `Update role for ${admin.email}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setAdmins(prevAdmins)
+        toast.error('Role update failed — reverted')
+      },
+      action: async () => {
+        const res = await adminFetch(`/api/admins/${admin.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: newRole }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to update role.')
+        return data
+      },
+      onSuccess: () => {
+        toast.success(`Role updated to ${newRole}`)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'update',
+    })
   }
 
   function formatDate(d) {
@@ -156,7 +215,14 @@ export default function AdminManagementPage() {
           <button className="btn-back" onClick={() => navigate('/admin')}>
             ← Dashboard
           </button>
-          <div className="topbar-title">Manage Admins</div>
+          <div className="topbar-title">
+            Manage Admins
+            {bgJobs.hasPending && (
+              <span style={{ marginLeft: '10px', color: '#60A5FA', fontSize: '11px', fontWeight: 400 }}>
+                ● {bgJobs.pendingCount} syncing
+              </span>
+            )}
+          </div>
         </div>
         <div className="u-flex u-ai-center u-gap-8">
           <NotificationCenter />
@@ -288,31 +354,11 @@ export default function AdminManagementPage() {
                   marginBottom: '4px',
                 }}
               >
-                <span
-                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
-                >
-                  Name
-                </span>
-                <span
-                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
-                >
-                  Email
-                </span>
-                <span
-                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
-                >
-                  Role
-                </span>
-                <span
-                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
-                >
-                  Added
-                </span>
-                <span
-                  className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide"
-                >
-                  Action
-                </span>
+                <span className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide">Name</span>
+                <span className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide">Email</span>
+                <span className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide">Role</span>
+                <span className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide">Added</span>
+                <span className="u-fs-11 u-fw-600 u-c-muted u-upper u-ls-wide">Action</span>
               </div>
               {admins.map((a) => (
                 <div
@@ -324,14 +370,11 @@ export default function AdminManagementPage() {
                     padding: '10px 12px',
                     borderBottom: '1px solid var(--border)',
                     alignItems: 'center',
+                    opacity: a._optimistic ? 0.7 : 1,
                   }}
                 >
-                  <span
-                    className="u-fs-13 u-fw-500 u-c-text u-ov-hidden u-ellipsis u-nowrap"
-                  >
-                    {a.name || (
-                      <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>—</span>
-                    )}
+                  <span className="u-fs-13 u-fw-500 u-c-text u-ov-hidden u-ellipsis u-nowrap">
+                    {a.name || <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>—</span>}
                     {a.id === currentUserId && (
                       <span
                         style={{
@@ -348,15 +391,12 @@ export default function AdminManagementPage() {
                         You
                       </span>
                     )}
+                    {a._optimistic && (
+                      <span style={{ marginLeft: '6px', fontSize: '10px', color: '#3B82F6' }}>● syncing</span>
+                    )}
                   </span>
-                  <span
-                    className="u-fs-13 u-c-text u-ov-hidden u-ellipsis u-nowrap"
-                  >
-                    {a.email}
-                  </span>
-                  <span
-                    className="u-fs-12 u-ov-hidden u-ellipsis u-nowrap"
-                  >
+                  <span className="u-fs-13 u-c-text u-ov-hidden u-ellipsis u-nowrap">{a.email}</span>
+                  <span className="u-fs-12 u-ov-hidden u-ellipsis u-nowrap">
                     {a.id === currentUserId ? (
                       <span className="u-c-muted">{a.role || 'admin'}</span>
                     ) : (
@@ -379,21 +419,14 @@ export default function AdminManagementPage() {
                       </select>
                     )}
                   </span>
-                  <span
-                    className="u-fs-12 u-c-muted u-ov-hidden u-ellipsis u-nowrap"
-                  >
+                  <span className="u-fs-12 u-c-muted u-ov-hidden u-ellipsis u-nowrap">
                     {formatDate(a.created_at)}
                   </span>
                   <span>
                     {a.id === currentUserId ? (
                       <span className="u-fs-11 u-c-muted">—</span>
                     ) : isLastAdmin ? (
-                      <span
-                        className="u-fs-11 u-c-muted"
-                        title="Cannot remove the last admin"
-                      >
-                        —
-                      </span>
+                      <span className="u-fs-11 u-c-muted" title="Cannot remove the last admin">—</span>
                     ) : (
                       <button
                         style={{
@@ -418,6 +451,7 @@ export default function AdminManagementPage() {
           )}
         </div>
       </div>
+      <BackgroundJobsIndicator jobs={bgJobs.jobs} onClear={bgJobs.clearJobs} />
       <SessionTimeout />
     </div>
   )
