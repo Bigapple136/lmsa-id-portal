@@ -201,7 +201,7 @@ router.get('/', requireAdmin, async (req, res) => {
   res.json(data)
 })
 
-// ADMIN: upload new template for a specific side
+// ADMIN: upload new template for a specific side — optimistic: return immediately, detection in background
 router.post('/', requireAdmin, requireFullAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded.' })
 
@@ -209,7 +209,6 @@ router.post('/', requireAdmin, requireFullAdmin, upload.single('file'), async (r
   if (!allowedTypes.includes(req.file.mimetype))
     return res.status(400).json({ error: 'Only PNG and JPG files are accepted.' })
 
-  // Get side from query param (default 'front')
   const side = req.query.side === 'back' ? 'back' : 'front'
 
   const timestamp = Date.now()
@@ -228,18 +227,7 @@ router.post('/', requireAdmin, requireFullAdmin, upload.single('file'), async (r
     data: { publicUrl },
   } = supabase.storage.from('templates').getPublicUrl(storagePath)
 
-  // Run zone detection on the uploaded image (full resolution)
-  let zones = null
-  let suggestedLayout = null
-  try {
-    const detection = await detectZonesFromBuffer(req.file.buffer)
-    zones = detection.zones
-    suggestedLayout = generateSuggestedLayout(zones, side)
-  } catch (detectErr) {
-    logger.warn({ err: detectErr }, 'Zone detection failed on upload, continuing without')
-  }
-
-  // Deactivate previous active template for this side
+  // Deactivate previous active template for this side — fast, do synchronously
   await supabase.from('templates').update({ is_active: false }).eq('side', side).eq('is_active', true)
 
   const insertData = {
@@ -248,8 +236,6 @@ router.post('/', requireAdmin, requireFullAdmin, upload.single('file'), async (r
     is_active: true,
     side,
   }
-  if (zones) insertData[`zones_${side}`] = zones
-  if (suggestedLayout) insertData[`suggested_layout_${side}`] = suggestedLayout
 
   const { data, error } = await supabase
     .from('templates')
@@ -258,10 +244,33 @@ router.post('/', requireAdmin, requireFullAdmin, upload.single('file'), async (r
     .single()
 
   if (error) return res.status(400).json({ error: error.message })
-  res.status(201).json(data)
+
+  // Optimistic: return immediately so admin can continue working
+  // Zone detection (heavy CV operation) runs in background and patches the row
+  res.status(201).json({ ...data, background: true, message: 'Template uploaded — zone detection queued in background' })
+
+  const fileBuffer = req.file.buffer // capture for background
+  const { enqueueImport } = require('../queue')
+  enqueueImport(async () => {
+    try {
+      const { detectZonesFromBuffer } = require('../utils/detectZones')
+      const detection = await detectZonesFromBuffer(fileBuffer)
+      const zones = detection.zones
+      const suggestedLayout = generateSuggestedLayout(zones, side)
+      if (zones || suggestedLayout) {
+        const patch = {}
+        if (zones) patch[`zones_${side}`] = zones
+        if (suggestedLayout) patch[`suggested_layout_${side}`] = suggestedLayout
+        await supabase.from('templates').update(patch).eq('id', data.id)
+        logger.info({ templateId: data.id, side, zonesCount: zones?.length }, 'Background zone detection completed')
+      }
+    } catch (detectErr) {
+      logger.warn({ err: detectErr.message, templateId: data.id }, 'Background zone detection failed')
+    }
+  })
 })
 
-// ADMIN: set active template
+// ADMIN: set active template — optimistic: activate immediately, detection background if needed
 router.put('/:id/activate', requireAdmin, requireFullAdmin, async (req, res) => {
   const { id } = req.params
   const { data: template, error: fetchError } = await supabase
@@ -282,51 +291,64 @@ router.put('/:id/activate', requireAdmin, requireFullAdmin, async (req, res) => 
     .single()
   if (error) return res.status(400).json({ error: error.message })
 
-  // If zones/suggested layout missing, run detection now
   let zones = template[`zones_${side}`] || null
   let suggestedLayout = template[`suggested_layout_${side}`] || null
 
-  if (!zones || !suggestedLayout) {
-    try {
-      // Download image from storage URL
-      const response = await fetch(template.file_url)
-      if (response.ok) {
-        const buffer = Buffer.from(await response.arrayBuffer())
-        const detection = await detectZonesFromBuffer(buffer)
-        zones = detection.zones
-        suggestedLayout = generateSuggestedLayout(zones, side)
-
-        // Store detected data
-        await supabase.from('templates').update({
-          [`zones_${side}`]: zones,
-          [`suggested_layout_${side}`]: suggestedLayout,
-        }).eq('id', id)
-      }
-    } catch (detectErr) {
-      logger.warn({ err: detectErr }, 'Zone detection failed on activate')
-    }
-  }
-
+  // Optimistic: return immediately with whatever zones we have
   res.json({
     template: updated,
     suggestedLayout: suggestedLayout ? { front: side === 'front' ? suggestedLayout : null, back: side === 'back' ? suggestedLayout : null } : null,
     zones: zones ? { front: side === 'front' ? zones : null, back: side === 'back' ? zones : null } : null,
+    background: !zones || !suggestedLayout ? true : false,
   })
+
+  // If zones missing, run detection in background
+  if (!zones || !suggestedLayout) {
+    const { enqueueImport } = require('../queue')
+    enqueueImport(async () => {
+      try {
+        const response = await fetch(template.file_url)
+        if (response.ok) {
+          const buffer = Buffer.from(await response.arrayBuffer())
+          const detection = await detectZonesFromBuffer(buffer)
+          const bgZones = detection.zones
+          const bgLayout = generateSuggestedLayout(bgZones, side)
+          await supabase.from('templates').update({
+            [`zones_${side}`]: bgZones,
+            [`suggested_layout_${side}`]: bgLayout,
+          }).eq('id', id)
+          logger.info({ templateId: id, side }, 'Background zone detection on activate completed')
+        }
+      } catch (detectErr) {
+        logger.warn({ err: detectErr.message, templateId: id }, 'Background zone detection on activate failed')
+      }
+    })
+  }
 })
 
-// ADMIN: delete template
+// ADMIN: delete template — optimistic: delete DB immediately, storage cleanup background
 router.delete('/:id', requireAdmin, requireFullAdmin, async (req, res) => {
   const { id } = req.params
   const { data: template } = await supabase.from('templates').select('*').eq('id', id).maybeSingle()
   if (!template) return res.status(404).json({ error: 'Template not found.' })
 
-  // Delete from storage
-  const path = template.file_url.split('/templates/').pop()
-  if (path) await supabase.storage.from('templates').remove([path])
-
   const { error } = await supabase.from('templates').delete().eq('id', id)
   if (error) return res.status(400).json({ error: error.message })
-  res.json({ ok: true })
+
+  res.json({ ok: true, background: true })
+
+  const filePath = template.file_url.split('/templates/').pop()
+  if (filePath) {
+    const { enqueueImport } = require('../queue')
+    enqueueImport(async () => {
+      try {
+        await supabase.storage.from('templates').remove([filePath])
+        logger.info({ templateId: id }, 'Background template storage cleanup completed')
+      } catch (err) {
+        logger.warn({ err: err.message, templateId: id }, 'Background template storage cleanup failed')
+      }
+    })
+  }
 })
 
 module.exports = router

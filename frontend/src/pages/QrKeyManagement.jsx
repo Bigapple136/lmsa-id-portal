@@ -6,6 +6,9 @@ import { useToast } from '../components/Toast'
 import EmptyState from '../components/EmptyState'
 import NotificationCenter from '../components/NotificationCenter'
 import SessionTimeout from '../components/SessionTimeout'
+import useBackgroundJobs from '../hooks/useBackgroundJobs'
+import BackgroundJobsIndicator from '../components/BackgroundJobsIndicator'
+import { runOptimistic } from '../lib/optimistic'
 
 const STATUS_COLORS = {
   active: { bg: 'var(--success-bg)', text: 'var(--success-text)', border: 'var(--success-border)' },
@@ -77,6 +80,7 @@ function StatusBadgeCell({ status }) {
 export default function QrKeyManagement() {
   const toast = useToast()
   const navigate = useNavigate()
+  const bgJobs = useBackgroundJobs()
   const [keys, setKeys] = useState([])
   const [audit, setAudit] = useState([])
   const [loading, setLoading] = useState(true)
@@ -132,26 +136,54 @@ export default function QrKeyManagement() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // ── Optimistic: rotate key ──
   async function handleRotate() {
-    setRotateLoading(true)
-    try {
-      const res = await adminJson('/api/qr/keys/rotate', 'POST', {})
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Rotation failed')
-      }
-      const data = await res.json()
-      toast.success(`Key rotated: ${data.old_kid} → ${data.new_kid}`)
-      setRotateModalOpen(false)
-      await loadKeys()
-      await loadAudit()
-    } catch (err) {
-      toast.error('Rotation failed: ' + err.message)
-    } finally {
-      setRotateLoading(false)
+    const prevKeys = [...keys]
+    const prevAudit = [...audit]
+    const optimisticNewKey = {
+      kid: `k_${new Date().toISOString().slice(0, 10).replace(/-/g, '_')}_optimistic`,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      rotated_from: keys.find(k => k.status === 'active')?.kid || null,
+      _optimistic: true,
     }
+
+    // Optimistic: show new key immediately, mark old as retired, close modal
+    setKeys((prev) => [
+      optimisticNewKey,
+      ...prev.map((k) => (k.status === 'active' ? { ...k, status: 'retired', rotated_at: new Date().toISOString() } : k)),
+    ])
+    setRotateModalOpen(false)
+    toast.info('Rotating QR signing key — syncing in background...')
+
+    runOptimistic({
+      label: 'Rotate QR signing key',
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setKeys(prevKeys)
+        setAudit(prevAudit)
+        toast.error('Key rotation failed — reverted')
+      },
+      action: async () => {
+        const res = await adminJson('/api/qr/keys/rotate', 'POST', {})
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Rotation failed')
+        }
+        return res.json()
+      },
+      onSuccess: (data) => {
+        toast.success(`Key rotated: ${data.old_kid} → ${data.new_kid}`)
+        loadKeys()
+        loadAudit()
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'rotate',
+    })
   }
 
+  // ── Optimistic: revoke key ──
   async function handleRevoke() {
     if (!revokeKid) return
     if (!revokeReason.trim()) {
@@ -162,25 +194,43 @@ export default function QrKeyManagement() {
       toast.error('Type the key ID exactly to confirm revocation')
       return
     }
-    setRevokeLoading(true)
-    try {
-      const res = await adminJson(`/api/qr/keys/revoke/${revokeKid}`, 'POST', { reason: revokeReason })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Revocation failed')
-      }
-      toast.success(`Key ${revokeKid} revoked`)
-      setRevokeModalOpen(false)
-      setRevokeKid(null)
-      setRevokeReason('')
-      setRevokeConfirm('')
-      await loadKeys()
-      await loadAudit()
-    } catch (err) {
-      toast.error('Revocation failed: ' + err.message)
-    } finally {
-      setRevokeLoading(false)
-    }
+
+    const prevKeys = [...keys]
+    const kidToRevoke = revokeKid
+    const reasonSnapshot = revokeReason
+
+    // Optimistic: mark as revoked immediately, close modal
+    setKeys((prev) => prev.map((k) => (k.kid === kidToRevoke ? { ...k, status: 'revoked', revoked_at: new Date().toISOString() } : k)))
+    setRevokeModalOpen(false)
+    setRevokeKid(null)
+    setRevokeReason('')
+    setRevokeConfirm('')
+    toast.info(`Revoking key ${kidToRevoke} — syncing...`)
+
+    runOptimistic({
+      label: `Revoke key ${kidToRevoke}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setKeys(prevKeys)
+        toast.error('Revocation failed — reverted')
+      },
+      action: async () => {
+        const res = await adminJson(`/api/qr/keys/revoke/${kidToRevoke}`, 'POST', { reason: reasonSnapshot })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Revocation failed')
+        }
+        return res.json()
+      },
+      onSuccess: () => {
+        toast.success(`Key ${kidToRevoke} revoked`)
+        loadKeys()
+        loadAudit()
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'revoke',
+    })
   }
 
   async function handleInspect() {
@@ -232,7 +282,14 @@ export default function QrKeyManagement() {
             ← Dashboard
           </button>
           <div>
-            <div className="topbar-title">QR Key Management</div>
+            <div className="topbar-title">
+              QR Key Management
+              {bgJobs.hasPending && (
+                <span style={{ marginLeft: '10px', color: '#60A5FA', fontSize: '11px', fontWeight: 400 }}>
+                  ● {bgJobs.pendingCount} syncing
+                </span>
+              )}
+            </div>
             <div className="topbar-sub">Credential security · signing keys and audit trail</div>
           </div>
         </div>
@@ -292,7 +349,6 @@ export default function QrKeyManagement() {
         )}
       </section>
 
-      {/* Active Key Banner */}
       {activeKey && (
         <div style={{
           background: 'linear-gradient(135deg, var(--success-bg) 0%, #E6F4EC 100%)',
@@ -305,11 +361,14 @@ export default function QrKeyManagement() {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
+          opacity: activeKey._optimistic ? 0.8 : 1,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <span className="material-symbols-outlined" style={{ color: 'var(--success-text)', fontSize: '24px' }}>verified</span>
             <div>
-              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--success-text)' }}>Active Signing Key</div>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: 'var(--success-text)' }}>
+                Active Signing Key {activeKey._optimistic && <span style={{ fontSize: '10px', color: '#3B82F6' }}>● syncing</span>}
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                 <KidBadge kid={activeKey.kid} />
                 <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Created {formatDate(activeKey.created_at)}</span>
@@ -328,7 +387,6 @@ export default function QrKeyManagement() {
         </div>
       )}
 
-      {/* Key Ring Table */}
       <section style={{ marginBottom: '32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--navy)' }}>Key Ring</h2>
@@ -359,9 +417,10 @@ export default function QrKeyManagement() {
               </thead>
               <tbody>
                 {keys.map((key) => (
-                  <tr key={key.kid} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <tr key={key.kid} style={{ borderBottom: '1px solid var(--border)', opacity: key._optimistic ? 0.7 : 1 }}>
                     <td style={{ padding: '12px 16px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: '12px' }}>
                       <KidBadge kid={key.kid} />
+                      {key._optimistic && <span style={{ marginLeft: '6px', fontSize: '10px', color: '#3B82F6' }}>● syncing</span>}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <StatusBadgeCell status={key.status} />
@@ -407,7 +466,6 @@ export default function QrKeyManagement() {
         )}
       </section>
 
-      {/* Audit Log */}
       <section>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h2 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--navy)' }}>Audit Log</h2>
@@ -486,7 +544,6 @@ export default function QrKeyManagement() {
         )}
       </section>
 
-      {/* Rotate Modal */}
       {rotateModalOpen && (
         <div className="modal-overlay">
           <div
@@ -529,7 +586,6 @@ export default function QrKeyManagement() {
         </div>
       )}
 
-      {/* Revoke Modal */}
       {revokeModalOpen && (
         <div className="modal-overlay">
           <div
@@ -589,7 +645,6 @@ export default function QrKeyManagement() {
         </div>
       )}
 
-      {/* QR Inspector Modal */}
       {inspectModalOpen && (
         <div className="modal-overlay">
           <div
@@ -628,7 +683,6 @@ export default function QrKeyManagement() {
 
               {inspectResult && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: '12px', background: 'var(--white)', overflow: 'hidden' }}>
-                  {/* Summary Banner */}
                   <div style={{
                     padding: '16px 20px',
                     background: inspectResult.valid ? 'var(--success-bg)' : 'var(--error-bg)',
@@ -660,10 +714,8 @@ export default function QrKeyManagement() {
                     </div>
                   </div>
 
-                  {/* Details Grid */}
                   <div style={{ padding: '20px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-                      {/* Token Info */}
                       <div style={{ background: 'var(--bg)', borderRadius: '8px', padding: '16px' }}>
                         <h4 style={{ margin: '0 0 12px', fontSize: '12px', fontWeight: '600', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Token Details</h4>
                         <div style={{ fontSize: '12px', lineHeight: '1.8' }}>
@@ -680,7 +732,6 @@ export default function QrKeyManagement() {
                         </div>
                       </div>
 
-                      {/* Key Info */}
                       <div style={{ background: 'var(--bg)', borderRadius: '8px', padding: '16px' }}>
                         <h4 style={{ margin: '0 0 12px', fontSize: '12px', fontWeight: '600', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Key Status</h4>
                         <div style={{ fontSize: '12px', lineHeight: '1.8' }}>
@@ -695,7 +746,6 @@ export default function QrKeyManagement() {
                         </div>
                       </div>
 
-                      {/* Student Info */}
                       {inspectResult.student && (
                         <div style={{ background: 'var(--bg)', borderRadius: '8px', padding: '16px' }}>
                           <h4 style={{ margin: '0 0 12px', fontSize: '12px', fontWeight: '600', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Student Record</h4>
@@ -711,7 +761,6 @@ export default function QrKeyManagement() {
                         </div>
                       )}
 
-                      {/* Raw Claims (for v2) */}
                       {inspectResult.token_info?.claims && (
                         <div style={{ background: 'var(--bg)', borderRadius: '8px', padding: '16px' }}>
                           <h4 style={{ margin: '0 0 12px', fontSize: '12px', fontWeight: '600', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Raw Claims (v2)</h4>
@@ -729,6 +778,7 @@ export default function QrKeyManagement() {
         </div>
       )}
       </div>
+      <BackgroundJobsIndicator jobs={bgJobs.jobs} onClear={bgJobs.clearJobs} />
       <SessionTimeout />
     </div>
   )

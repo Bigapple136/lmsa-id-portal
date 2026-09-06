@@ -244,41 +244,103 @@ export default function SettingsTab() {
                   icon="💾"
                   title="System backup"
                   admin
-                  desc="Download a full backup of all database records and uploaded files (photos, signatures, QR codes, templates). The backup is delivered as a ZIP file."
+                  desc="Download a full backup of all database records and uploaded files (photos, signatures, QR codes, templates). The backup is delivered as a ZIP file. Processing happens in background so you can continue working."
                 >
                   <button
                     className="btn-gold"
                     onClick={async () => {
                       try {
                         setDownloading((prev) => ({ ...prev, backup: true }))
-                        const res = await adminFetch('/api/backup')
-                        if (!res.ok) {
-                          const body = await res.json().catch(() => ({}))
-                          toast.error(body.error || 'Backup failed.')
+                        toast.info('Backup queued — processing in background, you can continue working...')
+                        // Optimistic: queue backup in background, poll for readiness
+                        const queueRes = await adminFetch('/api/backup?background=true')
+                        const queueData = await queueRes.json().catch(() => ({}))
+                        if (!queueRes.ok) {
+                          toast.error(queueData.error || 'Backup queue failed.')
+                          setDownloading((prev) => ({ ...prev, backup: false }))
                           return
                         }
-                        const blob = await res.blob()
-                        const disposition = res.headers.get('Content-Disposition') || ''
-                        const match = disposition.match(/filename="?(.+?)"?$/)
-                        const filename = match ? match[1] : 'lmsa-backup.zip'
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement('a')
-                        a.href = url
-                        a.download = filename
-                        document.body.appendChild(a)
-                        a.click()
-                        a.remove()
-                        URL.revokeObjectURL(url)
+                        const jobId = queueData.jobId
+                        if (!jobId) {
+                          // Fallback: if backend returned direct file (legacy), handle blob
+                          const blob = await queueRes.blob()
+                          const disposition = queueRes.headers.get('Content-Disposition') || ''
+                          const match = disposition.match(/filename="?(.+?)"?$/)
+                          const filename = match ? match[1] : 'lmsa-backup.zip'
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url
+                          a.download = filename
+                          document.body.appendChild(a)
+                          a.click()
+                          a.remove()
+                          URL.revokeObjectURL(url)
+                          toast.success('Backup downloaded')
+                          setDownloading((prev) => ({ ...prev, backup: false }))
+                          return
+                        }
+                        // Poll for ready status — try generic jobs endpoint first, fallback to backup
+                        let attempts = 0
+                        const maxAttempts = 60 // up to 5 minutes
+                        const poll = async () => {
+                          attempts++
+                          try {
+                            let statusRes = await adminFetch(`/api/jobs/${jobId}?status=true`)
+                            let statusData = await statusRes.json().catch(() => ({}))
+                            if (!statusRes.ok || !statusData.status) {
+                              statusRes = await adminFetch(`/api/backup/${jobId}?status=true`)
+                              statusData = await statusRes.json().catch(() => ({}))
+                            }
+                            if (statusData.status === 'ready') {
+                              // Download file — try jobs first, then backup
+                              let dlRes = await adminFetch(`/api/jobs/${jobId}`)
+                              if (!dlRes.ok) dlRes = await adminFetch(`/api/backup/${jobId}`)
+                              if (!dlRes.ok) throw new Error('Download failed')
+                              const blob = await dlRes.blob()
+                              const disposition = dlRes.headers.get('Content-Disposition') || ''
+                              const match = disposition.match(/filename="?(.+?)"?$/)
+                              const filename = match ? match[1] : statusData.filename || 'lmsa-backup.zip'
+                              const url = URL.createObjectURL(blob)
+                              const a = document.createElement('a')
+                              a.href = url
+                              a.download = filename
+                              document.body.appendChild(a)
+                              a.click()
+                              a.remove()
+                              URL.revokeObjectURL(url)
+                              toast.success('Backup ready — download started')
+                              setDownloading((prev) => ({ ...prev, backup: false }))
+                              return
+                            } else if (statusData.status === 'failed') {
+                              toast.error(statusData.error || 'Backup failed in background')
+                              setDownloading((prev) => ({ ...prev, backup: false }))
+                              return
+                            }
+                            if (attempts < maxAttempts) {
+                              setTimeout(poll, 5000)
+                            } else {
+                              toast.info('Backup still processing — check again later. Job ID: ' + jobId)
+                              setDownloading((prev) => ({ ...prev, backup: false }))
+                            }
+                          } catch (err) {
+                            if (attempts < maxAttempts) {
+                              setTimeout(poll, 5000)
+                            } else {
+                              toast.error('Backup polling failed: ' + (err.message || 'unknown'))
+                              setDownloading((prev) => ({ ...prev, backup: false }))
+                            }
+                          }
+                        }
+                        setTimeout(poll, 3000)
                       } catch {
                         toast.error('Backup failed. Please try again.')
-                      } finally {
                         setDownloading((prev) => ({ ...prev, backup: false }))
                       }
                     }}
                     disabled={downloading.backup}
                     style={{ fontSize: '13px', padding: '9px 18px' }}
                   >
-                    {downloading.backup ? 'Generating backup...' : 'Download Full Backup'}
+                    {downloading.backup ? 'Backup queued — processing...' : 'Download Full Backup'}
                   </button>
                 </SettingsCard>
               )}

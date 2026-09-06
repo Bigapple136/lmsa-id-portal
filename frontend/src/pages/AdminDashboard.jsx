@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import HCaptcha from '@hcaptcha/react-hcaptcha'
 import { supabase } from '../lib/supabase'
@@ -13,6 +13,9 @@ import SettingsCard from '../components/SettingsCard'
 import FieldToggleGroup from '../components/FieldToggleGroup'
 import ConfirmDialog from '../components/ConfirmDialog'
 import AssetSlot from '../components/AssetSlot'
+import BackgroundJobsIndicator from '../components/BackgroundJobsIndicator'
+import useBackgroundJobs from '../hooks/useBackgroundJobs'
+import { runOptimistic, createJob } from '../lib/optimistic'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
 import { Doughnut, Bar } from 'react-chartjs-2'
 
@@ -31,12 +34,9 @@ import StudentsTab from './admin/StudentsTab'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
-
-
-
-
 export default function AdminDashboard() {
   const toast = useToast()
+  const bgJobs = useBackgroundJobs()
   const [session, setSession] = useState(null)
   const [userRole, setUserRole] = useState(null)
   const [email, setEmail] = useState('')
@@ -48,8 +48,6 @@ export default function AdminDashboard() {
   const captchaRef = useRef(null)
   const navigate = useNavigate()
 
-  // Tab state lives in the query string so a section is bookmarkable,
-  // shareable, and reachable with the browser Back button.
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const activeTab = ADMIN_TABS.some((t) => t.id === tabParam) ? tabParam : 'overview'
@@ -118,32 +116,24 @@ export default function AdminDashboard() {
   const [yearFilter, setYearFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
 
-  // Field toggle state
   const [fields, setFields] = useState(null)
   const [fieldsSaving, setFieldsSaving] = useState(false)
   const [fieldsMsg, setFieldsMsg] = useState(null)
 
-  // QR field toggle state
   const [qrFields, setQrFields] = useState(null)
   const [qrFieldsSaving, setQrFieldsSaving] = useState(false)
   const [qrFieldsMsg, setQrFieldsMsg] = useState(null)
 
-  // Card layout state
   const [cardLayout, setCardLayout] = useState(null)
-
-  // Field→side assignment (front | back | both)
   const [fieldSides, setFieldSides] = useState(null)
 
-  // Download state
   const [downloading, setDownloading] = useState({})
 
-  // QR state
   const [qrGenerating, setQrGenerating] = useState(false)
   const [qrMsg, setQrMsg] = useState(null)
   const [qrRegenerateModalOpen, setQrRegenerateModalOpen] = useState(false)
   const [qrRegenerateAcknowledged, setQrRegenerateAcknowledged] = useState(false)
 
-  // Submission form state
   const [submissions, setSubmissions] = useState([])
   const [submissionsFilter, setSubmissionsFilter] = useState('pending')
   const [submissionFormEnabled, setSubmissionFormEnabled] = useState(false)
@@ -157,7 +147,6 @@ export default function AdminDashboard() {
 
   const DRAFT_KEY = 'admin_dashboard_draft'
 
-  // Restore draft from sessionStorage on mount
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(DRAFT_KEY)
@@ -174,12 +163,9 @@ export default function AdminDashboard() {
       console.warn('[Draft] Failed to restore draft', err)
     }
     sessionStorage.removeItem(DRAFT_KEY)
-    // Mount-only: this restores a draft once and then clears it. setActiveTab
-    // is stable, and re-running this would resurrect a discarded draft.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Save form text to sessionStorage when tab goes to background
   useEffect(() => {
     function saveDraft() {
       if (document.visibilityState !== 'hidden') return
@@ -202,7 +188,6 @@ export default function AdminDashboard() {
     return () => document.removeEventListener('visibilitychange', saveDraft)
   }, [manualForm, editForm, uploadMode, activeTab])
 
-  // Warn before leaving with unsaved data
   useEffect(() => {
     function onBeforeUnload(e) {
       const hasDraft =
@@ -225,9 +210,7 @@ export default function AdminDashboard() {
   }, [])
 
   useEffect(() => {
-    if (session === null) return // still loading
-    // No session — the login form is rendered inline below (line ~657).
-    // No navigation needed; /admin/login does not exist as a route.
+    if (session === null) return
   }, [session])
 
   useEffect(() => {
@@ -249,8 +232,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!session) return
     const init = async () => {
-      // A failure to load the session/role must never prevent the rest of the
-      // dashboard from loading — default to full admin and continue.
       try {
         const res = await authMe()
         if (res.ok) {
@@ -283,7 +264,6 @@ export default function AdminDashboard() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
-        console.error('[Auth] Sign-in failed:', error.message, error)
         const msg = error.message.includes('Invalid login credentials')
           ? 'Invalid email or password. If you were just invited, click the link in your email to set a password first.'
           : error.message
@@ -296,7 +276,6 @@ export default function AdminDashboard() {
         setCaptchaToken(null)
       }
     } catch (err) {
-      console.error('[Auth] Sign-in request error:', err)
       setLoginError('Unable to reach the authentication server. Please check your connection and try again.')
     } finally {
       setLoginLoading(false)
@@ -316,8 +295,6 @@ export default function AdminDashboard() {
     return results
   }
 
-  // Isolate each dashboard section so one failing request can't cascade into an
-  // unhandled rejection that stalls the rest of the dashboard.
   const safeLoad = (fn) => async () => {
     try {
       await fn()
@@ -326,18 +303,33 @@ export default function AdminDashboard() {
     }
   }
 
+  // Filtered list — memoized to avoid re-filter on pagination changes and preserve stable reference
+  // Defined early so effects can reference its length
+  const filtered = useMemo(
+    () =>
+      students.filter(
+        (s) =>
+          (yearFilter === 'all' || s.year_level === yearFilter) &&
+          (statusFilter === 'all' ||
+            (statusFilter === 'issues' ? ['issue', 'photo_issue'].includes(s.status) : s.status === statusFilter)) &&
+          (s.full_name.toLowerCase().includes(search.toLowerCase()) ||
+            s.student_id.toLowerCase().includes(search.toLowerCase())),
+      ),
+    [students, yearFilter, statusFilter, search],
+  )
+
   async function loadAll() {
     setDataLoading(true)
     try {
       await eachLimit(
         [
-          safeLoad(loadStudents),
+          safeLoad(() => loadStudents({ silent: true, preservePage: true })),
           safeLoad(loadTemplate),
           safeLoad(loadFields),
           safeLoad(loadQrFields),
           safeLoad(loadLayout),
           safeLoad(loadFieldSides),
-          safeLoad(loadSubmissions),
+          safeLoad(() => loadSubmissions(undefined, { silent: true })),
           safeLoad(loadSubmissionForm),
           safeLoad(loadAnalytics),
         ],
@@ -348,35 +340,188 @@ export default function AdminDashboard() {
     }
   }
 
-  async function loadStudents() {
-    const res = await adminFetch('/api/students')
-    if (!res.ok) return
-    const data = await res.json()
-    setStudents(data)
-    setCurrentPage(1)
-    setStats({
-      total: data.length,
-      confirmed: data.filter((s) => s.status === 'confirmed').length,
-      pending: data.filter((s) => ['pending', 'self_corrected'].includes(s.status)).length,
-      issues: data.filter((s) => ['issue', 'photo_issue'].includes(s.status)).length,
-    })
-    const issueStudents = data.filter((s) => ['issue', 'photo_issue'].includes(s.status))
-    if (issueStudents.length) {
-      const { data: confs } = await supabase
-        .from('confirmations')
-        .select('student_id, note, action')
-        .in(
-          'student_id',
-          issueStudents.map((s) => s.student_id),
-        )
-        .order('confirmed_at', { ascending: false })
-      if (confs) {
-        const map = {}
-        confs.forEach((c) => {
-          if (!map[c.student_id]) map[c.student_id] = c
-        })
-        setIssueNotes(map)
+  // Preserve pagination/filter state across background refreshes
+  // Load persisted filters from localStorage / URL on first mount
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const savedPage = params.get('page')
+      const savedYear = params.get('year')
+      const savedStatus = params.get('status')
+      const savedSearch = params.get('q')
+      const savedSubFilter = params.get('sub')
+
+      let hasUrlPrefs = false
+      if (savedPage) {
+        const p = parseInt(savedPage, 10)
+        if (!Number.isNaN(p) && p >= 1) {
+          setCurrentPage(p)
+          hasUrlPrefs = true
+        }
       }
+      if (savedYear && (savedYear === 'all' || YEARS.includes(savedYear))) {
+        setYearFilter(savedYear)
+        hasUrlPrefs = true
+      }
+      if (savedStatus && ['all', 'pending', 'confirmed', 'issues'].includes(savedStatus)) {
+        setStatusFilter(savedStatus)
+        hasUrlPrefs = true
+      }
+      if (savedSearch) {
+        setSearch(savedSearch)
+        hasUrlPrefs = true
+      }
+      if (savedSubFilter && ['pending', 'approved', 'rejected', 'all'].includes(savedSubFilter)) {
+        setSubmissionsFilter(savedSubFilter)
+        hasUrlPrefs = true
+      }
+
+      // Fallback to localStorage if URL has no values
+      if (!hasUrlPrefs) {
+        const raw = localStorage.getItem('admin_students_prefs')
+        if (raw) {
+          const prefs = JSON.parse(raw)
+          if (prefs.currentPage) setCurrentPage(prefs.currentPage)
+          if (prefs.yearFilter) setYearFilter(prefs.yearFilter)
+          if (prefs.statusFilter) setStatusFilter(prefs.statusFilter)
+          if (prefs.search) setSearch(prefs.search)
+          if (prefs.submissionsFilter) setSubmissionsFilter(prefs.submissionsFilter)
+        }
+      } else {
+        // Also restore submissions filter from separate storage if URL didn't have it
+        const subRaw = localStorage.getItem('admin_submissions_prefs')
+        if (subRaw && !savedSubFilter) {
+          try {
+            const subPrefs = JSON.parse(subRaw)
+            if (subPrefs.submissionsFilter) setSubmissionsFilter(subPrefs.submissionsFilter)
+          } catch {}
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist filters + pagination to URL and localStorage without triggering reload
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'admin_students_prefs',
+        JSON.stringify({ currentPage, yearFilter, statusFilter, search, submissionsFilter }),
+      )
+      localStorage.setItem(
+        'admin_submissions_prefs',
+        JSON.stringify({ submissionsFilter }),
+      )
+      // Update URL search params without navigation — preserve tab param
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (currentPage > 1) next.set('page', String(currentPage))
+          else next.delete('page')
+          if (yearFilter !== 'all') next.set('year', yearFilter)
+          else next.delete('year')
+          if (statusFilter !== 'all') next.set('status', statusFilter)
+          else next.delete('status')
+          if (search) next.set('q', search)
+          else next.delete('q')
+          if (submissionsFilter !== 'pending') next.set('sub', submissionsFilter)
+          else next.delete('sub')
+          return next
+        },
+        { replace: true },
+      )
+    } catch {}
+  }, [currentPage, yearFilter, statusFilter, search, submissionsFilter, setSearchParams])
+
+  // Clamp currentPage when filtered length shrinks (e.g., after delete) but don't reset to 1
+  // Avoid clamping on initial empty state before data loads — preserve saved page
+  useEffect(() => {
+    if (students.length === 0) return
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+    if (filtered.length === 0) {
+      // If filter yields no results, reset to page 1 (explicit empty state)
+      if (currentPage !== 1) setCurrentPage(1)
+      return
+    }
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered.length, students.length])
+
+  async function loadStudents(options = {}) {
+    const { silent = false, preservePage = true } = options
+    if (!silent) {
+      // Only show full skeleton on initial load when students empty
+      if (students.length === 0) setDataLoading(true)
+    }
+    try {
+      const res = await adminFetch('/api/students')
+      if (!res.ok) return
+      const data = await res.json()
+
+      // Smart merge: preserve optimistic records and _qrGenerating flags
+      // so background refresh doesn't wipe out in-flight UI states
+      setStudents((prev) => {
+        if (prev.length === 0) return data // initial load
+
+        // Build map of fresh data by student_id
+        const freshMap = new Map(data.map((s) => [s.student_id, s]))
+
+        // Keep optimistic temp records that aren't yet in fresh data
+        const optimisticKept = prev.filter((s) => s._optimistic && !freshMap.has(s.student_id))
+
+        // Merge fresh data with preserved flags
+        const merged = data.map((fresh) => {
+          const existing = prev.find((p) => p.student_id === fresh.student_id)
+          if (existing) {
+            // Preserve _qrGenerating if we were showing spinner
+            if (existing._qrGenerating && !fresh.qr_url) {
+              return { ...fresh, _qrGenerating: true, qr_url: existing.qr_url }
+            }
+            // Preserve _optimistic until real record fully replaces it
+            if (existing._optimistic && !fresh.qr_url && existing.qr_url === 'generating') {
+              return { ...fresh, _optimistic: true, qr_url: 'generating' }
+            }
+          }
+          return fresh
+        })
+
+        return [...optimisticKept, ...merged]
+      })
+
+      // Don't reset pagination — preserve user's current page
+      // Only reset if explicitly requested (e.g., initial load with no page)
+      if (!preservePage) {
+        setCurrentPage(1)
+      }
+
+      setStats({
+        total: data.length,
+        confirmed: data.filter((s) => s.status === 'confirmed').length,
+        pending: data.filter((s) => ['pending', 'self_corrected'].includes(s.status)).length,
+        issues: data.filter((s) => ['issue', 'photo_issue'].includes(s.status)).length,
+      })
+      const issueStudents = data.filter((s) => ['issue', 'photo_issue'].includes(s.status))
+      if (issueStudents.length) {
+        const { data: confs } = await supabase
+          .from('confirmations')
+          .select('student_id, note, action')
+          .in(
+            'student_id',
+            issueStudents.map((s) => s.student_id),
+          )
+          .order('confirmed_at', { ascending: false })
+        if (confs) {
+          const map = {}
+          confs.forEach((c) => {
+            if (!map[c.student_id]) map[c.student_id] = c
+          })
+          setIssueNotes(map)
+        }
+      }
+    } finally {
+      if (!silent) setDataLoading(false)
     }
   }
 
@@ -399,23 +544,43 @@ export default function AdminDashboard() {
     if (res.ok) setQrFields(await res.json())
   }
 
+  // ── Optimistic: save QR fields ──
   async function saveQrFields() {
-    setQrFieldsSaving(true)
-    setQrFieldsMsg(null)
-    try {
-      const res = await adminJson('/api/settings/qr-fields', 'PUT', qrFields)
-      if (res.ok) setQrFieldsMsg({ ok: true, text: 'QR field settings saved.' })
-      else
-        setQrFieldsMsg({
-          ok: false,
-          text: (await res.json().catch(() => ({}))).error || 'Failed to save QR settings.',
-        })
-    } catch {
-      setQrFieldsMsg({ ok: false, text: 'Network error. Please try again.' })
-    } finally {
-      setQrFieldsSaving(false)
-    }
-    setTimeout(() => setQrFieldsMsg(null), 2500)
+    const prev = qrFields ? { ...qrFields } : null
+    const snapshot = JSON.parse(JSON.stringify(qrFields || {}))
+
+    // Optimistic: show success immediately, admin can continue
+    setQrFieldsMsg({ ok: true, text: 'QR field settings saved — syncing...' })
+    setQrFieldsSaving(false)
+
+    runOptimistic({
+      label: 'Save QR field settings',
+      optimisticUpdate: () => {},
+      rollback: () => {
+        if (prev) setQrFields(prev)
+        setQrFieldsMsg({ ok: false, text: 'Failed to save QR settings — reverted.' })
+      },
+      action: async () => {
+        const res = await adminJson('/api/settings/qr-fields', 'PUT', snapshot)
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Failed to save QR settings.')
+        }
+        return res.json()
+      },
+      onSuccess: (saved) => {
+        setQrFields(saved)
+        setQrFieldsMsg({ ok: true, text: 'QR field settings saved.' })
+        setTimeout(() => setQrFieldsMsg(null), 2500)
+      },
+      onError: () => {
+        setQrFieldsMsg({ ok: false, text: 'Failed to save QR settings.' })
+        setTimeout(() => setQrFieldsMsg(null), 4000)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'save',
+    })
   }
 
   function toggleQrField(key) {
@@ -439,30 +604,87 @@ export default function AdminDashboard() {
     if (res.ok) setFieldSides(await res.json())
   }
 
+  // ── Optimistic: save field sides ──
   async function saveFieldSides(sides) {
+    const prev = fieldSides ? { ...fieldSides } : null
+    // Optimistic: update UI immediately
+    setFieldSides(sides)
+    if (typeof BroadcastChannel !== 'undefined') {
+      new BroadcastChannel('layout-changes').postMessage({ type: 'layout-updated' })
+    }
+
+    runOptimistic({
+      label: 'Save field sides',
+      optimisticUpdate: () => {},
+      rollback: () => {
+        if (prev) setFieldSides(prev)
+        toast.error('Failed to save field sides — reverted')
+      },
+      action: async () => {
+        const res = await adminJson('/api/settings/field-sides', 'PUT', sides)
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Save failed')
+        }
+        return res.json()
+      },
+      onSuccess: (saved) => {
+        setFieldSides(saved)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'save',
+    })
+  }
+
+  async function loadSubmissions(statusFilterParam, options = {}) {
+    // Support both signatures: loadSubmissions(filter) and loadSubmissions(filter, {silent})
+    // If first arg is an object with silent property, treat as options
+    let filter = submissionsFilter
+    let silent = false
+    if (typeof statusFilterParam === 'object' && statusFilterParam !== null && 'silent' in statusFilterParam) {
+      silent = Boolean(statusFilterParam.silent)
+    } else if (typeof statusFilterParam === 'string') {
+      filter = statusFilterParam
+      if (options && typeof options.silent === 'boolean') silent = options.silent
+    } else if (options && typeof options.silent === 'boolean') {
+      silent = options.silent
+    }
+
+    if (!silent) setSubmissionsLoading(true)
     try {
-      const res = await adminJson('/api/settings/field-sides', 'PUT', sides)
-      if (res.ok) setFieldSides(await res.json())
-      // Notify other tabs (e.g., PreviewPage) that field sides changed
-      if (typeof BroadcastChannel !== 'undefined') {
-        new BroadcastChannel('layout-changes').postMessage({ type: 'layout-updated' })
+      const statusParam = filter !== 'all' ? `?status=${filter}` : ''
+      const res = await adminFetch(`/api/submissions${statusParam}`)
+      if (res.ok) {
+        const data = await res.json()
+        // Smart merge to avoid full flicker: preserve optimistic _ flags if any
+        setSubmissions((prev) => {
+          if (prev.length === 0 || silent === false) return data
+          // For silent background refresh, merge without losing local optimistic states
+          const freshMap = new Map(data.map((s) => [s.id, s]))
+          const kept = prev.filter((s) => s._optimistic && !freshMap.has(s.id))
+          return [...kept, ...data]
+        })
       }
-    } catch {
-      /* non-critical — layout save still works */
+    } finally {
+      if (!silent) setSubmissionsLoading(false)
     }
   }
 
-  async function loadSubmissions(statusFilter) {
-    setSubmissionsLoading(true)
-    try {
-      const filter = statusFilter ?? submissionsFilter
-      const statusParam = filter !== 'all' ? `?status=${filter}` : ''
-      const res = await adminFetch(`/api/submissions${statusParam}`)
-      if (res.ok) setSubmissions(await res.json())
-    } finally {
-      setSubmissionsLoading(false)
+  // Track previous submissions filter to detect explicit user changes
+  const prevSubFilterRef = useRef(submissionsFilter)
+  useEffect(() => {
+    if (!session) return
+    // Skip initial mount — loadAll already triggered a load
+    // Only reload when filter actually changes
+    if (prevSubFilterRef.current !== submissionsFilter) {
+      prevSubFilterRef.current = submissionsFilter
+      // Explicit filter change — preserve current list visually but fetch new data
+      // Use non-silent to show subtle loading, but SubmissionsTab keeps old data until new arrives
+      loadSubmissions(submissionsFilter, { silent: false })
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submissionsFilter, session])
 
   async function loadSubmissionForm() {
     const res = await adminFetch('/api/settings/submission-form')
@@ -479,20 +701,42 @@ export default function AdminDashboard() {
     } catch {}
   }
 
+  // ── Optimistic: save layout ──
   async function saveLayout(layout) {
-    // layout is the full { front, back } object from LayoutMapper
-    const res = await adminJson('/api/settings/layout', 'PUT', layout)
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      console.warn('[AdminDashboard] saveLayout failed:', res.status, data)
-      throw new Error(data.error || 'Save failed')
+    const prev = cardLayout ? JSON.parse(JSON.stringify(cardLayout)) : null
+    const optimisticLayout = {
+      front: layout.front || cardLayout?.front || null,
+      back: layout.back || cardLayout?.back || null,
     }
-    const saved = await res.json()
-    setCardLayout(saved)
-    // Notify other tabs (e.g., PreviewPage) that layout changed
+    // Optimistic: show new layout immediately
+    setCardLayout(optimisticLayout)
     if (typeof BroadcastChannel !== 'undefined') {
       new BroadcastChannel('layout-changes').postMessage({ type: 'layout-updated' })
     }
+
+    runOptimistic({
+      label: 'Save card layout',
+      optimisticUpdate: () => {},
+      rollback: () => {
+        if (prev) setCardLayout(prev)
+      },
+      action: async () => {
+        const res = await adminJson('/api/settings/layout', 'PUT', layout)
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Save failed')
+        }
+        return res.json()
+      },
+      onSuccess: (saved) => {
+        setCardLayout(saved)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'save',
+    })
+
+    return optimisticLayout
   }
 
   async function loadLayoutHistory(side) {
@@ -501,37 +745,70 @@ export default function AdminDashboard() {
     return res.json()
   }
 
+  // ── Optimistic: revert layout ──
   async function revertLayout(historyId) {
-    const res = await adminJson(`/api/settings/layout/history/${historyId}/revert`, 'POST', {})
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.error || 'Revert failed')
+    const prev = cardLayout ? JSON.parse(JSON.stringify(cardLayout)) : null
+
+    const job = createJob({ label: 'Revert layout', type: 'save' })
+    bgJobs.addJob(job)
+
+    try {
+      const res = await adminJson(`/api/settings/layout/history/${historyId}/revert`, 'POST', {})
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Revert failed')
+      }
+      const { side, value } = await res.json()
+      // Optimistic update already applied via response, but apply immediately
+      setCardLayout((prevLayout) => ({ ...prevLayout, [side]: value }))
+      if (typeof BroadcastChannel !== 'undefined') {
+        new BroadcastChannel('layout-changes').postMessage({ type: 'layout-updated' })
+      }
+      bgJobs.updateJob(job.id, { status: 'success' })
+      setTimeout(() => bgJobs.removeJob(job.id), 2000)
+      toast.success('Layout reverted')
+      return { side, value }
+    } catch (err) {
+      if (prev) setCardLayout(prev)
+      bgJobs.updateJob(job.id, { status: 'error', error: err.message })
+      setTimeout(() => bgJobs.removeJob(job.id), 4000)
+      toast.error(`Revert failed: ${err.message}`)
+      throw err
     }
-    const { side, value } = await res.json()
-    setCardLayout((prev) => ({ ...prev, [side]: value }))
-    if (typeof BroadcastChannel !== 'undefined') {
-      new BroadcastChannel('layout-changes').postMessage({ type: 'layout-updated' })
-    }
-    return { side, value }
   }
 
+  // ── Optimistic: save fields ──
   async function saveFields() {
-    setFieldsSaving(true)
-    setFieldsMsg(null)
-    try {
-      const res = await adminJson('/api/settings/fields', 'PUT', fields)
-      if (res.ok) setFieldsMsg({ ok: true, text: 'Field settings saved.' })
-      else
-        setFieldsMsg({
-          ok: false,
-          text: (await res.json().catch(() => ({}))).error || 'Failed to save settings.',
-        })
-    } catch {
-      setFieldsMsg({ ok: false, text: 'Network error. Please try again.' })
-    } finally {
-      setFieldsSaving(false)
-    }
-    setTimeout(() => setFieldsMsg(null), 2500)
+    const prev = fields ? JSON.parse(JSON.stringify(fields)) : null
+    setFieldsMsg({ ok: true, text: 'Field settings saved — syncing...' })
+
+    runOptimistic({
+      label: 'Save field settings',
+      optimisticUpdate: () => {},
+      rollback: () => {
+        if (prev) setFields(prev)
+        setFieldsMsg({ ok: false, text: 'Failed to save — reverted' })
+      },
+      action: async () => {
+        const res = await adminJson('/api/settings/fields', 'PUT', prev)
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Failed to save settings.')
+        }
+        return res.json()
+      },
+      onSuccess: () => {
+        setFieldsMsg({ ok: true, text: 'Field settings saved.' })
+        setTimeout(() => setFieldsMsg(null), 2500)
+      },
+      onError: () => {
+        setFieldsMsg({ ok: false, text: 'Failed to save settings.' })
+        setTimeout(() => setFieldsMsg(null), 4000)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'save',
+    })
   }
 
   function toggleField(key) {
@@ -549,17 +826,147 @@ export default function AdminDashboard() {
     openFileInput(id)
   }
 
+  // ── Optimistic: handle download ──
+  // Downloads are non-blocking — admin can continue working while file prepares
+  // Heavy exports (QR, photoshoot, card-design) support background mode: queue + poll
   async function handleDownload(endpoint, filename) {
+    const label = `Download ${filename}`
+    const job = createJob({ label, type: 'download' })
+    bgJobs.addJob(job)
     setDownloading((prev) => ({ ...prev, [endpoint]: true }))
+    toast.info(`${label} — queued in background, you can continue working...`)
+
+    const isHeavyExport =
+      endpoint.includes('/export') || endpoint.includes('/api/qr/export')
+
     try {
+      // Try background mode first for heavy exports
+      if (isHeavyExport) {
+        const bgEndpoint = endpoint.includes('?') ? `${endpoint}&background=true` : `${endpoint}?background=true`
+        const queueRes = await adminFetch(
+          bgEndpoint.startsWith('/api/') ? bgEndpoint : `/api/settings/${bgEndpoint}`,
+        )
+        const queueData = await queueRes.json().catch(() => null)
+        if (queueRes.ok && queueData?.queued && queueData?.jobId) {
+          // Poll generic jobs endpoint (shared store) + backup endpoint as fallback
+          let attempts = 0
+          const maxAttempts = 60
+          const poll = async () => {
+            attempts++
+            try {
+              // Try generic jobs endpoint first
+              let statusRes = await adminFetch(`/api/jobs/${queueData.jobId}?status=true`)
+              let statusData = await statusRes.json().catch(() => ({}))
+              // Fallback to backup endpoint which also serves jobStore
+              if (!statusRes.ok || !statusData.status) {
+                statusRes = await adminFetch(`/api/backup/${queueData.jobId}?status=true`)
+                statusData = await statusRes.json().catch(() => ({}))
+              }
+
+              if (statusData.status === 'ready') {
+                const dlRes = await adminFetch(`/api/jobs/${queueData.jobId}`)
+                const dlResFallback = dlRes.ok ? dlRes : await adminFetch(`/api/backup/${queueData.jobId}`)
+                const finalRes = dlRes.ok ? dlRes : dlResFallback
+                if (!finalRes.ok) throw new Error('Download failed')
+                const blob = await finalRes.blob()
+                const disposition = finalRes.headers.get('Content-Disposition') || ''
+                const match = disposition.match(/filename="?(.+?)"?$/)
+                const finalFilename = match ? match[1] : filename
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = finalFilename
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                bgJobs.updateJob(job.id, { status: 'success' })
+                setTimeout(() => bgJobs.removeJob(job.id), 2000)
+                toast.success(`${finalFilename} ready — download started`)
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+                return
+              } else if (statusData.status === 'failed') {
+                throw new Error(statusData.error || 'Export failed in background')
+              }
+
+              if (attempts < maxAttempts) {
+                setTimeout(poll, 4000)
+              } else {
+                toast.info(`${label} still processing — job ${queueData.jobId}`)
+                bgJobs.updateJob(job.id, { status: 'success' })
+                setTimeout(() => bgJobs.removeJob(job.id), 3000)
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+              }
+            } catch (err) {
+              if (attempts < maxAttempts) {
+                setTimeout(poll, 4000)
+              } else {
+                bgJobs.updateJob(job.id, { status: 'error', error: err.message })
+                setTimeout(() => bgJobs.removeJob(job.id), 4000)
+                toast.error(err.message || 'Download failed')
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+              }
+            }
+          }
+          setTimeout(poll, 3000)
+          return
+        }
+        // If background mode not supported or returned direct file, fall through to direct download
+      }
+
       const res = await adminFetch(
         endpoint.startsWith('/api/') ? endpoint : `/api/settings/${endpoint}`,
       )
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        toast.error(data.error || 'Download failed. Please try again.')
-        return
+        throw new Error(data.error || 'Download failed')
       }
+      // Check if response is JSON with queued job (background mode returned JSON even without ?background param)
+      const contentType = res.headers.get('Content-Type') || ''
+      if (contentType.includes('application/json')) {
+        const json = await res.json().catch(() => null)
+        if (json?.queued && json?.jobId) {
+          toast.info(`${label} queued — processing in background...`)
+          // Poll as above
+          let attempts = 0
+          const maxAttempts = 60
+          const poll = async () => {
+            attempts++
+            try {
+              const statusRes = await adminFetch(`/api/jobs/${json.jobId}?status=true`)
+              const statusData = await statusRes.json().catch(() => ({}))
+              if (statusData.status === 'ready') {
+                const dlRes = await adminFetch(`/api/jobs/${json.jobId}`)
+                if (!dlRes.ok) throw new Error('Download failed')
+                const blob = await dlRes.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = filename
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+                bgJobs.updateJob(job.id, { status: 'success' })
+                setTimeout(() => bgJobs.removeJob(job.id), 2000)
+                toast.success(`${filename} ready`)
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+                return
+              }
+              if (attempts < maxAttempts) setTimeout(poll, 4000)
+              else {
+                setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+              }
+            } catch {
+              if (attempts < maxAttempts) setTimeout(poll, 4000)
+              else setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+            }
+          }
+          setTimeout(poll, 3000)
+          return
+        }
+      }
+
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -569,101 +976,232 @@ export default function AdminDashboard() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Download failed. Please check your connection.')
+      bgJobs.updateJob(job.id, { status: 'success' })
+      setTimeout(() => bgJobs.removeJob(job.id), 2000)
+      toast.success(`${filename} downloaded`)
+    } catch (err) {
+      bgJobs.updateJob(job.id, { status: 'error', error: err.message })
+      setTimeout(() => bgJobs.removeJob(job.id), 4000)
+      toast.error(err.message || 'Download failed. Please try again.')
     } finally {
-      setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+      // For direct downloads we clear immediately; for background polled downloads,
+      // the poll callback clears itself. Avoid double-clear by checking heavy export.
+      if (!isHeavyExport) {
+        setDownloading((prev) => ({ ...prev, [endpoint]: false }))
+      }
     }
   }
 
+  // ── Optimistic: template upload ──
   async function handleTemplateUpload(side) {
     const file = side === 'front' ? templateFileFront : templateFileBack
     if (!file) return
-    setUploading(true)
-    setUploadMsg(null)
-    try {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await adminForm(`/api/templates?side=${side}`, 'POST', form)
-      const data = await res.json()
-      if (res.ok) {
+
+    const prevFront = activeTemplateFront
+    const prevBack = activeTemplateBack
+    const objectUrl = URL.createObjectURL(file)
+
+    const optimisticTemplate = {
+      file_name: file.name,
+      file_url: objectUrl,
+      uploaded_at: new Date().toISOString(),
+      is_active: true,
+      side,
+      _optimistic: true,
+    }
+
+    // Optimistic: show template immediately with local preview
+    if (side === 'front') {
+      setActiveTemplateFront(optimisticTemplate)
+      setTemplateFileFront(null)
+    } else {
+      setActiveTemplateBack(optimisticTemplate)
+      setTemplateFileBack(null)
+    }
+    setUploadMsg({ ok: true, text: `${side.charAt(0).toUpperCase() + side.slice(1)} template — preview shown, syncing in background...` })
+
+    runOptimistic({
+      label: `Upload ${side} template`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        if (side === 'front') setActiveTemplateFront(prevFront)
+        else setActiveTemplateBack(prevBack)
+        setUploadMsg({ ok: false, text: 'Template upload failed — reverted' })
+        URL.revokeObjectURL(objectUrl)
+      },
+      action: async () => {
+        const form = new FormData()
+        form.append('file', file)
+        const res = await adminForm(`/api/templates?side=${side}`, 'POST', form)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Upload failed.')
+        return data
+      },
+      onSuccess: (data) => {
+        URL.revokeObjectURL(objectUrl)
         if (side === 'front') {
           setActiveTemplateFront(data)
-          setTemplateFileFront(null)
         } else {
           setActiveTemplateBack(data)
-          setTemplateFileBack(null)
         }
         setUploadMsg({ ok: true, text: `${side.charAt(0).toUpperCase() + side.slice(1)} template uploaded and set as active.` })
-      } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
-    } catch {
-      setUploadMsg({ ok: false, text: 'Upload failed. Please check your connection.' })
-    } finally {
-      setUploading(false)
-    }
+        setTimeout(() => setUploadMsg(null), 4000)
+      },
+      onError: (err) => {
+        setUploadMsg({ ok: false, text: err.message || 'Upload failed.' })
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'upload',
+    })
   }
 
+  // ── Optimistic: CSV bulk upload ──
   async function handleCSVUpload() {
     if (!csvFile) return
-    setUploading(true)
-    setUploadMsg(null)
+
+    const fileToUpload = csvFile
+    const zipToUpload = zipFile
+    const queuedCount = 0 // will be updated after response
+
+    // Optimistic: clear file inputs immediately and show queued message
+    // Admin can continue working while import processes in background
+    setCsvFile(null)
+    setZipFile(null)
+    setUploadMsg({ ok: true, text: `Import queued — processing in background. You can continue working.` })
+    toast.info('CSV import queued — processing in background')
+
+    const job = createJob({ label: `Import ${fileToUpload.name}`, type: 'upload' })
+    bgJobs.addJob(job)
+
     try {
       const form = new FormData()
-      form.append('csv', csvFile)
-      if (zipFile) form.append('zip', zipFile)
+      form.append('csv', fileToUpload)
+      if (zipToUpload) form.append('zip', zipToUpload)
       const res = await adminForm('/api/students/bulk', 'POST', form)
       const data = await res.json()
-      if (res.ok) {
-        setCsvFile(null)
-        setZipFile(null)
-        setUploadMsg({ ok: true, text: `${data.queued} student record${data.queued !== 1 ? 's' : ''} queued for import.` })
-        loadStudents()
-      } else setUploadMsg({ ok: false, text: data.error || 'Upload failed.' })
-    } catch {
-      setUploadMsg({ ok: false, text: 'Upload failed. Please check your connection.' })
-    } finally {
-      setUploading(false)
+      if (!res.ok) throw new Error(data.error || 'Upload failed.')
+
+      setUploadMsg({ ok: true, text: `${data.queued} student record${data.queued !== 1 ? 's' : ''} queued for import — processing in background.` })
+      bgJobs.updateJob(job.id, { status: 'success' })
+      setTimeout(() => bgJobs.removeJob(job.id), 3000)
+      toast.success(`${data.queued} records queued for import`)
+
+      // Reload students after a short delay to show imported records
+      // Poll a few times as background import completes
+      setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+      setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
+      setTimeout(() => loadStudents({ silent: true, preservePage: true }), 10000)
+    } catch (err) {
+      setUploadMsg({ ok: false, text: err.message || 'Upload failed.' })
+      bgJobs.updateJob(job.id, { status: 'error', error: err.message })
+      setTimeout(() => bgJobs.removeJob(job.id), 5000)
+      toast.error(`Import failed: ${err.message}`)
     }
   }
 
+  // ── Optimistic: manual add student ──
   async function handleManualAdd(e) {
     e.preventDefault()
-    setManualSubmitting(true)
-    setManualMsg(null)
-    try {
-      const form = new FormData()
-      Object.entries(manualForm).forEach(([k, v]) => form.append(k, v))
-      if (manualPhoto) form.append('photo', manualPhoto)
-      if (manualSig) form.append('signature', manualSig)
-      const res = await adminForm('/api/students', 'POST', form)
-      const data = await res.json()
-      if (res.ok) {
-        setManualMsg({ ok: true, text: `${data.full_name} added successfully. QR code generated.` })
-        setManualForm({
-          student_id: '',
-          full_name: '',
-          year_level: '1st Year',
-          position: '',
-          programme: '',
-          blood_type: '',
-          student_email: '',
-          emergency_contact_name: '',
-          emergency_contact_phone: '',
-          date_of_birth: '',
-          nationality: '',
-          county_of_origin: '',
-          current_address: '',
-        })
-        setManualPhoto(null)
-        setManualSig(null)
-        sessionStorage.removeItem(DRAFT_KEY)
-        loadStudents()
-      } else setManualMsg({ ok: false, text: data.error || 'Could not add student.' })
-    } catch {
-      setManualMsg({ ok: false, text: 'Network error. Please try again.' })
-    } finally {
-      setManualSubmitting(false)
+
+    const formSnapshot = { ...manualForm }
+    const photoSnapshot = manualPhoto
+    const sigSnapshot = manualSig
+
+    // Create optimistic student record
+    const optimisticStudent = {
+      id: `temp_${Date.now()}`,
+      student_id: formSnapshot.student_id,
+      full_name: formSnapshot.full_name,
+      year_level: formSnapshot.year_level,
+      position: formSnapshot.position || null,
+      programme: formSnapshot.programme || null,
+      blood_type: formSnapshot.blood_type || null,
+      student_email: formSnapshot.student_email || null,
+      emergency_contact_name: formSnapshot.emergency_contact_name || null,
+      emergency_contact_phone: formSnapshot.emergency_contact_phone || null,
+      date_of_birth: formSnapshot.date_of_birth || null,
+      nationality: formSnapshot.nationality || null,
+      county_of_origin: formSnapshot.county_of_origin || null,
+      current_address: formSnapshot.current_address || null,
+      photo_url: photoSnapshot ? URL.createObjectURL(photoSnapshot) : null,
+      signature_url: sigSnapshot ? URL.createObjectURL(sigSnapshot) : null,
+      qr_url: null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      _optimistic: true,
     }
+
+    const prevStudents = [...students]
+
+    // Optimistic: add to list immediately, clear form, allow admin to continue
+    setStudents((prev) => [optimisticStudent, ...prev])
+    setStats((prev) => ({
+      ...prev,
+      total: prev.total + 1,
+      pending: prev.pending + 1,
+    }))
+    setManualForm({
+      student_id: '',
+      full_name: '',
+      year_level: '1st Year',
+      position: '',
+      programme: '',
+      blood_type: '',
+      student_email: '',
+      emergency_contact_name: '',
+      emergency_contact_phone: '',
+      date_of_birth: '',
+      nationality: '',
+      county_of_origin: '',
+      current_address: '',
+    })
+    setManualPhoto(null)
+    setManualSig(null)
+    setManualMsg({ ok: true, text: `${formSnapshot.full_name} added — syncing in background...` })
+    sessionStorage.removeItem(DRAFT_KEY)
+
+    runOptimistic({
+      label: `Add student ${formSnapshot.full_name}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setStudents(prevStudents)
+        setStats((prev) => ({
+          total: Math.max(0, prev.total - 1),
+          pending: Math.max(0, prev.pending - 1),
+        }))
+        setManualForm(formSnapshot)
+        setManualMsg({ ok: false, text: 'Failed to add student — reverted' })
+        if (optimisticStudent.photo_url) URL.revokeObjectURL(optimisticStudent.photo_url)
+        if (optimisticStudent.signature_url) URL.revokeObjectURL(optimisticStudent.signature_url)
+      },
+      action: async () => {
+        const form = new FormData()
+        Object.entries(formSnapshot).forEach(([k, v]) => form.append(k, v))
+        if (photoSnapshot) form.append('photo', photoSnapshot)
+        if (sigSnapshot) form.append('signature', sigSnapshot)
+        const res = await adminForm('/api/students', 'POST', form)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Could not add student.')
+        return data
+      },
+      onSuccess: (data) => {
+        // Replace optimistic record with real one
+        setStudents((prev) => prev.map((s) => (s.id === optimisticStudent.id ? data : s)))
+        setManualMsg({ ok: true, text: `${data.full_name} added — QR generating in background.` })
+        if (optimisticStudent.photo_url) URL.revokeObjectURL(optimisticStudent.photo_url)
+        if (optimisticStudent.signature_url) URL.revokeObjectURL(optimisticStudent.signature_url)
+        // Reload to get accurate stats and QR (poll as QR generates in background)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
+      },
+      onError: (err) => {
+        setManualMsg({ ok: false, text: err.message || 'Could not add student.' })
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'create',
+    })
   }
 
   function openEdit(s) {
@@ -689,103 +1227,195 @@ export default function AdminDashboard() {
     setEditMsg(null)
   }
 
+  // ── Optimistic: edit save ──
   async function handleEditSave(e) {
     e.preventDefault()
-    setEditSubmitting(true)
-    setEditMsg(null)
-    try {
-      const form = new FormData()
-      form.append('full_name', editForm.full_name)
-      form.append('year_level', editForm.year_level)
-      form.append('position', editForm.position || '')
-      form.append('programme', editForm.programme || '')
-      form.append('blood_type', editForm.blood_type || '')
-      form.append('student_email', editForm.student_email || '')
-      form.append('emergency_contact_name', editForm.emergency_contact_name || '')
-      form.append('emergency_contact_phone', editForm.emergency_contact_phone || '')
-      form.append('date_of_birth', editForm.date_of_birth || '')
-      form.append('nationality', editForm.nationality || '')
-      form.append('county_of_origin', editForm.county_of_origin || '')
-      form.append('current_address', editForm.current_address || '')
-      if (editPhoto) form.append('photo', editPhoto)
-      if (editSig) form.append('signature', editSig)
-      // Removal flags are ignored server-side when a replacement is uploaded
-      if (editRemovePhoto && !editPhoto) form.append('remove_photo', '1')
-      if (editRemoveSig && !editSig) form.append('remove_signature', '1')
-      const res = await adminForm(
-        `/api/students/${encodeURIComponent(editStudent.student_id)}`,
-        'PATCH',
-        form,
-      )
-      const data = await res.json()
-      if (res.ok) {
-        const removed = [
-          editRemovePhoto && !editPhoto ? 'photo' : null,
-          editRemoveSig && !editSig ? 'signature' : null,
-        ].filter(Boolean)
-        setEditMsg({
-          ok: true,
-          text: removed.length
-            ? `Student updated. ${removed.join(' and ')} removed. QR code regenerated.`
-            : 'Student updated. QR code regenerated.',
-        })
-        sessionStorage.removeItem(DRAFT_KEY)
-        // Reflect the saved record (incl. the new versioned photo/signature
-        // URLs) immediately, both in the dialog thumbnail and the list row,
-        // rather than waiting for the full reload.
-        if (data && typeof data === 'object') {
-          setEditStudent((prev) => (prev ? { ...prev, ...data } : prev))
-          setEditPhoto(null)
-          setEditSig(null)
-          setEditRemovePhoto(false)
-          setEditRemoveSig(false)
-          setStudents((prev) =>
-            prev.map((s) => (s.student_id === data.student_id ? { ...s, ...data } : s)),
-          )
+
+    const studentId = editStudent.student_id
+    const prevStudent = { ...editStudent }
+    const prevStudents = [...students]
+    const formSnapshot = { ...editForm }
+    const removePhotoFlag = editRemovePhoto && !editPhoto
+    const removeSigFlag = editRemoveSig && !editSig
+
+    // Build optimistic updated student
+    const optimisticUpdated = {
+      ...editStudent,
+      full_name: formSnapshot.full_name,
+      year_level: formSnapshot.year_level,
+      position: formSnapshot.position || null,
+      programme: formSnapshot.programme || null,
+      blood_type: formSnapshot.blood_type || null,
+      student_email: formSnapshot.student_email || null,
+      emergency_contact_name: formSnapshot.emergency_contact_name || null,
+      emergency_contact_phone: formSnapshot.emergency_contact_phone || null,
+      date_of_birth: formSnapshot.date_of_birth || null,
+      nationality: formSnapshot.nationality || null,
+      county_of_origin: formSnapshot.county_of_origin || null,
+      current_address: formSnapshot.current_address || null,
+      photo_url: removePhotoFlag ? null : editPhoto ? URL.createObjectURL(editPhoto) : editStudent.photo_url,
+      signature_url: removeSigFlag ? null : editSig ? URL.createObjectURL(editSig) : editStudent.signature_url,
+      status: 'pending',
+      _optimistic: true,
+    }
+
+    // Optimistic: update list immediately and close modal
+    setStudents((prev) => prev.map((s) => (s.student_id === studentId ? optimisticUpdated : s)))
+    setEditStudent(null)
+    toast.info(`Updating ${formSnapshot.full_name} — syncing...`)
+
+    runOptimistic({
+      label: `Update ${formSnapshot.full_name}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setStudents(prevStudents)
+        setEditStudent(prevStudent)
+        toast.error('Update failed — reverted')
+      },
+      action: async () => {
+        const form = new FormData()
+        form.append('full_name', formSnapshot.full_name)
+        form.append('year_level', formSnapshot.year_level)
+        form.append('position', formSnapshot.position || '')
+        form.append('programme', formSnapshot.programme || '')
+        form.append('blood_type', formSnapshot.blood_type || '')
+        form.append('student_email', formSnapshot.student_email || '')
+        form.append('emergency_contact_name', formSnapshot.emergency_contact_name || '')
+        form.append('emergency_contact_phone', formSnapshot.emergency_contact_phone || '')
+        form.append('date_of_birth', formSnapshot.date_of_birth || '')
+        form.append('nationality', formSnapshot.nationality || '')
+        form.append('county_of_origin', formSnapshot.county_of_origin || '')
+        form.append('current_address', formSnapshot.current_address || '')
+        if (editPhoto) form.append('photo', editPhoto)
+        if (editSig) form.append('signature', editSig)
+        if (removePhotoFlag) form.append('remove_photo', '1')
+        if (removeSigFlag) form.append('remove_signature', '1')
+        const res = await adminForm(
+          `/api/students/${encodeURIComponent(studentId)}`,
+          'PATCH',
+          form,
+        )
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Update failed.')
+        return data
+      },
+      onSuccess: (data) => {
+        setStudents((prev) => prev.map((s) => (s.student_id === data.student_id ? { ...s, ...data } : s)))
+        // Clean up object URLs
+        if (optimisticUpdated.photo_url && optimisticUpdated.photo_url.startsWith('blob:')) {
+          URL.revokeObjectURL(optimisticUpdated.photo_url)
         }
-        loadStudents()
-        setTimeout(() => setEditStudent(null), 1200)
-      } else setEditMsg({ ok: false, text: data.error || 'Update failed.' })
-    } catch {
-      setEditMsg({ ok: false, text: 'Network error. Please try again.' })
-    } finally {
-      setEditSubmitting(false)
-    }
+        if (optimisticUpdated.signature_url && optimisticUpdated.signature_url.startsWith('blob:')) {
+          URL.revokeObjectURL(optimisticUpdated.signature_url)
+        }
+        // QR regeneration is background — poll for updated QR
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 6000)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'update',
+    })
   }
 
+  // ── Optimistic: generate single QR ──
   async function handleGenerateQR(studentId) {
-    try {
-      const res = await adminFetch(`/api/qr/generate/${encodeURIComponent(studentId)}`, {
-        method: 'POST',
-      })
-      if (res.ok) {
-        loadStudents()
-        return true
-      }
-      return false
-    } catch {
-      return false
-    }
+    const prevStudents = [...students]
+    // Optimistic: mark as generating immediately
+    setStudents((prev) =>
+      prev.map((s) => (s.student_id === studentId ? { ...s, qr_url: s.qr_url || 'generating', _qrGenerating: true } : s))
+    )
+
+    runOptimistic({
+      label: `Generate QR for ${studentId}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setStudents(prevStudents)
+      },
+      action: async () => {
+        const res = await adminFetch(`/api/qr/generate/${encodeURIComponent(studentId)}`, {
+          method: 'POST',
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'QR generation failed')
+        }
+        return res.json()
+      },
+      onSuccess: (data) => {
+        if (data.queued || data.background) {
+          // Backend queued — keep spinner and poll for real QR
+          toast.info(`QR generation queued for ${studentId} — background processing`)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 10000)
+          return
+        }
+        setStudents((prev) =>
+          prev.map((s) => (s.student_id === studentId ? { ...s, qr_url: data.qr_url, _qrGenerating: false } : s))
+        )
+        loadStudents({ silent: true, preservePage: true })
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'qr',
+    })
+
+    return true
   }
 
+  // ── Optimistic: regenerate single QR ──
   async function handleRegenerateQR(studentId) {
-    try {
-      const res = await adminFetch(`/api/qr/regenerate/${encodeURIComponent(studentId)}`, {
-        method: 'POST',
-      })
-      if (res.ok) {
-        loadStudents()
-        return true
-      }
-      return false
-    } catch {
-      return false
-    }
+    const prevStudents = [...students]
+    setStudents((prev) =>
+      prev.map((s) => (s.student_id === studentId ? { ...s, _qrGenerating: true } : s))
+    )
+
+    runOptimistic({
+      label: `Regenerate QR for ${studentId}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setStudents(prevStudents)
+      },
+      action: async () => {
+        const res = await adminFetch(`/api/qr/regenerate/${encodeURIComponent(studentId)}`, {
+          method: 'POST',
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'QR regeneration failed')
+        }
+        return res.json()
+      },
+      onSuccess: (data) => {
+        if (data.queued || data.background) {
+          toast.info(`QR regeneration queued for ${studentId} — background processing`)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 2000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 5000)
+          setTimeout(() => loadStudents({ silent: true, preservePage: true }), 10000)
+          return
+        }
+        setStudents((prev) =>
+          prev.map((s) => (s.student_id === studentId ? { ...s, qr_url: data.qr_url, _qrGenerating: false } : s))
+        )
+        loadStudents({ silent: true, preservePage: true })
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'qr',
+    })
+
+    return true
   }
 
+  // ── Optimistic: generate all QR ──
   async function handleGenerateAllQR() {
-    setQrGenerating(true)
-    setQrMsg(null)
+    setQrMsg({ ok: true, text: 'Generating missing QR codes in background — you can continue working.' })
+    toast.info('Generating QR codes in background...')
+
+    const job = createJob({ label: 'Generate missing QR codes', type: 'qr' })
+    bgJobs.addJob(job)
+
     try {
       const res = await adminFetch('/api/qr/generate-all', {
         method: 'POST',
@@ -793,19 +1423,34 @@ export default function AdminDashboard() {
         body: JSON.stringify({ force: false }),
       })
       const data = await res.json()
-      if (res.ok)
+      if (!res.ok) throw new Error(data.error || 'Generation failed.')
+
+      // Handle both immediate and queued responses
+      if (data.queued) {
+        setQrMsg({
+          ok: true,
+          text: `${data.queued} QR codes queued for generation in background.`,
+        })
+        bgJobs.updateJob(job.id, { status: 'success' })
+        setTimeout(() => bgJobs.removeJob(job.id), 3000)
+        // Poll for completion
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 3000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 8000)
+      } else {
         setQrMsg({
           ok: true,
           text: `Generated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}`,
         })
-      else setQrMsg({ ok: false, text: data.error || 'Generation failed.' })
-      loadStudents()
-      setTimeout(() => setQrMsg(null), 4000)
-    } catch {
-      setQrMsg({ ok: false, text: 'Network error. Please try again.' })
-      setTimeout(() => setQrMsg(null), 4000)
-    } finally {
-      setQrGenerating(false)
+        bgJobs.updateJob(job.id, { status: 'success' })
+        setTimeout(() => bgJobs.removeJob(job.id), 3000)
+        loadStudents({ silent: true, preservePage: true })
+      }
+      setTimeout(() => setQrMsg(null), 5000)
+    } catch (err) {
+      setQrMsg({ ok: false, text: err.message || 'Network error.' })
+      bgJobs.updateJob(job.id, { status: 'error', error: err.message })
+      setTimeout(() => bgJobs.removeJob(job.id), 5000)
+      setTimeout(() => setQrMsg(null), 5000)
     }
   }
 
@@ -814,67 +1459,156 @@ export default function AdminDashboard() {
     setQrRegenerateModalOpen(true)
   }
 
+  // ── Optimistic: regenerate all QR ──
   async function confirmRegenerateAllQR() {
-    setQrGenerating(true)
-    setQrMsg(null)
+    setQrRegenerateModalOpen(false)
+    setQrMsg({ ok: true, text: 'Regenerating all QR codes in background — you can continue working.' })
+    toast.info('Regenerating all QR codes in background...')
+
+    const job = createJob({ label: `Regenerate all QR codes (${students.length} records)`, type: 'qr' })
+    bgJobs.addJob(job)
+
     try {
       const res = await adminFetch('/api/qr/regenerate-all', { method: 'POST' })
       const data = await res.json()
-      if (res.ok)
+      if (!res.ok) throw new Error(data.error || 'Regeneration failed.')
+
+      if (data.queued) {
+        setQrMsg({
+          ok: true,
+          text: `${data.queued} QR codes queued for regeneration in background.`,
+        })
+        bgJobs.updateJob(job.id, { status: 'success' })
+        setTimeout(() => bgJobs.removeJob(job.id), 3000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 3000)
+        setTimeout(() => loadStudents({ silent: true, preservePage: true }), 8000)
+      } else {
         setQrMsg({
           ok: true,
           text: `Regenerated ${data.generated} QR codes.${data.failed ? ` ${data.failed} failed.` : ''}`,
         })
-      else setQrMsg({ ok: false, text: data.error || 'Regeneration failed.' })
-      loadStudents()
-      setQrRegenerateModalOpen(false)
+        bgJobs.updateJob(job.id, { status: 'success' })
+        setTimeout(() => bgJobs.removeJob(job.id), 3000)
+        loadStudents({ silent: true, preservePage: true })
+      }
       setTimeout(() => setQrMsg(null), 6000)
-    } catch {
-      setQrMsg({ ok: false, text: 'Network error. Please try again.' })
+    } catch (err) {
+      setQrMsg({ ok: false, text: err.message || 'Network error.' })
+      bgJobs.updateJob(job.id, { status: 'error', error: err.message })
+      setTimeout(() => bgJobs.removeJob(job.id), 5000)
       setTimeout(() => setQrMsg(null), 6000)
-    } finally {
-      setQrGenerating(false)
     }
   }
 
-  // ── Submission handlers ──
+  // ── Optimistic: toggle submission form ──
   async function handleToggleSubmissionForm() {
     const newState = !submissionFormEnabled
-    try {
-      const res = await adminJson('/api/settings/submission-form', 'PUT', { enabled: newState })
-      if (res.ok) {
-        setSubmissionFormEnabled(newState)
+    const prevState = submissionFormEnabled
+
+    // Optimistic: toggle immediately
+    setSubmissionFormEnabled(newState)
+    setSubmissionMsg({
+      ok: true,
+      text: newState ? 'Form enabled — syncing...' : 'Form disabled — syncing...',
+    })
+
+    runOptimistic({
+      label: newState ? 'Enable submission form' : 'Disable submission form',
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setSubmissionFormEnabled(prevState)
+        setSubmissionMsg({ ok: false, text: 'Failed to update — reverted' })
+      },
+      action: async () => {
+        const res = await adminJson('/api/settings/submission-form', 'PUT', { enabled: newState })
+        if (!res.ok) throw new Error('Failed to update form settings.')
+        return res.json()
+      },
+      onSuccess: () => {
         setSubmissionMsg({
           ok: true,
           text: newState ? 'Form enabled. Share the link with students.' : 'Form disabled.',
         })
-      } else {
+        setTimeout(() => setSubmissionMsg(null), 3000)
+      },
+      onError: () => {
         setSubmissionMsg({ ok: false, text: 'Failed to update form settings.' })
-      }
-    } catch {
-      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
-    }
-    setTimeout(() => setSubmissionMsg(null), 3000)
+        setTimeout(() => setSubmissionMsg(null), 3000)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'save',
+    })
   }
 
+  // ── Optimistic: approve submission ──
   async function handleApproveSubmission(id) {
-    try {
-      const res = await adminFetch(`/api/submissions/${id}/approve`, { method: 'POST' })
-      const data = await res.json()
-      if (res.ok) {
+    const submission = submissions.find((s) => s.id === id)
+    if (!submission) return
+
+    const prevSubmissions = [...submissions]
+    const prevStudents = [...students]
+
+    // Optimistic: remove from pending list immediately and add student placeholder
+    const optimisticStudent = {
+      id: `temp_${Date.now()}`,
+      student_id: submission.student_id,
+      full_name: submission.full_name,
+      year_level: submission.year_level,
+      position: submission.position || null,
+      programme: submission.programme || null,
+      blood_type: submission.blood_type || null,
+      student_email: submission.student_email || null,
+      emergency_contact_name: submission.emergency_contact_name || null,
+      emergency_contact_phone: submission.emergency_contact_phone || null,
+      date_of_birth: submission.date_of_birth || null,
+      nationality: submission.nationality || null,
+      county_of_origin: submission.county_of_origin || null,
+      current_address: submission.current_address || null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      _optimistic: true,
+    }
+
+    setSubmissions((prev) => prev.filter((s) => s.id !== id))
+    setStudents((prev) => [optimisticStudent, ...prev])
+    setSubmissionMsg({ ok: true, text: `Approving ${submission.full_name} — syncing...` })
+    toast.info(`Approving ${submission.full_name} in background...`)
+
+    runOptimistic({
+      label: `Approve submission ${submission.full_name}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setSubmissions(prevSubmissions)
+        setStudents(prevStudents)
+        setSubmissionMsg({ ok: false, text: 'Approval failed — reverted' })
+      },
+      action: async () => {
+        const res = await adminFetch(`/api/submissions/${id}/approve`, { method: 'POST' })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Approval failed.')
+        return data
+      },
+      onSuccess: (data) => {
         const msg = data.name_warning
           ? { ok: true, text: 'Student approved. ' + data.name_warning, warn: true }
           : { ok: true, text: 'Student approved and record created.' }
         setSubmissionMsg(msg)
-        loadSubmissions()
-        loadStudents()
-      } else {
-        setSubmissionMsg({ ok: false, text: data.error || 'Approval failed.' })
-      }
-    } catch {
-      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
-    }
-    setTimeout(() => setSubmissionMsg(null), 5000)
+        // Replace optimistic student with real one
+        if (data.student) {
+          setStudents((prev) => prev.map((s) => (s.id === optimisticStudent.id ? data.student : s)))
+        }
+        loadStudents({ silent: true, preservePage: true })
+        setTimeout(() => setSubmissionMsg(null), 5000)
+      },
+      onError: (err) => {
+        setSubmissionMsg({ ok: false, text: err.message || 'Approval failed.' })
+        setTimeout(() => setSubmissionMsg(null), 5000)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'approve',
+    })
   }
 
   function handleRejectSubmission(submission) {
@@ -882,80 +1616,142 @@ export default function AdminDashboard() {
     setRejectNotes('')
   }
 
+  // ── Optimistic: reject submission ──
   async function confirmRejectSubmission() {
     if (!pendingRejectSubmission) return
-    setDangerSubmitting(true)
-    try {
-      const res = await adminJson(`/api/submissions/${pendingRejectSubmission.id}/reject`, 'PATCH', {
-        admin_notes: rejectNotes || '',
-      })
-      const data = await res.json()
-      if (res.ok) {
+
+    const submission = pendingRejectSubmission
+    const prevSubmissions = [...submissions]
+
+    // Optimistic: update status immediately and close modal
+    setSubmissions((prev) =>
+      prev.map((s) => (s.id === submission.id ? { ...s, status: 'rejected', admin_notes: rejectNotes || '' } : s))
+    )
+    setPendingRejectSubmission(null)
+    setRejectNotes('')
+    setSubmissionMsg({ ok: true, text: `Rejecting ${submission.full_name} — syncing...` })
+
+    runOptimistic({
+      label: `Reject submission ${submission.full_name}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setSubmissions(prevSubmissions)
+        setPendingRejectSubmission(submission)
+        setSubmissionMsg({ ok: false, text: 'Rejection failed — reverted' })
+      },
+      action: async () => {
+        const res = await adminJson(`/api/submissions/${submission.id}/reject`, 'PATCH', {
+          admin_notes: rejectNotes || '',
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Rejection failed.')
+        return data
+      },
+      onSuccess: () => {
         setSubmissionMsg({ ok: true, text: 'Submission rejected.' })
-        setPendingRejectSubmission(null)
-        setRejectNotes('')
-        loadSubmissions()
-      } else {
-        setSubmissionMsg({ ok: false, text: data.error || 'Rejection failed.' })
-      }
-    } catch {
-      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
-    } finally {
-      setDangerSubmitting(false)
-    }
-    setTimeout(() => setSubmissionMsg(null), 3000)
+        loadSubmissions(undefined, { silent: true })
+        setTimeout(() => setSubmissionMsg(null), 3000)
+      },
+      onError: (err) => {
+        setSubmissionMsg({ ok: false, text: err.message || 'Rejection failed.' })
+        setTimeout(() => setSubmissionMsg(null), 3000)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'reject',
+    })
   }
 
   function handleDeleteSubmission(submission) {
     setPendingDeleteSubmission(submission)
   }
 
+  // ── Optimistic: delete submission (already optimistic, enhanced with jobs) ──
   async function confirmDeleteSubmission() {
     if (!pendingDeleteSubmission) return
+    const submission = pendingDeleteSubmission
     const prevSubmissions = submissions
-    setDangerSubmitting(true)
-    setSubmissions((prev) => prev.filter((s) => s.id !== pendingDeleteSubmission.id))
-    try {
-      const res = await adminFetch(`/api/submissions/${pendingDeleteSubmission.id}`, { method: 'DELETE' })
-      if (res.ok) {
-        setSubmissionMsg({ ok: true, text: 'Submission deleted.' })
-        setPendingDeleteSubmission(null)
-      } else {
+
+    // Optimistic: remove immediately
+    setSubmissions((prev) => prev.filter((s) => s.id !== submission.id))
+    setPendingDeleteSubmission(null)
+    setSubmissionMsg({ ok: true, text: `Deleting submission — syncing...` })
+
+    runOptimistic({
+      label: `Delete submission ${submission.full_name}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
         setSubmissions(prevSubmissions)
+        setSubmissionMsg({ ok: false, text: 'Failed to delete — reverted' })
+      },
+      action: async () => {
+        const res = await adminFetch(`/api/submissions/${submission.id}`, { method: 'DELETE' })
+        if (!res.ok) throw new Error('Failed to delete submission.')
+        return true
+      },
+      onSuccess: () => {
+        setSubmissionMsg({ ok: true, text: 'Submission deleted.' })
+        setTimeout(() => setSubmissionMsg(null), 3000)
+      },
+      onError: () => {
         setSubmissionMsg({ ok: false, text: 'Failed to delete submission.' })
-      }
-    } catch {
-      setSubmissions(prevSubmissions)
-      setSubmissionMsg({ ok: false, text: 'Network error. Please try again.' })
-    } finally {
-      setDangerSubmitting(false)
-    }
-    setTimeout(() => setSubmissionMsg(null), 3000)
+        setTimeout(() => setSubmissionMsg(null), 3000)
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'delete',
+    })
   }
 
   function handleDeleteStudent(student) {
     setPendingDeleteStudent(student)
   }
 
+  // ── Optimistic: delete student ──
   async function confirmDeleteStudent() {
     if (!pendingDeleteStudent) return
-    setDangerSubmitting(true)
-    try {
-      const res = await adminFetch(
-        `/api/students/${encodeURIComponent(pendingDeleteStudent.student_id)}`,
-        { method: 'DELETE' },
-      )
-      if (!res.ok) {
-        toast.error('Failed to delete student.')
-        return
-      }
-      setPendingDeleteStudent(null)
-      loadStudents()
-    } catch {
-      toast.error('Failed to delete student.')
-    } finally {
-      setDangerSubmitting(false)
-    }
+    const student = pendingDeleteStudent
+    const prevStudents = [...students]
+
+    // Optimistic: remove immediately and close modal
+    setStudents((prev) => prev.filter((s) => s.student_id !== student.student_id))
+    setStats((prev) => ({
+      total: Math.max(0, prev.total - 1),
+      confirmed: student.status === 'confirmed' ? Math.max(0, prev.confirmed - 1) : prev.confirmed,
+      pending: ['pending', 'self_corrected'].includes(student.status) ? Math.max(0, prev.pending - 1) : prev.pending,
+      issues: ['issue', 'photo_issue'].includes(student.status) ? Math.max(0, prev.issues - 1) : prev.issues,
+    }))
+    setPendingDeleteStudent(null)
+    toast.info(`Deleting ${student.full_name} — syncing...`)
+
+    runOptimistic({
+      label: `Delete student ${student.full_name}`,
+      optimisticUpdate: () => {},
+      rollback: () => {
+        setStudents(prevStudents)
+        setStats({
+          total: prevStudents.length,
+          confirmed: prevStudents.filter((s) => s.status === 'confirmed').length,
+          pending: prevStudents.filter((s) => ['pending', 'self_corrected'].includes(s.status)).length,
+          issues: prevStudents.filter((s) => ['issue', 'photo_issue'].includes(s.status)).length,
+        })
+        toast.error('Delete failed — reverted')
+      },
+      action: async () => {
+        const res = await adminFetch(
+          `/api/students/${encodeURIComponent(student.student_id)}`,
+          { method: 'DELETE' },
+        )
+        if (!res.ok) throw new Error('Failed to delete student.')
+        return true
+      },
+      onSuccess: () => {
+        loadStudents({ silent: true, preservePage: true })
+      },
+      jobsApi: bgJobs,
+      toast,
+      type: 'delete',
+    })
   }
 
   function getInitials(name) {
@@ -972,17 +1768,6 @@ export default function AdminDashboard() {
     return <StatusBadge status={status} />
   }
 
-  const filtered = students.filter(
-    (s) =>
-      (yearFilter === 'all' || s.year_level === yearFilter) &&
-      (statusFilter === 'all' ||
-        (statusFilter === 'issues' ? ['issue', 'photo_issue'].includes(s.status) : s.status === statusFilter)) &&
-      (s.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        s.student_id.toLowerCase().includes(search.toLowerCase())),
-  )
-
-  // Single entry point for tab changes so the submissions lazy-load stays in
-  // one place instead of being repeated per nav copy.
   useDocumentTitle(
     session
       ? `${ADMIN_TABS.find((t) => t.id === activeTab)?.label || 'Dashboard'} · Admin`
@@ -991,20 +1776,19 @@ export default function AdminDashboard() {
 
   function selectTab(tab) {
     setActiveTab(tab)
-    if (tab === 'submissions') loadSubmissions()
+    if (tab === 'submissions') loadSubmissions(undefined, { silent: true })
   }
 
   const recentActivity = [...students]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 6)
 
-  // Everything the extracted tab bodies read. Assembled here so the tabs stay
-  // presentational and all state continues to be owned by this component.
   const dashboard = {
     PAGE_SIZE,
     activeTemplateBack,
     activeTemplateFront,
     analyticsData,
+    bgJobs,
     cardLayout,
     csvFile,
     currentPage,
@@ -1153,7 +1937,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="admin-wrapper">
-      {/* ── EDIT MODAL ── */}
       {editStudent && (
         <div className="modal-overlay">
           <div
@@ -1220,7 +2003,6 @@ export default function AdminDashboard() {
                 </div>
               )}
 
-              {/* QR-encoded fields */}
               <div
                 style={{
                   borderTop: '0.5px solid var(--border)',
@@ -1489,6 +2271,11 @@ export default function AdminDashboard() {
           <h1 className="topbar-logo">LMSA ID Portal</h1>
           <div className="topbar-sub">
             GoldWay Admin Dashboard{userRole === 'support_admin' && ' · Support Admin'}
+            {bgJobs.hasPending && (
+              <span style={{ marginLeft: '12px', color: '#60A5FA', fontSize: '11px' }}>
+                ● {bgJobs.pendingCount} syncing in background
+              </span>
+            )}
           </div>
         </div>
         <div className="u-flex u-ai-center u-gap-8">
@@ -1496,7 +2283,6 @@ export default function AdminDashboard() {
             onNavigateStudent={(studentId, _type) => {
               setStatusFilter('issues')
               setActiveTab('students')
-              // Find the student and open edit modal
               const student = students.find((s) => s.student_id === studentId)
               if (student) openEdit(student)
             }}
@@ -1508,9 +2294,6 @@ export default function AdminDashboard() {
       </div>
 
       <div className="admin-sidebar-layout">
-        {/* One nav definition, two presentations. The sidebar and the
-            horizontal strip are the same tablist rendered once; CSS swaps
-            which container is visible at the 900px breakpoint. */}
         <AdminNav
           tabs={ADMIN_TABS}
           activeTab={activeTab}
@@ -1521,32 +2304,21 @@ export default function AdminDashboard() {
 
       <main className="admin-body" id="admin-tabpanel" role="tabpanel" tabIndex={-1}>
         <DashboardProvider value={dashboard}>
-        {/* ── OVERVIEW ── */}
         {activeTab === 'overview' && (
           <OverviewTab />
         )}
-
-        {/* ── UPLOAD ── */}
         {activeTab === 'upload' && (
           <UploadTab />
         )}
-
-        {/* ── LAYOUT ── */}
         {activeTab === 'layout' && (
           <LayoutTab />
         )}
-
-        {/* ── SUBMISSION FORM ── */}
         {activeTab === 'submissions' && (
           <SubmissionsTab />
         )}
-
-        {/* ── SETTINGS ── */}
         {activeTab === 'settings' && (
           <SettingsTab />
         )}
-
-        {/* ── STUDENTS ── */}
         {activeTab === 'students' && (
           <StudentsTab />
         )}
@@ -1554,6 +2326,7 @@ export default function AdminDashboard() {
       </main>
       </div>
 
+      <BackgroundJobsIndicator jobs={bgJobs.jobs} onClear={bgJobs.clearJobs} />
       <SessionTimeout />
     </div>
   )

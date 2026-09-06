@@ -12,6 +12,7 @@ const {
   firstError,
 } = require('../middleware/validate')
 const logger = require('../logger')
+const { enqueueImport } = require('../queue')
 
 const ALLOWED_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 
@@ -157,7 +158,7 @@ router.get('/', requireAdmin, async (req, res) => {
   res.json(data)
 })
 
-// Admin: Approve submission
+// Admin: Approve submission — optimistic: return immediately, QR background
 router.post('/:id/approve', requireAdmin, async (req, res) => {
   const idErr = uuid(req.params.id, 'Submission ID')
   if (idErr) return res.status(400).json({ error: idErr })
@@ -185,16 +186,12 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       .neq('student_id', submission.student_id)
       .limit(1),
     (() => {
-      // Extract the surname (last word, ignoring suffixes like Jr./Sr./III)
-      // and match against WHOLE-WORD surname, not substring.
-      // This prevents false positives like matching "Doe" against "Doeman Smith".
       const name = submission.full_name.trim()
       let surname = null
       const SUFFIXES = /\b(Jr\.?|Sr\.?|II|III|IV|V|PhD|Ph\.D\.|Esq\.?)\s*$/i
-      const COMMA = /^(.*?),\s+(.*)$/
+      const COMMA = /^(.*?),\\s+(.*)$/
 
       if (COMMA.test(name)) {
-        // "Smith, John" → surname = "Smith"
         const [, last] = name.match(COMMA)
         surname = last?.trim() || null
       } else {
@@ -204,14 +201,7 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
       }
 
       if (!surname || surname.length < 3) return Promise.resolve({ data: [] })
-
-      // Escape SQL LIKE wildcards so a literal "%" or "_" in a name doesn't
-      // act as a wildcard. We then wrap with word-boundary-ish matching: the
-      // surname must appear as either the full last name, preceded by a space,
-      // or after a comma — not as a substring inside another name.
       const escaped = surname.replace(/[%_\\]/g, (c) => `\\${c}`)
-      // Match: surname is the full name, OR ends with " surname" (space-prefixed),
-      // OR begins with "surname," (comma format). This avoids substring matches.
       const pattern = `% ${escaped}%`
       return supabase
         .from('students')
@@ -258,13 +248,7 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
 
   if (insertErr) return res.status(400).json({ error: insertErr.message })
 
-  try {
-    const { generateForStudent } = require('./qr')
-    await generateForStudent(student)
-  } catch (err) {
-    logger.warn({ studentId: student.student_id, err: err.message }, 'Submission QR generation failed')
-  }
-
+  // Mark submission approved immediately — admin can continue working
   const { error: updateErr } = await supabase
     .from('student_submissions')
     .update({
@@ -274,13 +258,27 @@ router.post('/:id/approve', requireAdmin, async (req, res) => {
     })
     .eq('id', req.params.id)
 
-  if (updateErr) return res.status(500).json({ error: updateErr.message })
+  if (updateErr) {
+    logger.warn({ err: updateErr.message, submissionId: req.params.id }, 'Failed to mark submission approved after student insert')
+  }
 
-  const result = { student, message: 'Student approved and record created.' }
+  const result = { student, message: 'Student approved and record created.', background: true, queued: true }
   if (uniqueMatches.length) {
     result.name_warning = `Similar name found for ${uniqueMatches.map((m) => `"${m.full_name}" (${m.student_id})`).join(', ')}. Verify this is not a duplicate.`
   }
+
+  // Optimistic response — QR generation happens in background
   res.json(result)
+
+  enqueueImport(async () => {
+    try {
+      const { generateForStudent } = require('./qr')
+      await generateForStudent(student)
+      logger.info({ studentId: student.student_id }, 'Background QR for approved submission completed')
+    } catch (err) {
+      logger.warn({ studentId: student.student_id, err: err.message }, 'Background QR for approved submission failed')
+    }
+  })
 })
 
 // Admin: Reject submission

@@ -1,10 +1,9 @@
 /**
  * One row of the admin student table.
  *
- * Split out of StudentsTab so the row markup stays readable, and converted
- * from a stack of <div>s to real <tr>/<td> cells so the list is navigable as
- * a table. The pill/action styling that was previously inline now lives in
- * index.css under .student-* classes.
+ * Now supports optimistic UI indicators:
+ * - _optimistic: shows syncing state for newly added/updated records
+ * - _qrGenerating: shows QR generation in progress
  */
 export default function StudentRow({
   student: s,
@@ -18,8 +17,6 @@ export default function StudentRow({
   onGenerateQR,
   onRegenerateQR,
 }) {
-  // Opens a short-lived signed URL in a new tab. Failures are non-fatal: the
-  // admin can retry, so we warn rather than surface an error state per row.
   async function openSignedUrl(path, label) {
     try {
       const res = await fetch(path, {
@@ -34,12 +31,15 @@ export default function StudentRow({
   }
 
   const id = encodeURIComponent(s.student_id)
+  const isOptimistic = s._optimistic
+  const isQrGenerating = s._qrGenerating
+  const isQrPlaceholder = s.qr_url === 'generating'
 
   return (
-    <tr>
+    <tr style={{ opacity: isOptimistic ? 0.75 : 1 }}>
       <td className="student-td-photo">
         {s.photo_url ? (
-          <img className="student-photo" src={s.photo_url} alt="" />
+          <img className="student-photo" src={s.photo_url} alt="" style={{ opacity: isOptimistic ? 0.7 : 1 }} />
         ) : (
           <div className="avatar" aria-hidden="true">
             {getInitials(s.full_name)}
@@ -48,7 +48,14 @@ export default function StudentRow({
       </td>
 
       <th scope="row" className="student-td-name">
-        <div className="student-name">{s.full_name}</div>
+        <div className="student-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {s.full_name}
+          {isOptimistic && (
+            <span style={{ fontSize: '10px', color: '#3B82F6', fontWeight: 500, whiteSpace: 'nowrap' }}>
+              ● syncing
+            </span>
+          )}
+        </div>
         <div className="student-meta">
           {s.student_id} · {s.year_level}
           {s.position ? ` · ${s.position}` : ''}
@@ -58,7 +65,34 @@ export default function StudentRow({
 
       <td className="student-td-qr">
         <div className="student-actions">
-          {s.qr_url ? (
+          {isQrGenerating || isQrPlaceholder ? (
+            <>
+              <span
+                className="student-chip"
+                style={{
+                  background: '#EFF6FF',
+                  color: '#3B82F6',
+                  borderColor: '#BFDBFE',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <span
+                  style={{
+                    width: '10px',
+                    height: '10px',
+                    border: '1.5px solid #3B82F6',
+                    borderTopColor: 'transparent',
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    animation: 'spin 0.8s linear infinite',
+                  }}
+                />
+                Generating...
+              </span>
+            </>
+          ) : s.qr_url ? (
             <>
               <span className="student-chip student-chip--ready">QR ready</span>
               <button
@@ -82,6 +116,7 @@ export default function StudentRow({
                   type="button"
                   className="student-chip student-chip--danger"
                   onClick={() => onRegenerateQR(s.student_id)}
+                  disabled={isQrGenerating}
                 >
                   Regenerate
                   <span className="sr-only"> QR for {s.full_name}</span>
@@ -94,6 +129,7 @@ export default function StudentRow({
                 type="button"
                 className="student-chip student-chip--warn"
                 onClick={() => onGenerateQR(s.student_id)}
+                disabled={isQrGenerating}
               >
                 Generate QR
                 <span className="sr-only"> for {s.full_name}</span>
@@ -116,7 +152,7 @@ export default function StudentRow({
       <td className="student-td-status">{statusPill(s.status)}</td>
 
       <td className="student-td-edit">
-        <button type="button" className="btn-edit" onClick={() => onEdit(s)}>
+        <button type="button" className="btn-edit" onClick={() => onEdit(s)} disabled={isOptimistic}>
           Edit
           <span className="sr-only"> {s.full_name}</span>
         </button>

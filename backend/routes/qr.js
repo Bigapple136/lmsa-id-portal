@@ -18,6 +18,7 @@ const logger = require('../logger')
 const { withVersion } = require('../utils/storageUrl')
 
 const JSZip = require('jszip')
+const { enqueueImport } = require('../queue')
 
 const BACKEND_URL = process.env.BACKEND_URL
 const FRONTEND_URL = process.env.FRONTEND_URL
@@ -209,12 +210,24 @@ router.post('/generate/:studentId', requireAdmin, requireFullAdmin, async (req, 
 
   if (error || !student) return res.status(404).json({ error: 'Student not found.' })
 
-  try {
-    const url = await generateForStudent(student)
-    res.json({ qr_url: url, student_id: student.student_id })
-  } catch (err) {
-    res.status(500).json({ error: 'QR generation failed: ' + err.message })
-  }
+  // Optimistic UX: return queued immediately, generate in background
+  // If student already has qr_url, return it immediately to avoid duplicate work indication
+  res.json({
+    student_id: student.student_id,
+    queued: true,
+    background: true,
+    message: `QR generation queued for ${student.student_id}`,
+    qr_url: student.qr_url || null,
+  })
+
+  enqueueImport(async () => {
+    try {
+      const url = await generateForStudent(student)
+      logger.info({ studentId: student.student_id }, 'Background QR generate completed')
+    } catch (err) {
+      logger.warn({ studentId: student.student_id, err: err.message }, 'Background QR generate failed')
+    }
+  })
 })
 
 router.post('/generate-all', requireAdmin, requireFullAdmin, async (req, res) => {
@@ -224,19 +237,33 @@ router.post('/generate-all', requireAdmin, requireFullAdmin, async (req, res) =>
   if (!students?.length)
     return res.json({ generated: 0, message: 'All students already have QR codes.' })
 
-  let generated = 0,
-    failed = 0
-  for (const student of students) {
-    try {
-      await generateForStudent(student)
-      generated++
-    } catch (err) {
-      logger.warn({ studentId: student.student_id, err: err.message }, 'QR generation failed')
-      failed++
-    }
-  }
+  // Optimistic UX: return immediately and process in background
+  // Frontend already shows optimistic "generating" state
+  const totalToGenerate = students.length
 
-  res.json({ generated, failed, total: students.length })
+  // Return queued response immediately so admin can continue working
+  res.json({
+    queued: totalToGenerate,
+    total: totalToGenerate,
+    message: `${totalToGenerate} QR codes queued for background generation.`,
+    background: true,
+  })
+
+  // Process in background queue
+  enqueueImport(async () => {
+    let generated = 0,
+      failed = 0
+    for (const student of students) {
+      try {
+        await generateForStudent(student)
+        generated++
+      } catch (err) {
+        logger.warn({ studentId: student.student_id, err: err.message }, 'QR background generation failed')
+        failed++
+      }
+    }
+    logger.info({ generated, failed, total: totalToGenerate }, 'Background QR generate-all completed')
+  })
 })
 
 router.post('/regenerate/:studentId', requireAdmin, requireFullAdmin, async (req, res) => {
@@ -251,13 +278,23 @@ router.post('/regenerate/:studentId', requireAdmin, requireFullAdmin, async (req
 
   if (error || !student) return res.status(404).json({ error: 'Student not found.' })
 
-  try {
-    await supabase.from('students').update({ qr_url: null }).eq('student_id', student.student_id)
-    const url = await generateForStudent(student)
-    res.json({ qr_url: url, student_id: student.student_id })
-  } catch (err) {
-    res.status(500).json({ error: 'QR regeneration failed: ' + err.message })
-  }
+  // Optimistic UX: return queued immediately, regenerate in background
+  res.json({
+    student_id: student.student_id,
+    queued: true,
+    background: true,
+    message: `QR regeneration queued for ${student.student_id}`,
+  })
+
+  enqueueImport(async () => {
+    try {
+      await supabase.from('students').update({ qr_url: null }).eq('student_id', student.student_id)
+      const url = await generateForStudent(student)
+      logger.info({ studentId: student.student_id, url }, 'Background QR regeneration completed')
+    } catch (err) {
+      logger.warn({ studentId: student.student_id, err: err.message }, 'Background QR regeneration failed')
+    }
+  })
 })
 
 router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) => {
@@ -266,19 +303,30 @@ router.post('/regenerate-all', requireAdmin, requireFullAdmin, async (req, res) 
   if (error) return res.status(500).json({ error: error.message })
   if (!students?.length) return res.json({ generated: 0, message: 'No students found.' })
 
-  let generated = 0,
-    failed = 0
-  for (const student of students) {
-    try {
-      await generateForStudent(student)
-      generated++
-    } catch (err) {
-      logger.warn({ studentId: student.student_id, err: err.message }, 'QR regeneration failed')
-      failed++
-    }
-  }
+  // Optimistic UX: return immediately and process in background
+  const totalToGenerate = students.length
 
-  res.json({ generated, failed, total: students.length })
+  res.json({
+    queued: totalToGenerate,
+    total: totalToGenerate,
+    message: `${totalToGenerate} QR codes queued for background regeneration.`,
+    background: true,
+  })
+
+  enqueueImport(async () => {
+    let generated = 0,
+      failed = 0
+    for (const student of students) {
+      try {
+        await generateForStudent(student)
+        generated++
+      } catch (err) {
+        logger.warn({ studentId: student.student_id, err: err.message }, 'QR background regeneration failed')
+        failed++
+      }
+    }
+    logger.info({ generated, failed, total: totalToGenerate }, 'Background QR regenerate-all completed')
+  })
 })
 
 router.get('/verification-url/:studentId', requireAdmin, async (req, res) => {
@@ -643,6 +691,58 @@ body{font-family:'Inter',Arial,sans-serif;background:#f6fbf4;color:#181d19;min-h
 })
 
 router.get('/export', requireAdmin, requireFullAdmin, async (req, res) => {
+  if (req.query.background === 'true' || req.query.async === 'true') {
+    const { createJob, setJobReady, setJobFailed, setJobProcessing } = require('../jobStore')
+    const job = createJob({ type: 'qr-export', filename: 'LMSA_QR_Codes.zip', mimeType: 'application/zip' })
+
+    res.json({
+      queued: true,
+      jobId: job.id,
+      background: true,
+      message: 'QR export queued — processing in background.',
+    })
+
+    enqueueImport(async () => {
+      setJobProcessing(job.id)
+      try {
+        const { data: students, error } = await supabase
+          .from('students')
+          .select('student_id, full_name, year_level, qr_url')
+          .not('qr_url', 'is', null)
+          .order('year_level')
+
+        if (error) throw new Error(error.message)
+        if (!students?.length) throw new Error('No QR codes generated yet.')
+
+        const zip = new JSZip()
+        const root = zip.folder('qr-codes')
+        const CONCURRENCY = 10
+        let idx = 0
+        async function downloadWorker() {
+          while (idx < students.length) {
+            const i = idx++
+            const s = students[i]
+            try {
+              const resp = await fetch(s.qr_url)
+              if (!resp.ok) continue
+              const buffer = Buffer.from(await resp.arrayBuffer())
+              const yearFolder = (s.year_level || 'unknown').toLowerCase().replace(/\s+/g, '-')
+              root.folder(yearFolder).file(`${s.student_id}.png`, buffer)
+            } catch (err) {
+              logger.warn({ studentId: s.student_id, err: err.message }, 'QR export fetch failed (background)')
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, students.length) }, downloadWorker))
+        const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+        setJobReady(job.id, { buffer: zipBuffer, filename: 'LMSA_QR_Codes.zip', mimeType: 'application/zip' })
+      } catch (err) {
+        setJobFailed(job.id, err)
+      }
+    })
+    return
+  }
+
   const { data: students, error } = await supabase
     .from('students')
     .select('student_id, full_name, year_level, qr_url')
