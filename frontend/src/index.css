@@ -5996,6 +5996,59 @@ textarea:focus-visible {
 }
 
 /* ==========================================================================
+   Students tab filter bar: search, class/status selects, and Add.
+   The inline min-widths that used to sit on the selects are moved here so the
+   row can be reflowed responsively instead of crushing the search field and
+   Add button on a phone.
+   ========================================================================== */
+
+.students-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.students-filter-search {
+  flex: 1 1 200px;
+  min-width: 200px;
+}
+
+.students-filter-select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 130px;
+  font-size: 13px;
+}
+
+.students-filter-select--status {
+  min-width: 120px;
+}
+
+/* On narrow screens the filter controls were a single non-wrapping row: the
+   search input shrank to nothing while the fixed-width selects squeezed the
+   Add button. Stack them instead — search on its own full-width row, the two
+   selects sharing the next, and Add filling the final row as a comfortable
+   tap target. */
+@media (max-width: 600px) {
+  .students-filter-search {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  .students-filter-select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .students-filter-add {
+    flex: 1 1 100%;
+    min-height: 44px;
+  }
+}
+
+/* ==========================================================================
    Admin utility classes.
    These replace static inline style={{...}} objects that were scattered
    through the admin pages. Only fully-static declarations were converted:
