@@ -10,9 +10,11 @@
 export const CR80_LONG_EDGE_MM = 85.6
 export const CR80_SHORT_EDGE_MM = 53.98
 
-// LMSA's production card is portrait: the calibrated template is 590×1004px
-// and CardCanvas renders at a 158.5% padding-top aspect. These two exports are
-// the portrait defaults used when no template has been measured yet.
+// LMSA's production card is portrait: the calibrated template is 590×1004px.
+// These two exports are the portrait defaults used by cardDimensionsMm when no
+// template image has been measured yet. CardCanvas derives its own box aspect
+// from the loaded template's real pixel size, so landscape templates render
+// correctly too.
 export const CARD_WIDTH_MM = CR80_SHORT_EDGE_MM
 export const CARD_HEIGHT_MM = CR80_LONG_EDGE_MM
 

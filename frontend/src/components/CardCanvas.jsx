@@ -94,6 +94,10 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
   const [failed, setFailed] = useState(false)
   const [side, setSide] = useState(initialSide) // 'front' | 'back'
   const [isFlipping, setIsFlipping] = useState(false)
+  // Real pixel size of the currently displayed template. The card box aspect
+  // ratio is derived from this so the renderer honours BOTH portrait and
+  // landscape templates (a hardcoded paddingTop would squish landscape art).
+  const [templateSize, setTemplateSize] = useState(null)
 
   // Determine template URL for current side
   const currentTemplateUrl = side === 'front' 
@@ -151,6 +155,7 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
         const H = template.naturalHeight
         canvas.width = W
         canvas.height = H
+        setTemplateSize({ w: W, h: H })
 
         // Draw background template
         ctx.drawImage(template, 0, 0)
@@ -299,7 +304,11 @@ export default function CardCanvas({ student, templateUrl, templateUrlFront, tem
           position: 'relative',
           width: '100%',
           height: 0,
-          paddingTop: '158.5%', // CR-80 aspect ratio (approx 1004/634 ≈ 1.585)
+          // Aspect ratio derived from the loaded template's real dimensions so
+          // a landscape template renders as a landscape card and a portrait
+          // one as portrait. Falls back to the classic CR-80 portrait ratio
+          // only for the brief moment before the template image has loaded.
+          paddingTop: templateSize ? `${(templateSize.h / templateSize.w) * 100}%` : '158.5%', // CR-80 portrait fallback (1004/634 ≈ 1.585)
           transformStyle: 'preserve-3d',
           // Single-face flip: card swings out to edge-on (90deg) and back to
           // 0deg, while the canvas content swaps sides at the 300ms midpoint.
