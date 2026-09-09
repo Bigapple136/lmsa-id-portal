@@ -96,18 +96,60 @@ router.post('/', async (req, res) => {
   )
   if (err) return res.status(400).json({ error: err })
 
-  const { data: existing } = await supabase
+  const trimmedStudentId = student_id.trim()
+
+  // NOTE: no .maybeSingle() here — multiple matching rows (e.g. a stale
+  // approved row plus a pending one) would make maybeSingle error out and the
+  // dedupe check would be silently skipped.
+  const { data: existingRows, error: existingErr } = await supabase
     .from('student_submissions')
     .select('id, status')
-    .eq('student_id', student_id.trim())
+    .eq('student_id', trimmedStudentId)
     .in('status', ['pending', 'approved'])
-    .maybeSingle()
-  if (existing) {
-    const msg =
-      existing.status === 'approved'
-        ? 'A submission for this Student ID has already been approved. Contact your admin if updates are needed.'
-        : 'A submission for this Student ID is already pending review. Please wait for admin approval.'
-    return res.status(409).json({ error: msg })
+  if (existingErr) return res.status(500).json({ error: 'Failed to check existing submissions.' })
+
+  const pendingRow = existingRows?.find((r) => r.status === 'pending')
+  if (pendingRow) {
+    return res.status(409).json({
+      error: 'A submission for this Student ID is already pending review. Please wait for admin approval.',
+    })
+  }
+
+  const approvedRows = existingRows?.filter((r) => r.status === 'approved') || []
+  if (approvedRows.length) {
+    // An approved submission only blocks resubmission while the student record
+    // it produced still exists. If an admin deleted the student so the person
+    // could resubmit, the leftover approved submission row is stale — clean it
+    // up and let the new submission through.
+    const { data: student, error: studentErr } = await supabase
+      .from('students')
+      .select('student_id')
+      .eq('student_id', trimmedStudentId)
+      .maybeSingle()
+    if (studentErr) return res.status(500).json({ error: 'Failed to check existing submissions.' })
+
+    if (student) {
+      return res.status(409).json({
+        error:
+          'A submission for this Student ID has already been approved. Contact your admin if updates are needed.',
+      })
+    }
+
+    const { error: cleanupErr } = await supabase
+      .from('student_submissions')
+      .delete()
+      .in('id', approvedRows.map((r) => r.id))
+    if (cleanupErr) {
+      logger.warn(
+        { studentId: trimmedStudentId, err: cleanupErr.message },
+        'Failed to clean up stale approved submissions before resubmission',
+      )
+    } else {
+      logger.info(
+        { studentId: trimmedStudentId, removed: approvedRows.length },
+        'Removed stale approved submissions (student record no longer exists); allowing resubmission',
+      )
+    }
   }
 
   const { data, error } = await supabase

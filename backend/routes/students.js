@@ -341,6 +341,18 @@ router.delete('/:studentId', requireAdmin, requireFullAdmin, async (req, res) =>
       logger.warn({ studentId, err: err.message }, 'Background confirmations cleanup failed')
     }
     try {
+      // Remove approved submission rows tied to this student. Leaving them
+      // behind blocks the student from ever resubmitting the form ("already
+      // been approved" 409), which defeats the point of deleting the record.
+      await supabase
+        .from('student_submissions')
+        .delete()
+        .eq('student_id', studentId)
+        .eq('status', 'approved')
+    } catch (err) {
+      logger.warn({ studentId, err: err.message }, 'Background approved-submissions cleanup failed')
+    }
+    try {
       await logAdminAction(req, 'student_delete', {
         targetType: 'student',
         targetId: studentId,
