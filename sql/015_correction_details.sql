@@ -22,14 +22,21 @@
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS details JSONB;
 ALTER TABLE confirmations ADD COLUMN IF NOT EXISTS details JSONB;
 
--- admin_notifications selects `n.*`, and a view freezes that expansion when it
--- is created — so without this REPLACE the new column would stay invisible to
--- anything reading through the view.
+-- admin_notifications lists columns explicitly so PostgreSQL can match old view
+-- columns to new ones when the `details` column is added — `n.*` would fail
+-- with a column rename error on re-creation.
 CREATE OR REPLACE VIEW admin_notifications AS
 SELECT
-  n.*,
+  n.id,
+  n.type,
+  n.title,
+  n.message,
+  n.student_id,
+  n.is_read,
+  n.created_at,
   nr.admin_id IS NOT NULL AS is_read_by_me,
-  nr.read_at
+  nr.read_at,
+  n.details
 FROM notifications n
 LEFT JOIN notification_reads nr
   ON n.id = nr.notification_id
