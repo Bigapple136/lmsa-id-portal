@@ -68,14 +68,6 @@ export default function LandingPage() {
           <p className="split-desc">Student ID verification and card management portal.</p>
         </div>
         <div className="split-form-panel">
-          <div className="landing-mobile-brand" aria-label="LMSA identity">
-            <img src="/lmsa-logo.png" alt="" className="landing-mobile-logo" aria-hidden="true" />
-            <div>
-              <p className="landing-mobile-kicker">LMSA ID Portal</p>
-              <p className="landing-mobile-name">A.M. Dogliotti College of Medicine</p>
-            </div>
-          </div>
-
           <div className="split-card">
             <h2 className="split-card-title">Verify Your ID</h2>
             <p className="split-card-sub" id={FORM_HELP_ID}>

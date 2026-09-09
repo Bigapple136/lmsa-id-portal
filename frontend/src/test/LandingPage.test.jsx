@@ -40,6 +40,19 @@ describe('LandingPage', () => {
     )
   })
 
+  it('renders the two-panel split without a duplicate mobile brand block', () => {
+    const { container } = renderLandingPage()
+
+    // The duplicate compact brand was removed: mobile reuses the main brand
+    // panel as a slim strip, so the identity is never rendered twice.
+    expect(container.querySelector('.landing-mobile-brand')).not.toBeInTheDocument()
+
+    // Same two panels as the desktop viewport, in reading order.
+    const panels = [...container.querySelector('.split-landing').children].map((el) => el.className)
+    expect(panels).toEqual(['split-brand', 'split-form-panel'])
+    expect(container.querySelector('.split-card')).toBeInTheDocument()
+  })
+
   it('shows an announced validation error before submitting an incomplete lookup', () => {
     renderLandingPage()
 

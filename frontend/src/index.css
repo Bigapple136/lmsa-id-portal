@@ -4596,9 +4596,6 @@ textarea:focus-visible {
 }
 
 /* Landing page polish: keep the registrar-seal identity while making the lookup path clearer. */
-.landing-mobile-brand {
-  display: none;
-}
 
 .landing-recovery {
   border: 1px solid rgba(138, 92, 10, 0.22);
@@ -4680,19 +4677,17 @@ textarea:focus-visible {
   color: var(--hint);
 }
 
+/* Mobile (≤900px): the desktop two-column split becomes two stacked rows — a
+   slim brand strip on top and the lookup card below. Same two panels as the
+   desktop viewport, in reading order, with no duplicated brand block and no
+   multi-column strip anywhere. */
 @media (max-width: 900px) {
   .split-landing {
     min-height: auto;
   }
 
-  .split-form-panel {
-    order: 1;
-    align-items: stretch;
-    padding: 28px 18px 34px;
-  }
-
   .split-brand {
-    order: 2;
+    flex: none;
     min-height: auto;
     padding: 20px 22px;
     display: grid;
@@ -4705,41 +4700,14 @@ textarea:focus-visible {
     text-align: left;
   }
 
-  .landing-mobile-brand {
-    display: flex;
+  .split-form-panel {
+    flex: 1 1 auto;
+    /* Stack the lookup card full-width. Without column direction this row flex
+       would squeeze its children side-by-side on every phone. */
+    flex-direction: column;
     align-items: center;
-    gap: 12px;
-    width: 100%;
-    max-width: 480px;
-    margin: 0 auto 16px;
-    color: var(--text);
-  }
-
-  .landing-mobile-logo {
-    width: 46px;
-    height: 46px;
-    flex-shrink: 0;
-    object-fit: contain;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .landing-mobile-kicker {
-    margin: 0 0 3px;
-    color: var(--navy);
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .landing-mobile-name {
-    margin: 0;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.35;
+    justify-content: flex-start;
+    padding: 28px 18px 34px;
   }
 
   .split-emblem {
@@ -4772,6 +4740,20 @@ textarea:focus-visible {
   .split-desc {
     display: none;
   }
+
+  /* The three verification pills stack at the same breakpoint as the rest of
+     the page, so no phone or tablet keeps a cramped 3-across strip. Desktop
+     keeps the 3-up row. */
+  .verification-steps {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .verification-steps li {
+    justify-content: flex-start;
+    min-height: 38px;
+    padding-inline: 12px;
+  }
 }
 
 @media (max-width: 480px) {
@@ -4788,16 +4770,7 @@ textarea:focus-visible {
     font-size: 23px;
   }
 
-  .verification-steps {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-
-  .verification-steps li {
-    justify-content: flex-start;
-    min-height: 38px;
-    padding-inline: 12px;
-  }
+  /* .verification-steps already stacks at ≤900px; no 480px override needed. */
 
   .landing-alt-actions {
     flex-direction: column;
@@ -4812,21 +4785,6 @@ textarea:focus-visible {
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
-  }
-}
-
-/* P1 fix: collapse the 3-pill verification steps at the phone breakpoint
-   (600px) instead of 480px, so they never render as a cramped 3-across strip
-   on phones in landscape or small tablets — the "three column" mobile symptom. */
-@media (max-width: 600px) {
-  .verification-steps {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-  .verification-steps li {
-    justify-content: flex-start;
-    min-height: 38px;
-    padding-inline: 12px;
   }
 }
 
