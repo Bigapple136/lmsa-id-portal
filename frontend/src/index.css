@@ -2733,6 +2733,109 @@ a:focus:not(:focus-visible) {
   margin-top: 4px;
 }
 
+/* What a student's self-correction actually changed. Rendered from
+   notifications.details, inside the feed item, so "…corrected their details" is
+   never the whole story an admin has to go on. */
+.correction-details {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.correction-details-heading {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hint);
+}
+
+.correction-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.correction-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 7px;
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+}
+
+.correction-detail-label {
+  color: var(--muted);
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.correction-detail-change {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.correction-detail-from {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--hint);
+  overflow-wrap: anywhere;
+}
+
+.correction-detail-to {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.correction-detail-arrow {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.correction-detail-empty {
+  color: var(--hint);
+  font-style: italic;
+}
+
+.correction-note {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--gold);
+  background: var(--warn-bg);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.correction-note-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn-text);
+  margin-bottom: 2px;
+}
+
+.correction-note-text {
+  display: block;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .nc-dot {
   flex-shrink: 0;
   width: 8px;
@@ -2926,6 +3029,13 @@ a:focus:not(:focus-visible) {
   .nc-item-msg {
     font-size: 13px;
     line-height: 1.5;
+  }
+
+  /* The changed-field rows carry the values an admin has to read, not just
+     glance at, so they follow the message up to 13px on phones too. */
+  .correction-detail-row,
+  .correction-note {
+    font-size: 13px;
   }
 }
 
@@ -5773,6 +5883,26 @@ textarea:focus-visible {
 .meta-row--last { border-bottom: none; }
 .meta-table--tight { margin-bottom: 4px; }
 .meta-value--unset { color: var(--muted); font-style: italic; }
+
+/* The optional "what did you find wrong" box on the report step */
+.issue-note-field {
+  margin-bottom: 14px;
+}
+.issue-note-optional {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--hint);
+  font-size: 11px;
+}
+.issue-note-input {
+  min-height: 76px;
+}
+.issue-note-hint--near-limit {
+  color: var(--warn-text);
+}
 
 /* Issue-type checklist */
 .issue-type-list {

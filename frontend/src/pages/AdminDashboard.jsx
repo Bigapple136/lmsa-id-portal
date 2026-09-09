@@ -14,6 +14,7 @@ import FieldToggleGroup from '../components/FieldToggleGroup'
 import ConfirmDialog from '../components/ConfirmDialog'
 import AssetSlot from '../components/AssetSlot'
 import BackgroundJobsIndicator from '../components/BackgroundJobsIndicator'
+import CorrectionDetails from '../components/CorrectionDetails'
 import useBackgroundJobs from '../hooks/useBackgroundJobs'
 import { runOptimistic, createJob } from '../lib/optimistic'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
@@ -113,6 +114,9 @@ export default function AdminDashboard() {
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [editMsg, setEditMsg] = useState(null)
   const [issueNotes, setIssueNotes] = useState({})
+  // The correction a notification was clicked from, shown in the student editor
+  // so the admin reads what the student reported next to the fields they'd fix.
+  const [correctionBrief, setCorrectionBrief] = useState(null)
   const [yearFilter, setYearFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
 
@@ -1221,6 +1225,9 @@ export default function AdminDashboard() {
 
   function openEdit(s) {
     setEditStudent(s)
+    // Only the notification route into this modal carries a brief; opening the
+    // same editor from the table must not re-show the last student's report.
+    setCorrectionBrief(null)
     setEditForm({
       full_name: s.full_name,
       year_level: s.year_level,
@@ -1277,6 +1284,7 @@ export default function AdminDashboard() {
     // Optimistic: update list immediately and close modal
     setStudents((prev) => prev.map((s) => (s.student_id === studentId ? optimisticUpdated : s)))
     setEditStudent(null)
+    setCorrectionBrief(null)
     toast.info(`Updating ${formSnapshot.full_name} — syncing...`)
 
     runOptimistic({
@@ -1973,7 +1981,18 @@ export default function AdminDashboard() {
                 ×
               </button>
             </div>
-            {issueNotes[editStudent.student_id] && (
+            {correctionBrief && (
+              <div className="info-box u-mb-14">
+                <strong>Reported by the student</strong>
+                <CorrectionDetails details={correctionBrief} heading="They corrected" />
+                {(correctionBrief.photo_issue || correctionBrief.photo_issue_reported) && (
+                  <p className="correction-note-text u-mt-8">
+                    They also reported the photo on their card is wrong — a re-shoot is needed.
+                  </p>
+                )}
+              </div>
+            )}
+            {!correctionBrief && issueNotes[editStudent.student_id] && (
               <div className="info-box u-mb-14" >
                 <strong>Student's report:</strong> {issueNotes[editStudent.student_id].note}
               </div>
@@ -2295,11 +2314,16 @@ export default function AdminDashboard() {
         </div>
         <div className="u-flex u-ai-center u-gap-8">
           <NotificationCenter
-            onNavigateStudent={(studentId, _type) => {
-              setStatusFilter('issues')
+            onNavigateStudent={(studentId, type, notification) => {
+              // A photo report leaves the student in the issues list, which is
+              // where the admin wants to land. A self-correction does not: the
+              // record goes back to 'pending' for re-confirmation, so filtering
+              // to issues would hide the very row they clicked through to see.
+              setStatusFilter(type === 'photo_issue' ? 'issues' : 'all')
               setActiveTab('students')
               const student = students.find((s) => s.student_id === studentId)
               if (student) openEdit(student)
+              setCorrectionBrief(notification?.details || null)
             }}
           />
           <button className="btn-outline-light" onClick={() => supabase.auth.signOut()}>

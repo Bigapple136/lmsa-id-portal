@@ -11,6 +11,9 @@ import useDocumentTitle from '../lib/useDocumentTitle'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+// Mirrors MAX_STUDENT_NOTE_LENGTH in backend/utils/corrections.js — the API
+// rejects longer, so the box stops you here instead of at submit time.
+const MAX_STUDENT_NOTE_LENGTH = 500
 
 const QR_FIELD_META = {
   blood_type: { label: 'Blood Type' },
@@ -76,6 +79,10 @@ export default function PreviewPage() {
   const [step, setStep] = useState('idle')
   const [selectedIssues, setSelectedIssues] = useState([])
   const [corrections, setCorrections] = useState({ full_name: '', year_level: '' })
+  // The student's own description of what looks wrong. Optional, and the one
+  // thing admins had no way to see before: the record only shows the values,
+  // not what the student thought was off about them.
+  const [studentNote, setStudentNote] = useState('')
   const [qrCorrections, setQrCorrections] = useState({})
   const [qrWrongFields, setQrWrongFields] = useState({})
   const [correctionError, setCorrectionError] = useState('')
@@ -302,6 +309,7 @@ export default function PreviewPage() {
         corrections: nextCorrections,
         qr_corrections: nextQrCorrections,
         photo_issue: hasPhoto,
+        student_note: studentNote.trim() || undefined,
       },
     }
   }
@@ -333,13 +341,15 @@ export default function PreviewPage() {
           body: JSON.stringify(body),
         },
       )
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
       const updated = await res.json()
       setStudent(updated)
       if (hasPhoto) setPhotoNoticed(true)
       setStep('done')
-    } catch {
-      toast.error('Something went wrong. Please try again.')
+    } catch (err) {
+      // The route explains what it rejected (e.g. "nothing changed"), which is
+      // actionable; the generic fallback is only for transport failures.
+      toast.error(err?.message || 'Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -353,16 +363,20 @@ export default function PreviewPage() {
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ corrections: {}, photo_issue: true }),
+          body: JSON.stringify({
+            corrections: {},
+            photo_issue: true,
+            student_note: studentNote.trim() || undefined,
+          }),
         },
       )
-      if (!res.ok) throw new Error()
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
       const updated = await res.json()
       setStudent(updated)
       setPhotoNoticed(true)
       setStep('done')
-    } catch {
-      toast.error('Something went wrong. Please try again.')
+    } catch (err) {
+      toast.error(err?.message || 'Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -375,6 +389,7 @@ export default function PreviewPage() {
     setQrCorrections({})
     setQrWrongFields({})
     setCorrectionError('')
+    setStudentNote('')
   }
 
   function toggleQrWrong(field) {
@@ -616,6 +631,7 @@ export default function PreviewPage() {
                     </label>
                   ))}
                 </div>
+                <IssueNoteField value={studentNote} onChange={setStudentNote} />
                 <div className="btn-row">
                   <button
                     className="btn-gold"
@@ -935,6 +951,36 @@ export default function PreviewPage() {
   )
 }
 
+// One capture point for the student's own description, on the step where they
+// already know what they selected — every branch after this one (QR form, other
+// form, tabs, photo-only) posts whatever is in here, so the note is never
+// dependent on which path the student took through the flow.
+function IssueNoteField({ value, onChange }) {
+  const nearLimit = value.length > MAX_STUDENT_NOTE_LENGTH - 80
+  return (
+    <div className="field-group issue-note-field">
+      <label className="field-label" htmlFor="preview-issue-note">
+        What issue did you find with your details?
+        <span className="issue-note-optional">Optional, but it helps us fix it faster</span>
+      </label>
+      <textarea
+        id="preview-issue-note"
+        className="field-input submission-textarea issue-note-input"
+        rows={3}
+        maxLength={MAX_STUDENT_NOTE_LENGTH}
+        value={value}
+        onChange={(e) => onChange(e.target.value.slice(0, MAX_STUDENT_NOTE_LENGTH))}
+        placeholder="e.g. my second name is missing, or the phone number is my brother's, not my father's"
+      />
+      <p className={`field-hint${nearLimit ? ' issue-note-hint--near-limit' : ''}`}>
+        {nearLimit
+          ? `${MAX_STUDENT_NOTE_LENGTH - value.length} characters left — LMSA reads this with your correction.`
+          : 'Only LMSA admins see this. Include exactly what looks wrong, and what it should say.'}
+      </p>
+    </div>
+  )
+}
+
 function QrFieldRow({
   field,
   currentValue,
@@ -984,7 +1030,9 @@ function QrFieldRow({
                   ? 'email'
                   : field === 'emergency_contact_phone'
                     ? 'tel'
-                    : 'text'
+                    : field === 'date_of_birth'
+                      ? 'date'
+                      : 'text'
               }
               value={correctionValue}
               onChange={(e) => onCorrectionChange(e.target.value)}

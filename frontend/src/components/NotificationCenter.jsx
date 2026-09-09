@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { adminFetch } from '../lib/api'
+import CorrectionDetails from './CorrectionDetails'
 
 const TYPE_ICONS = {
   submission: '📩',
@@ -313,13 +314,14 @@ export default function NotificationCenter({ onNavigateStudent }) {
                 <div className="nc-item-body">
                   <div className="nc-item-title">{n.title}</div>
                   <div className="nc-item-msg">{n.message}</div>
+                  <CorrectionDetails details={n.details} />
                   <div className="nc-item-time">{timeAgo(n.created_at)}</div>
                 </div>
                 <div className="nc-item-actions">
                   {n.student_id && (n.type === 'photo_issue' || n.type === 'self_correction') && onNavigateStudent && (
                     <button
                       className="nc-view-btn"
-                      onClick={() => onNavigateStudent(n.student_id, n.type)}
+                      onClick={() => onNavigateStudent(n.student_id, n.type, n)}
                       aria-label="View student"
                       title="View student"
                       style={{

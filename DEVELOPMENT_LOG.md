@@ -1010,6 +1010,100 @@ truncation.
 
 ---
 
+## 17. Feature: Self-Correction Notifications Now Say What Changed — and Take a Note From the Student
+
+### Problem
+A student using the self-service correction flow on their preview page produced
+exactly one line of signal for admins: *"STU-001 requested corrections to their
+details"*. No idea which details, no idea why, and no way for the student to
+explain. Worse, a student who both fixed their name and flagged a wrong photo got
+only the *photo_issue* notification — the name correction never reached the feed
+at all.
+
+### Root Cause
+`PATCH /api/students/:id/self-correct` composed its `confirmations.note` from the
+submitted values but wrote a fixed, generic string into `notifications.message`.
+Nothing in the request carried the student's own words, and the emit block was an
+if/else-if, so `photo_issue` shadowed `self_correction` whenever both were true.
+The `notes` array (which does hold the detail) only ever reached the activity-log
+row, which no admin screen renders for a self-correction — those students land
+back on `status = 'pending'`, and the students tab pulls notes only for
+`issue`/`photo_issue` rows.
+
+### Solution
+- **`backend/utils/corrections.js` (new)** — one place that compares the submitted
+  patch against the stored row and produces both renderings: the sentence
+  ("Kofi Amankwah (STU-001) corrected their full name, year level and emergency
+  contact phone") and the structured `details` (`fields[]` with `from`/`to`, plus
+  `student_note`). Field labels live here, so the notification wording and the
+  panel's chips cannot drift.
+- **Self-service honesty**: a submitted value identical to what is on the record is
+  no longer reported as a correction (it previously wrote the row, logged a
+  notification and regenerated the QR for nothing). A submission with no change,
+  no note and no photo report is now a 400 that says so, and the preview page
+  surfaces that message instead of "Something went wrong".
+- **Student note**: "What issue did you find with your details?" — an optional
+  500-character box on the report step where the student picks what is wrong, so
+  it is captured on every branch (QR-only, card-fields-only, tabbed, photo-only)
+  rather than being duplicated into each of the four submit forms. Validated
+  server-side (`student_note` must be text, ≤ 500), whitespace-collapsed, stored on
+  the notification and in the activity-log line, quoted last there so truncation can
+  never eat a field prefix.
+- **One notification per kind of event**: a combined report now writes both a
+  `self_correction` and a `photo_issue` row, so the feed's type filters stay
+  honest. The note rides on exactly one of them (the `self_correction` row, or the
+  `photo_issue` row when that is all there is), so it is never read twice.
+- **`sql/015_correction_details.sql` (new)** — `details JSONB` on `notifications`
+  and `confirmations`, plus a `CREATE OR REPLACE VIEW admin_notifications`, which
+  is needed because a view freezes its `n.*` expansion at creation time.
+- **`backend/utils/notificationLog.js` (new)** — `emitNotification` /
+  `logStudentActivity`, both logging rather than throwing. They degrade gracefully
+  when 015 has not been applied: retry without `details`, folding the note into
+  the message text so nothing is lost while the migration is pending. (Same shape
+  of fallback the notification-reads code uses.)
+- **Admin UI** — `CorrectionDetails` (new shared component) renders "full name:
+  ~~Ama Serwah~~ → Ama Serwaa" plus the student's note, used in the notification
+  panel and in the student editor. Clicking *View student* on a notification now
+  carries that brief into the modal, and lands on the *all* filter rather than
+  *issues* for self-corrections — those students are `pending`, so the old
+  hard-coded filter hid the row the admin had just clicked through to see.
+- **Analytics** — `GET /api/analytics` attributes `corrections_by_field` from
+  `confirmations.details.fields` when present, falling back to the pre-existing
+  "Name corrected to:" text matching for older rows. This was already fragile (the
+  previous section flagged it) and became a real hazard once student-typed text
+  started being appended to that same note.
+- Also: `date_of_birth` in the QR correction form became a real date input, since
+  the route now validates `YYYY-MM-DD` rather than letting Postgres reject it.
+
+### Verification
+- Backend: 94 tests passing, including `tests/corrections.test.js` (20 — wording,
+  no-op suppression, field ordering, note handling) and `tests/selfCorrect.test.js`
+  (13 — route-level, including the "details column missing" degradation path, the
+  blood-type/DOB/email guards, and the token-must-match-the-student check).
+  `npm run lint` unchanged from baseline (2 pre-existing errors in
+  `routes/templates.js`).
+- Frontend: 126 tests passing, including `tests/previewCorrectionNote.test.jsx`
+  (5 — the note box appears, is trimmed into the PATCH body, is omitted when empty,
+  survives into the photo-only path, and the server's rejection reason reaches the
+  student) and `tests/correctionDetails.test.jsx` (5). `npm run lint` unchanged from
+  baseline; `npm run build` succeeds.
+- **Requires `sql/015_correction_details.sql` before structured details appear** —
+  without it the notification is still correct and readable, just prose-only.
+
+### Files Changed
+- `backend/utils/corrections.js`, `backend/utils/notificationLog.js` — new
+- `backend/routes/students.js` — self-correct route rebuilt around the summary
+- `backend/routes/analytics.js` — structured field attribution with legacy fallback
+- `backend/tests/corrections.test.js`, `backend/tests/selfCorrect.test.js` — new
+- `sql/015_correction_details.sql` — new
+- `frontend/src/components/CorrectionDetails.jsx` — new
+- `frontend/src/pages/PreviewPage.jsx` — note capture, server-error surfacing, date input
+- `frontend/src/components/NotificationCenter.jsx`, `frontend/src/pages/AdminDashboard.jsx` — render the detail
+- `frontend/src/index.css` — detail + note styles
+- `frontend/src/test/previewCorrectionNote.test.jsx`, `frontend/src/test/correctionDetails.test.jsx` — new
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -1036,6 +1130,12 @@ truncation.
 | `65feb9f` | Remove stray debug output files | Pushed |
 | `0f6b513` | Sub-percent layout precision + mm readouts + rounded corners for image fields | Pushed |
 | `f92f793` | Fix Name Corrections stat — was counting new registrations + unrelated corrections | Pushed |
+
+**Apply before self-correction notifications show per-field detail:**
+1. `sql/015_correction_details.sql` — adds `details JSONB` to `notifications` and
+   `confirmations` and re-creates `admin_notifications`. Until it is applied the
+   inserts fall back to prose-only messages (logged at `warn`), so nothing breaks,
+   but the "what changed" chips and the note block stay empty.
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).
