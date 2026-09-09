@@ -1310,6 +1310,73 @@ backup table list; `qr_keys` confirmed excluded with reason.
 
 ---
 
+## 20. Feature: Guided In-App Restore (commit `5cc9d90`)
+
+### Problem
+The portal could *take* backups but had no way to *apply* one: recovery
+was a manual Supabase procedure (re-import 13 JSON files in FK-safe order,
+re-upload three buckets, fix the `qr_audit` sequence by hand). Workable,
+but slow and error-prone in exactly the emergency where it matters most —
+and the system is now live with student data.
+
+### Solution
+Guided restore under Admin → Settings → System → Restore from backup
+(full admin only, every step audit-logged):
+- **Upload & validate** (`POST /api/restore/upload`): ZIP streams to a
+  disk staging area via `unzipper` (never fully in memory — photo-heavy
+  backups are hundreds of MB), with zip-slip, file-count (50k) and
+  uncompressed-size (5 GB) guards. Anything without a valid `manifest.json`
+  is rejected as "not a LIMSA backup". Writes nothing live.
+- **Preview** (`GET /api/restore/:id/preview`): live-vs-backup diff per
+  table and per bucket, Merge/Skip per table, warnings. Read-only, but
+  marks the session reviewed — apply refuses without it.
+- **Apply** (`POST /api/restore/:id/apply`, exact `RESTORE` phrase +
+  optional file toggle): background job with phase progress over
+  `/api/jobs`. Snapshots CURRENT live data first (abort untouched if the
+  snapshot fails); merges tables in FK-safe order by upsert — live-only
+  rows/files are never deleted; failing batches retry row-by-row; files
+  upload with `upsert:true`; `qr_audit` BIGSERIAL sequence advanced via
+  new `sql/017` RPC with a graceful warning on older databases. Every
+  phase idempotent, so re-running after a partial failure is safe.
+- **Snapshot/result/discard**: pre-restore snapshot downloadable for 24h,
+  result re-fetchable past the 30-min job TTL, staging discarded on
+  demand. Workspaces expire after 24h so a stale preview can never apply.
+- **Job store**: `setJobProgress` + status-only jobs (`result` JSON
+  instead of a file); `/api/jobs` passes progress/result through and
+  restricts `restore` jobs to full admins like `backup` jobs.
+- **Frontend** (`RestoreSection.jsx`): staged summary → diff table →
+  file toggle → typed confirm → progress bar → results with row-level
+  details, snapshot download, start-over. `api.js` gained a per-request
+  `timeoutMs` (restore uploads get 10 min instead of 45s).
+- `docs/BACKUP.md` documents the guided flow; the manual Supabase
+  procedure stays as the app-is-down fallback.
+
+### Verification
+Backend: 167/167 tests (13 new in `tests/restore.test.js`: FK-safe plan
+guard, manifest validation, upload rejection paths, preview diff, apply
+guards, full mocked apply incl. snapshot/upsert order/bucket mapping/
+sequence/audit, batch salvage + keyless skips, missing-RPC warning,
+discard/TTL, support_admin blocks). Frontend: 154/154 (5 new
+`RestoreSection` flow tests) + production build. ESLint clean on all
+touched files.
+
+### Files Changed
+- `backend/routes/restore.js` — new (upload/preview/apply/snapshot/result/discard)
+- `backend/jobStore.js` — `setJobProgress`, status-only `result` jobs
+- `backend/routes/jobs.js` — progress/result passthrough, restore privilege
+- `backend/routes/backup.js` — reuse exports (snapshot builder, buckets, pool)
+- `backend/index.js` — mount `/api/restore`
+- `backend/package.json`, `backend/package-lock.json` — `unzipper`
+- `backend/tests/restore.test.js` — new (13 tests)
+- `sql/017_restore_sequence_reset.sql` — new (run once in Supabase)
+- `frontend/src/components/RestoreSection.jsx` — new (guided UI)
+- `frontend/src/pages/admin/SettingsTab.jsx` — mount under System
+- `frontend/src/lib/api.js` — per-request `timeoutMs`, `adminForm` options
+- `frontend/src/test/RestoreSection.test.jsx` — new (5 tests)
+- `docs/BACKUP.md` — guided restore docs, manual fallback kept
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
