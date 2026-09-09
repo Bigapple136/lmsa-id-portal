@@ -1234,6 +1234,82 @@ reports a failed load instead of an empty queue.
 
 ---
 
+## 19. Backup Hardening: Cluster-Safe Jobs, Missing Table, Manifest, Audit Trail (commit `c902ec2`)
+
+### Problem
+Pre-live audit of the backup system (it guards real student PII + photos)
+found two critical defects and a set of logic/speed gaps:
+
+1. **Background downloads were broken in production.** The Dockerfile runs
+   `node cluster.js` (up to 4 workers) but the job store was an in-memory
+   `Map` per worker — a backup queued on worker A 404'd ("Job not found
+   or expired") whenever the status poll / download landed on another
+   worker. This hit every background export, not just backup (QR export,
+   photoshoot roster, card-design roster).
+2. **`correction_requests` was silently excluded from every backup.**
+   Added in migration 016 after the last backup-table fix (`2f9a943`) —
+   the same bug recurring. The pending student-correction queue would
+   have been lost in a restore.
+3. `/api/jobs/:jobId` only required any admin, so a `support_admin` could
+   download a full backup, bypassing `/api/backup`'s full-admin guard.
+4. Empty tables were omitted from the ZIP (indistinguishable from
+   "failed to back up"); no manifest, so partial failures were silent;
+   full-database PII exports were never audit-logged; the frontend
+   queued via a state-changing GET with a dead blob fallback (read an
+   already-consumed response body); no rate limit on the heavy op.
+5. Speed: tables fetched one-by-one, files downloaded one-by-one, and
+   JPEGs/PNGs pointlessly DEFLATE-compressed (CPU burn, ~zero size gain).
+
+### Solution
+- **`backend/jobStore.js` rewritten as a filesystem-backed store**
+  (`$TMPDIR/lmsa-jobs`, 30-min TTL, atomic meta writes, strict job-id
+  validation as path-traversal protection). All cluster workers share
+  the container filesystem, so every job is visible to every worker with
+  no new infra. Result files now stream from disk (`res.sendFile`)
+  instead of sitting in the heap. Same `createJob/getJob/setJob*`
+  signatures, so the qr/students background exporters were fixed with
+  zero changes. Documented limit: multi-worker, not multi-instance
+  (sticky sessions needed if the backend ever scales past one host).
+- **`backend/routes/backup.js`**: added `correction_requests`;
+  bounded-parallel table fetch (4×) + file downloads (8×); STORE for
+  binaries / DEFLATE for JSON; table files always written; `manifest.json`
+  (row/file/byte counts, failures, `excluded_tables` with the `qr_keys`
+  reason); audit-logged `backup_queued/completed/failed/downloaded`;
+  dedicated limiter (10/15 min) on queue/download entry only, polls
+  untouched; single shared `queueBackupJob` for POST + legacy GET.
+- **`backend/routes/jobs.js`**: backup-type jobs require full admin;
+  streams from disk; audit-logs backup downloads served via this route.
+- **Frontend (`SettingsTab.jsx`)**: queues via `POST /api/backup`;
+  content-type-aware response handling replaces the dead fallback.
+- **`docs/BACKUP.md` (new)**: ZIP layout, the deliberate `qr_keys`
+  exclusion + separate key-backup procedure, how it runs, scaling
+  caveat, step-by-step restore runbook. No one-click restore endpoint
+  on purpose — overwriting live data from a web button is too dangerous.
+- **Tests (`backend/tests/backup.test.js`, 15 new)**: schema-coverage
+  guard (every `CREATE TABLE` in `sql/` must be backed up or a
+  documented exclusion — fails the build if a future migration is
+  missed); jobStore round-trip/expiry/traversal/cleanup +
+  cross-instance visibility proof; `/api/jobs` privilege tests
+  (support_admin blocked from backup jobs, still served own exports).
+
+### Verification
+Backend: 154/154 tests (139 existing + 15 new); ESLint clean on all
+touched files (the 2 errors + 3 warnings in `templates.js`/`qr.js` are
+pre-existing at HEAD, unrelated). Frontend: 149/149 tests, production
+build succeeds, ESLint clean on `SettingsTab.jsx` (its 2 errors are
+pre-existing elsewhere). `correction_requests` confirmed present in the
+backup table list; `qr_keys` confirmed excluded with reason.
+
+### Files Changed
+- `backend/jobStore.js` — rewritten (filesystem-backed)
+- `backend/routes/backup.js` — table fix, parallelism, manifest, audit, limiter
+- `backend/routes/jobs.js` — backup privilege boundary, disk streaming, audit
+- `backend/tests/backup.test.js` — new (15 tests)
+- `frontend/src/pages/admin/SettingsTab.jsx` — POST queue, response fix
+- `docs/BACKUP.md` — new (operations + restore runbook)
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
