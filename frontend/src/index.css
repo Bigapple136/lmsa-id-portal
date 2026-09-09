@@ -2733,6 +2733,264 @@ a:focus:not(:focus-visible) {
   margin-top: 4px;
 }
 
+/* What a student's self-correction actually changed. Rendered from
+   notifications.details, inside the feed item, so "…corrected their details" is
+   never the whole story an admin has to go on. */
+.correction-details {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.correction-details-heading {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--hint);
+}
+
+.correction-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.correction-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 7px;
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: 6px;
+}
+
+.correction-detail-label {
+  color: var(--muted);
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.correction-detail-change {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.correction-detail-from {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--hint);
+  overflow-wrap: anywhere;
+}
+
+.correction-detail-to {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.correction-detail-arrow {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.correction-detail-empty {
+  color: var(--hint);
+  font-style: italic;
+}
+
+.correction-note {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--gold);
+  background: var(--warn-bg);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.correction-note-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn-text);
+  margin-bottom: 2px;
+}
+
+.correction-note-text {
+  display: block;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* ── Gated corrections: the student's view of their own open request ──
+   The card cannot say "confirmed" while the student disputes it, so this panel is
+   what explains the pause. Amber (waiting), not red — nothing is wrong. */
+.review-banner {
+  background: var(--warn-bg);
+  border: 0.5px solid #E8C97A;
+  border-radius: var(--radius);
+  padding: 12px 13px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--warn-text);
+}
+
+.review-banner-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.review-banner-title {
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.review-banner-age {
+  font-size: 10.5px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.review-banner .correction-details {
+  margin-top: 8px;
+}
+
+.review-banner-body {
+  margin: 8px 0 0;
+  color: var(--text);
+}
+
+.review-banner-withdraw {
+  margin-top: 10px;
+  font-size: 11px;
+  padding: 5px 10px;
+  background: transparent;
+}
+
+.confirm-locked-hint {
+  margin: 6px 0 14px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* The decision, where the student will actually see it. */
+.resolution-box {
+  border-radius: var(--radius);
+  border: 0.5px solid var(--border);
+  background: var(--white);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+  padding: 9px 12px;
+  margin-bottom: 14px;
+}
+
+.resolution-box--approved {
+  background: var(--success-bg);
+  border-color: var(--success-border);
+  color: var(--success-text);
+}
+
+.resolution-box--rejected {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error-text);
+}
+
+.resolution-box-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* ── Admin: the corrections queue ── */
+.tab-count {
+  display: inline-block;
+  min-width: 17px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  border: 0.5px solid #E8C97A;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.correction-row-meta {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.corrections-row--focus {
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.correction-conflict {
+  background: var(--error-bg);
+  border: 0.5px solid var(--error-border);
+  border-radius: var(--radius);
+  color: var(--error-text);
+  font-size: 11.5px;
+  line-height: 1.55;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.correction-conflict-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--text);
+}
+
+.correction-conflict-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.correction-decided {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* A control that sits inside a sentence has to look like part of it. */
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--navy-mid);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--navy);
+}
+
 .nc-dot {
   flex-shrink: 0;
   width: 8px;
@@ -2926,6 +3184,13 @@ a:focus:not(:focus-visible) {
   .nc-item-msg {
     font-size: 13px;
     line-height: 1.5;
+  }
+
+  /* The changed-field rows carry the values an admin has to read, not just
+     glance at, so they follow the message up to 13px on phones too. */
+  .correction-detail-row,
+  .correction-note {
+    font-size: 13px;
   }
 }
 
@@ -5773,6 +6038,26 @@ textarea:focus-visible {
 .meta-row--last { border-bottom: none; }
 .meta-table--tight { margin-bottom: 4px; }
 .meta-value--unset { color: var(--muted); font-style: italic; }
+
+/* The optional "what did you find wrong" box on the report step */
+.issue-note-field {
+  margin-bottom: 14px;
+}
+.issue-note-optional {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--hint);
+  font-size: 11px;
+}
+.issue-note-input {
+  min-height: 76px;
+}
+.issue-note-hint--near-limit {
+  color: var(--warn-text);
+}
 
 /* Issue-type checklist */
 .issue-type-list {

@@ -21,11 +21,13 @@ const {
 const { supabase } = require('../db')
 const { requireAdmin, requireFullAdmin } = require('../middleware/auth')
 const { enqueueImport } = require('../queue')
-const { email, maxLength } = require('../middleware/validate')
+const { email, maxLength, dateString } = require('../middleware/validate')
 const { signStudentToken, verifyStudentToken } = require('./qr')
 const logger = require('../logger')
 const { logAdminAction } = require('../auditLog')
 const { withVersion } = require('../utils/storageUrl')
+const { CORRECTION_LABELS, buildCorrectionReport, sanitizeStudentNote, MAX_STUDENT_NOTE_LENGTH } = require('../utils/corrections')
+const { fileCorrectionRequest } = require('../utils/correctionRequests')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
 
@@ -37,9 +39,16 @@ function getQRGenerator() {
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
 const ALLOWED_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
+// Matches the students_blood_type_check constraint; checked here so a student
+// gets "must be one of A+, A-, …" instead of a raw Postgres constraint message.
+const ALLOWED_BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
 const MAX_TEXT_LENGTH = 200
-const MAX_NOTE_LENGTH = 1000
+// Everything a student may change about their own record through
+// /:studentId/self-correct — the card fields plus the QR-payload fields. Kept in
+// sync with CORRECTION_LABELS, which is also where the admin-facing wording for
+// each of these lives.
+const CORRECTABLE_FIELDS = Object.keys(CORRECTION_LABELS)
 
 function validateYear(y) {
   return ALLOWED_YEARS.includes(y)
@@ -827,7 +836,12 @@ router.patch(
   },
 )
 
-// ── PUBLIC: self-correct ──
+// ── PUBLIC: request a self-correction ──
+// The student picks what is wrong and says why; LMSA decides. Kept on this URL
+// because it is what every issued preview link and the preview page already
+// call, and because "self-correct" still describes the student's intent — what
+// changed is that the record only moves once an admin approves it. See
+// utils/correctionRequests.js for the lifecycle and sql/016 for the queue.
 router.patch('/:studentId/self-correct', async (req, res) => {
   const sidErr = maxLength(req.params.studentId, 50, 'studentId')
   if (sidErr) return res.status(400).json({ error: sidErr })
@@ -839,12 +853,22 @@ router.patch('/:studentId/self-correct', async (req, res) => {
     return res.status(403).json({ error: 'Invalid or expired token.' })
   }
 
-  const { corrections, qr_corrections, photo_issue } = req.body
+  const { corrections, qr_corrections, photo_issue, student_note } = req.body
   const studentId = req.params.studentId
 
+  if (student_note !== undefined && student_note !== null && typeof student_note !== 'string')
+    return res.status(400).json({ error: 'student_note must be text.' })
+  // 500, not the 1000 the admin/issue note paths allow: this text is appended to
+  // the activity-log line that also carries the per-field detail, and that line is
+  // truncated at 1000 with the fields first — a long note must never eat them.
+  const noteErr = maxLength(student_note, MAX_STUDENT_NOTE_LENGTH, 'student_note')
+  if (noteErr) return res.status(400).json({ error: noteErr })
+
+  // select('*') because the summary needs the stored value of every field the
+  // student is allowed to touch, to report what actually moved.
   const { data: student, error: lookupErr } = await supabase
     .from('students')
-    .select('student_id, status')
+    .select('*')
     .eq('student_id', studentId)
     .maybeSingle()
   if (lookupErr || !student) return res.status(404).json({ error: 'Student not found.' })
@@ -855,6 +879,19 @@ router.patch('/:studentId/self-correct', async (req, res) => {
     return res.status(400).json({ error: 'full_name too long.' })
   if (corrections?.position && !validateTextLength(corrections.position))
     return res.status(400).json({ error: 'position too long.' })
+  if (corrections?.student_email || qr_corrections?.student_email) {
+    const emailErr = email(corrections?.student_email || qr_corrections?.student_email, 'Email')
+    if (emailErr) return res.status(400).json({ error: emailErr })
+  }
+  const submittedBloodType = corrections?.blood_type ?? qr_corrections?.blood_type
+  if (submittedBloodType && !ALLOWED_BLOOD_TYPES.includes(String(submittedBloodType).trim()))
+    return res
+      .status(400)
+      .json({ error: `blood_type must be one of: ${ALLOWED_BLOOD_TYPES.join(', ')}` })
+  if (corrections?.date_of_birth || qr_corrections?.date_of_birth) {
+    const dobErr = dateString(corrections?.date_of_birth || qr_corrections?.date_of_birth, 'Date of birth')
+    if (dobErr) return res.status(400).json({ error: dobErr })
+  }
 
   const VALID_QR_FIELDS = [
     'blood_type',
@@ -867,92 +904,46 @@ router.patch('/:studentId/self-correct', async (req, res) => {
     'county_of_origin',
     'current_address',
   ]
+  // Unknown keys inside `corrections` are ignored (as they always were — the
+  // report only reads fields a student owns); unknown keys in `qr_corrections`
+  // stay a 400, because that object is a flat field map where a stray key reads
+  // as an attempt to write a column nobody asked for.
   if (qr_corrections) {
     for (const key of Object.keys(qr_corrections)) {
       if (!VALID_QR_FIELDS.includes(key))
         return res.status(400).json({ error: `Invalid QR field: ${key}` })
-      if (!validateTextLength(String(qr_corrections[key]), 200))
+      if (!validateTextLength(String(qr_corrections[key] ?? ''), 200))
         return res.status(400).json({ error: `${key} too long.` })
     }
   }
-
-  const updates = { status: 'pending' }
-  const notes = []
-  if (corrections?.full_name) {
-    updates.full_name = corrections.full_name.trim()
-    notes.push(`Name corrected to: ${corrections.full_name.trim()}`)
-  }
-  if (corrections?.year_level) {
-    updates.year_level = corrections.year_level
-    notes.push(`Year corrected to: ${corrections.year_level}`)
-  }
-  if (corrections?.position !== undefined) {
-    updates.position = corrections.position?.trim() || null
-    notes.push(`Position corrected to: ${corrections.position}`)
+  for (const key of Object.keys(corrections || {})) {
+    if (!CORRECTABLE_FIELDS.includes(key)) continue
+    if (!validateTextLength(String(corrections[key] ?? ''), 200))
+      return res.status(400).json({ error: `${key} too long.` })
   }
 
-  if (qr_corrections) {
-    for (const [key, value] of Object.entries(qr_corrections)) {
-      updates[key] = String(value).trim()
-      notes.push(`${key} corrected to: ${String(value).trim()}`)
-    }
+  const report = buildCorrectionReport({
+    student,
+    corrections,
+    qrCorrections: qr_corrections,
+    photoIssue: Boolean(photo_issue),
+    studentNote: sanitizeStudentNote(student_note),
+  })
+
+  // A report that changed nothing and carries no note is not worth an admin's
+  // attention — and saying so beats filing an empty request.
+  if (!report.hasAnything) {
+    return res.status(400).json({
+      error: 'Nothing to correct — the details you sent already match your record. If something still looks wrong, enter the correct value or describe it in the note box.',
+    })
   }
 
-  const hasUpdates = Object.keys(updates).some((k) => k !== 'status')
-  if (hasUpdates) {
-    const { error } = await supabase.from('students').update(updates).eq('student_id', studentId)
-    if (error) return res.status(400).json({ error: error.message })
-  }
-
-  if (photo_issue) {
-    await supabase
-      .from('confirmations')
-      .insert({
-        student_id: studentId,
-        action: 'photo_issue',
-        note: 'Student reported incorrect photo.',
-      })
-    await supabase.from('students').update({ status: 'photo_issue' }).eq('student_id', studentId)
-  }
-
-  if (notes.length) {
-    await supabase
-      .from('confirmations')
-      .insert({
-        student_id: studentId,
-        action: 'self_corrected',
-        note: notes.join(' | ').slice(0, MAX_NOTE_LENGTH),
-      })
-    const { data: updated } = await supabase
-      .from('students')
-      .select('*')
-      .eq('student_id', studentId)
-      .single()
-    if (updated) {
-      try {
-        await getQRGenerator()(updated)
-      } catch (err) {
-        logger.warn({ studentId: updated.student_id, err: err.message }, 'Self-correct QR generation failed')
-      }
-    }
-  }
-
-  // Emit notification for admins
-  if (photo_issue) {
-    supabase.from('notifications').insert({
-      type: 'photo_issue',
-      title: 'Photo issue',
-      message: `${studentId} reported an incorrect photo`,
-      student_id: studentId,
-    }).then(() => {}).catch((err) => logger.warn({ err: err?.message }, 'photo_issue notification insert failed'))
-  } else if (notes.length) {
-    supabase.from('notifications').insert({
-      type: 'self_correction',
-      title: 'Detail correction',
-      message: `${studentId} requested corrections to their details`,
-      student_id: studentId,
-    }).then(() => {}).catch((err) => logger.warn({ err: err?.message }, 'self_correction notification insert failed'))
-  }
+  // Nothing is written to the student's record here. What is written is a
+  // correction request, which an admin approves (routes/corrections.js) before it
+  // touches `students` — a preview link identifies a student, it does not entitle
+  // them to edit their enrollment record.
+  const { request, error: fileError } = await fileCorrectionRequest({ student, studentId, report })
+  if (fileError) return res.status(502).json({ error: fileError })
 
   const { data, error } = await supabase
     .from('students')
@@ -960,7 +951,10 @@ router.patch('/:studentId/self-correct', async (req, res) => {
     .eq('student_id', studentId)
     .single()
   if (error) return res.status(400).json({ error: error.message })
-  res.json(data)
+
+  // `student` is the record as it stands (unchanged, except that a photo report
+  // or a disputed confirmation moves `status`); `request` is what is pending.
+  res.json({ student: data, request })
 })
 
 // ── ADMIN: export photoshoot roster as PDF ── (supports ?background=true for optimistic UX)
@@ -1472,3 +1466,8 @@ router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => 
 })
 
 module.exports = router
+// The admin approval path has to move a student's photo/signature/QR between year
+// folders exactly like PUT /:studentId does, so the helper is exported rather than
+// copied — a second copy drifting is how a cohort change ends up with its assets
+// stranded in the old folder.
+module.exports.migrateStudentFiles = migrateStudentFiles

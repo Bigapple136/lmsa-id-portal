@@ -1,7 +1,8 @@
 /* eslint-disable react/prop-types */
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import IDCardDisplay from '../components/IDCardDisplay'
+import CorrectionDetails from '../components/CorrectionDetails'
 import CardCanvas from '../components/CardCanvas'
 import PrintPreviewModal from '../components/PrintPreviewModal'
 import Navbar from '../components/Navbar'
@@ -11,6 +12,9 @@ import useDocumentTitle from '../lib/useDocumentTitle'
 
 const YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year', '6th Year']
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+// Mirrors MAX_STUDENT_NOTE_LENGTH in backend/utils/corrections.js — the API
+// rejects longer, so the box stops you here instead of at submit time.
+const MAX_STUDENT_NOTE_LENGTH = 500
 
 const QR_FIELD_META = {
   blood_type: { label: 'Blood Type' },
@@ -76,11 +80,23 @@ export default function PreviewPage() {
   const [step, setStep] = useState('idle')
   const [selectedIssues, setSelectedIssues] = useState([])
   const [corrections, setCorrections] = useState({ full_name: '', year_level: '' })
+  // The student's own description of what looks wrong. Optional, and the one
+  // thing admins had no way to see before: the record only shows the values,
+  // not what the student thought was off about them.
+  const [studentNote, setStudentNote] = useState('')
   const [qrCorrections, setQrCorrections] = useState({})
   const [qrWrongFields, setQrWrongFields] = useState({})
   const [correctionError, setCorrectionError] = useState('')
   const [photoNoticed, setPhotoNoticed] = useState(false)
   const [reportTab, setReportTab] = useState('qr')
+  // The student's own requests. A correction is an ask now, not an edit, so the
+  // page has to show the ask: what is waiting on an admin (which locks Confirm),
+  // and how the last one was decided (which is the only place a rejection reason
+  // reaches the student). `/api/corrections/mine` returns newest first.
+  const [openRequest, setOpenRequest] = useState(null)
+  const [requestHistory, setRequestHistory] = useState([])
+  // `useState` initialiser is not enough here — the list is refetched after every
+  // submit — so the derived value lives with the render instead.
 
   const [, setTemplateStatus] = useState('loading')
 
@@ -95,6 +111,8 @@ export default function PreviewPage() {
     return { version: 'v2', exp: claims.exp, expInfo, claims }
   }, [token])
 
+  const resolvedNotice = !openRequest && requestHistory.length ? requestHistory[0] : null
+
   // CardCanvas resolves front/back independently against calibrated
   // defaults, so it only needs a template and field-sides to render
   // something correct — no completeness gate required.
@@ -105,6 +123,7 @@ export default function PreviewPage() {
 
   useEffect(() => {
     fetchStudent()
+    fetchRequests()
     fetchTemplateAndLayout()
   }, [token])
 
@@ -116,9 +135,26 @@ export default function PreviewPage() {
       if (event.data?.type === 'layout-updated') {
         fetchTemplateAndLayout()
       }
+      // An approval changes the record the student is looking at. Refetching here
+      // is what stops a page that was open while the admin decided from showing
+      // the old details and a locked Confirm button until the student reloads.
+      if (event.data?.type === 'student-updated' && event.data.studentId === studentIdRef.current) {
+        refreshFromServer()
+      }
     }
     return () => channel.close()
   }, [])
+
+  // Read from inside the channel callback, which is installed once: closures
+  // over `student` or over the fetchers themselves would compare against — and
+  // call — whatever the first render captured.
+  const studentIdRef = useRef(null)
+  studentIdRef.current = student?.student_id || null
+  const refreshFromServer = useRef(() => {})
+  refreshFromServer.current = () => {
+    fetchStudent()
+    fetchRequests()
+  }
 
   async function fetchTemplateAndLayout() {
     // Fetch each resource independently so one failing endpoint never discards
@@ -185,7 +221,21 @@ export default function PreviewPage() {
     }
   }
 
+  async function fetchRequests() {
+    try {
+      const res = await apiFetch(`/api/corrections/mine?token=${encodeURIComponent(token)}`)
+      if (!res.ok) return
+      const data = await res.json()
+      setRequestHistory(data.requests || [])
+      setOpenRequest(data.open || null)
+    } catch {
+      // Context about a pending request, not state the page cannot run without:
+      // a failure here must not stop the card from loading.
+    }
+  }
+
   async function handleConfirm() {
+    if (openRequest) return
     setSubmitting(true)
     try {
       const res = await apiFetch('/api/confirmations/student', {
@@ -302,6 +352,7 @@ export default function PreviewPage() {
         corrections: nextCorrections,
         qr_corrections: nextQrCorrections,
         photo_issue: hasPhoto,
+        student_note: studentNote.trim() || undefined,
       },
     }
   }
@@ -333,13 +384,20 @@ export default function PreviewPage() {
           body: JSON.stringify(body),
         },
       )
-      if (!res.ok) throw new Error()
-      const updated = await res.json()
-      setStudent(updated)
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
+      // `student` is the record as it still stands, `request` is the ask. Applying
+      // the requested values to the card here would show the student a record that
+      // does not exist until an admin approves it.
+      const payload = await res.json()
+      if (payload.student) setStudent(payload.student)
+      if (payload.request) setOpenRequest(payload.request)
       if (hasPhoto) setPhotoNoticed(true)
       setStep('done')
-    } catch {
-      toast.error('Something went wrong. Please try again.')
+      fetchRequests()
+    } catch (err) {
+      // The route explains what it rejected (e.g. "nothing changed"), which is
+      // actionable; the generic fallback is only for transport failures.
+      toast.error(err?.message || 'Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -353,16 +411,39 @@ export default function PreviewPage() {
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ corrections: {}, photo_issue: true }),
+          body: JSON.stringify({
+            corrections: {},
+            photo_issue: true,
+            student_note: studentNote.trim() || undefined,
+          }),
         },
       )
-      if (!res.ok) throw new Error()
-      const updated = await res.json()
-      setStudent(updated)
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
+      const payload = await res.json()
+      if (payload.student) setStudent(payload.student)
       setPhotoNoticed(true)
       setStep('done')
-    } catch {
-      toast.error('Something went wrong. Please try again.')
+      fetchRequests()
+    } catch (err) {
+      toast.error(err?.message || 'Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleWithdrawRequest() {
+    if (!openRequest) return
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(
+        `/api/corrections/${encodeURIComponent(openRequest.id)}/withdraw?token=${encodeURIComponent(token)}`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
+      toast.success('Request withdrawn. Your card is back to you — confirm it if it looks right.')
+      await fetchRequests()
+    } catch (err) {
+      toast.error(err?.message || 'Something went wrong. Please try again.')
     } finally {
       setSubmitting(false)
     }
@@ -375,6 +456,7 @@ export default function PreviewPage() {
     setQrCorrections({})
     setQrWrongFields({})
     setCorrectionError('')
+    setStudentNote('')
   }
 
   function toggleQrWrong(field) {
@@ -546,10 +628,14 @@ export default function PreviewPage() {
                   </div>
                   <div className="meta-row meta-row--last">
                     <span className="meta-key">Status</span>
-                    <span className="meta-val status-pending">
+                    <span
+                      className={`meta-val${openRequest ? '' : ' status-pending'}`}
+                    >
                       {student.status === 'photo_issue'
                         ? 'Photo issue — admin notified'
-                        : 'Pending confirmation'}
+                        : openRequest
+                          ? 'Correction under review'
+                          : 'Pending confirmation'}
                     </span>
                   </div>
                 </div>
@@ -574,20 +660,42 @@ export default function PreviewPage() {
                   ))}
                 </div>
 
+                {openRequest && (
+                  <CorrectionReviewBanner
+                    request={openRequest}
+                    busy={submitting}
+                    onWithdraw={handleWithdrawRequest}
+                  />
+                )}
+
                 {student.status === 'photo_issue' ? (
                   <div className="info-box">
                     Your photo issue has been reported. LMSA will contact you to arrange a re-shoot.
                   </div>
                 ) : (
-                  <div className="btn-row">
-                    <button className="btn-gold" onClick={handleConfirm} disabled={submitting}>
-                      {submitting ? 'Confirming...' : 'Confirm — all correct'}
-                    </button>
-                    <button className="btn-outline" onClick={() => setStep('select')}>
-                      Report an issue
-                    </button>
-                  </div>
+                  <>
+                    <div className="btn-row">
+                      <button
+                        className="btn-gold"
+                        onClick={handleConfirm}
+                        disabled={submitting || Boolean(openRequest)}
+                      >
+                        {submitting ? 'Confirming...' : 'Confirm — all correct'}
+                      </button>
+                      <button className="btn-outline" onClick={() => setStep('select')}>
+                        {openRequest ? 'Add to your request' : 'Report an issue'}
+                      </button>
+                    </div>
+                    {openRequest && (
+                      <p className="confirm-locked-hint">
+                        Confirm is waiting on the admin reviewing your request above — a card
+                        cannot be confirmed and disputed at the same time.
+                      </p>
+                    )}
+                  </>
                 )}
+
+                <RequestOutcomeNotice request={resolvedNotice} />
               </>
             )}
 
@@ -616,6 +724,7 @@ export default function PreviewPage() {
                     </label>
                   ))}
                 </div>
+                <IssueNoteField value={studentNote} onChange={setStudentNote} />
                 <div className="btn-row">
                   <button
                     className="btn-gold"
@@ -910,10 +1019,12 @@ export default function PreviewPage() {
             {/* ── STEP: DONE ── */}
             {step === 'done' && (
               <div className="success-box">
-                {photoNoticed && !selectedIssues.some((i) => i !== 'photo_issue')
-                  ? 'Photo issue reported. LMSA will contact you to arrange a re-shoot.'
-                  : 'Corrections submitted. Please review your updated card above and confirm if everything looks correct now.'}
-                {selectedIssues.some((i) => i !== 'photo_issue') && !confirmed && (
+                {openRequest
+                  ? 'Sent for review. Your card keeps showing what LMSA has on record until an admin approves the change — it updates here as soon as they decide.'
+                  : photoNoticed && !selectedIssues.some((i) => i !== 'photo_issue')
+                    ? 'Photo issue reported. LMSA will contact you to arrange a re-shoot.'
+                    : 'Corrections submitted. Please review your updated card above and confirm if everything looks correct now.'}
+                {selectedIssues.some((i) => i !== 'photo_issue') && !confirmed && !openRequest && (
                   <div className="mt-12">
                     <button
                       className="btn-gold btn-full"
@@ -931,6 +1042,97 @@ export default function PreviewPage() {
       </main>
 
       {showPrint && <PrintPreviewModal student={student} onClose={() => setShowPrint(false)} />}
+    </div>
+  )
+}
+
+// One capture point for the student's own description, on the step where they
+// already know what they selected — every branch after this one (QR form, other
+// form, tabs, photo-only) posts whatever is in here, so the note is never
+// dependent on which path the student took through the flow.
+function IssueNoteField({ value, onChange }) {
+  const nearLimit = value.length > MAX_STUDENT_NOTE_LENGTH - 80
+  return (
+    <div className="field-group issue-note-field">
+      <label className="field-label" htmlFor="preview-issue-note">
+        What issue did you find with your details?
+        <span className="issue-note-optional">Optional, but it helps us fix it faster</span>
+      </label>
+      <textarea
+        id="preview-issue-note"
+        className="field-input submission-textarea issue-note-input"
+        rows={3}
+        maxLength={MAX_STUDENT_NOTE_LENGTH}
+        value={value}
+        onChange={(e) => onChange(e.target.value.slice(0, MAX_STUDENT_NOTE_LENGTH))}
+        placeholder="e.g. my second name is missing, or the phone number is my brother's, not my father's"
+      />
+      <p className={`field-hint${nearLimit ? ' issue-note-hint--near-limit' : ''}`}>
+        {nearLimit
+          ? `${MAX_STUDENT_NOTE_LENGTH - value.length} characters left — LMSA reads this with your correction.`
+          : 'Only LMSA admins see this. Include exactly what looks wrong, and what it should say.'}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * The student's own view of the request they have open.
+ *
+ * It exists because gating the flow changes what "I fixed it" means: the card
+ * above them still shows the old values, and without this panel that reads as the
+ * portal ignoring them. It renders the request through the same CorrectionDetails
+ * component the admin queue uses, so what the student wrote and what the admin
+ * approves cannot drift apart.
+ */
+function CorrectionReviewBanner({ request, onWithdraw, busy }) {
+  return (
+    <div className="review-banner" role="status">
+      <div className="review-banner-head">
+        <span className="review-banner-title">Correction under review</span>
+        <span className="review-banner-age">
+          {new Date(request.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+      </div>
+      <CorrectionDetails details={request} heading="You asked to change" />
+      <p className="review-banner-body">
+        Nothing on your card has changed yet — an LMSA admin checks corrections before they are
+        applied. You can withdraw this request, or add to it, and the details stay as they are
+        until then.
+      </p>
+      <button type="button" className="btn-outline review-banner-withdraw" onClick={onWithdraw} disabled={busy}>
+        {busy ? 'Withdrawing...' : 'Withdraw request'}
+      </button>
+    </div>
+  )
+}
+
+// Only for a fortnight: after that the record itself (or the next request) is the
+// answer, and a stale "an admin rejected this" line would just be noise.
+const RESOLVED_WINDOW_DAYS = 14
+
+function RequestOutcomeNotice({ request }) {
+  if (!request) return null
+  const decidedAt = request.reviewed_at || request.updated_at
+  const ageDays = decidedAt ? (Date.now() - new Date(decidedAt).getTime()) / 86400000 : Infinity
+  if (ageDays > RESOLVED_WINDOW_DAYS) return null
+
+  const text =
+    request.status === 'approved'
+      ? 'An admin approved your last correction request — your details above are the updated ones.'
+      : request.status === 'rejected'
+        ? 'An admin looked at your request and left your details as they were.'
+        : 'Your last correction request was withdrawn.'
+
+  return (
+    <div className={`resolution-box resolution-box--${request.status}`}>
+      <span>{text}</span>
+      {request.status === 'rejected' && request.admin_note ? (
+        <span className="resolution-box-note">They said: “{request.admin_note}”</span>
+      ) : null}
     </div>
   )
 }
@@ -984,7 +1186,9 @@ function QrFieldRow({
                   ? 'email'
                   : field === 'emergency_contact_phone'
                     ? 'tel'
-                    : 'text'
+                    : field === 'date_of_birth'
+                      ? 'date'
+                      : 'text'
               }
               value={correctionValue}
               onChange={(e) => onCorrectionChange(e.target.value)}

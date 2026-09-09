@@ -1010,6 +1010,230 @@ truncation.
 
 ---
 
+## 17. Feature: Self-Correction Notifications Now Say What Changed — and Take a Note From the Student (commit `7ce15dc`)
+
+### Problem
+A student using the self-service correction flow on their preview page produced
+exactly one line of signal for admins: *"STU-001 requested corrections to their
+details"*. No idea which details, no idea why, and no way for the student to
+explain. Worse, a student who both fixed their name and flagged a wrong photo got
+only the *photo_issue* notification — the name correction never reached the feed
+at all.
+
+### Root Cause
+`PATCH /api/students/:id/self-correct` composed its `confirmations.note` from the
+submitted values but wrote a fixed, generic string into `notifications.message`.
+Nothing in the request carried the student's own words, and the emit block was an
+if/else-if, so `photo_issue` shadowed `self_correction` whenever both were true.
+The `notes` array (which does hold the detail) only ever reached the activity-log
+row, which no admin screen renders for a self-correction — those students land
+back on `status = 'pending'`, and the students tab pulls notes only for
+`issue`/`photo_issue` rows.
+
+### Solution
+- **`backend/utils/corrections.js` (new)** — one place that compares the submitted
+  patch against the stored row and produces both renderings: the sentence
+  ("Kofi Amankwah (STU-001) corrected their full name, year level and emergency
+  contact phone") and the structured `details` (`fields[]` with `from`/`to`, plus
+  `student_note`). Field labels live here, so the notification wording and the
+  panel's chips cannot drift.
+- **Self-service honesty**: a submitted value identical to what is on the record is
+  no longer reported as a correction (it previously wrote the row, logged a
+  notification and regenerated the QR for nothing). A submission with no change,
+  no note and no photo report is now a 400 that says so, and the preview page
+  surfaces that message instead of "Something went wrong".
+- **Student note**: "What issue did you find with your details?" — an optional
+  500-character box on the report step where the student picks what is wrong, so
+  it is captured on every branch (QR-only, card-fields-only, tabbed, photo-only)
+  rather than being duplicated into each of the four submit forms. Validated
+  server-side (`student_note` must be text, ≤ 500), whitespace-collapsed, stored on
+  the notification and in the activity-log line, quoted last there so truncation can
+  never eat a field prefix.
+- **One notification per kind of event**: a combined report now writes both a
+  `self_correction` and a `photo_issue` row, so the feed's type filters stay
+  honest. The note rides on exactly one of them (the `self_correction` row, or the
+  `photo_issue` row when that is all there is), so it is never read twice.
+- **`sql/015_correction_details.sql` (new)** — `details JSONB` on `notifications`
+  and `confirmations`, plus a `CREATE OR REPLACE VIEW admin_notifications`, which
+  is needed because a view freezes its `n.*` expansion at creation time.
+- **`backend/utils/notificationLog.js` (new)** — `emitNotification` /
+  `logStudentActivity`, both logging rather than throwing. They degrade gracefully
+  when 015 has not been applied: retry without `details`, folding the note into
+  the message text so nothing is lost while the migration is pending. (Same shape
+  of fallback the notification-reads code uses.)
+- **Admin UI** — `CorrectionDetails` (new shared component) renders "full name:
+  ~~Ama Serwah~~ → Ama Serwaa" plus the student's note, used in the notification
+  panel and in the student editor. Clicking *View student* on a notification now
+  carries that brief into the modal, and lands on the *all* filter rather than
+  *issues* for self-corrections — those students are `pending`, so the old
+  hard-coded filter hid the row the admin had just clicked through to see.
+- **Analytics** — `GET /api/analytics` attributes `corrections_by_field` from
+  `confirmations.details.fields` when present, falling back to the pre-existing
+  "Name corrected to:" text matching for older rows. This was already fragile (the
+  previous section flagged it) and became a real hazard once student-typed text
+  started being appended to that same note.
+- Also: `date_of_birth` in the QR correction form became a real date input, since
+  the route now validates `YYYY-MM-DD` rather than letting Postgres reject it.
+
+### Verification
+- Backend: 94 tests passing, including `tests/corrections.test.js` (20 — wording,
+  no-op suppression, field ordering, note handling) and `tests/selfCorrect.test.js`
+  (13 — route-level, including the "details column missing" degradation path, the
+  blood-type/DOB/email guards, and the token-must-match-the-student check).
+  `npm run lint` unchanged from baseline (2 pre-existing errors in
+  `routes/templates.js`).
+- Frontend: 126 tests passing, including `tests/previewCorrectionNote.test.jsx`
+  (5 — the note box appears, is trimmed into the PATCH body, is omitted when empty,
+  survives into the photo-only path, and the server's rejection reason reaches the
+  student) and `tests/correctionDetails.test.jsx` (5). `npm run lint` unchanged from
+  baseline; `npm run build` succeeds.
+- **Requires `sql/015_correction_details.sql` before structured details appear** —
+  without it the notification is still correct and readable, just prose-only.
+
+### Files Changed
+- `backend/utils/corrections.js`, `backend/utils/notificationLog.js` — new
+- `backend/routes/students.js` — self-correct route rebuilt around the summary
+- `backend/routes/analytics.js` — structured field attribution with legacy fallback
+- `backend/tests/corrections.test.js`, `backend/tests/selfCorrect.test.js` — new
+- `sql/015_correction_details.sql` — new
+- `frontend/src/components/CorrectionDetails.jsx` — new
+- `frontend/src/pages/PreviewPage.jsx` — note capture, server-error surfacing, date input
+- `frontend/src/components/NotificationCenter.jsx`, `frontend/src/pages/AdminDashboard.jsx` — render the detail
+- `frontend/src/index.css` — detail + note styles
+- `frontend/src/test/previewCorrectionNote.test.jsx`, `frontend/src/test/correctionDetails.test.jsx` — new
+
+---
+
+## 18. Security: Student Self-Corrections Became Requests an Admin Approves (commit `26e450b`)
+
+### Problem
+The self-service correction flow from §17 was still ungated: `PATCH
+/api/students/:id/self-correct` took whatever the browser sent and wrote it
+straight into the student's own `students` row, then regenerated the QR code and
+printed-card data from it. The only thing between a student and their record was a
+signed preview link — which is a bearer token, handed out to every student,
+screenshot-able, and valid for months. Enough to move yourself into another year
+level, rewrite your emergency contact, or set the blood type a first responder
+reads off the card. The `ALLOWED_YEARS` / `ALLOWED_BLOOD_TYPES` guards added in
+§17 kept the values in their CHECK lists; they never said *who* may change them.
+
+### Root Cause
+The route was written as the student-facing twin of the admin `PUT
+/api/students/:id`: same `corrections` / `qr_corrections` payload, same update, and
+the token check was read as authorisation rather than as identification. It is
+only identification — it proves which row the link belongs to, not that the caller
+may edit enrollment data.
+
+### Solution
+The student's write became a request, and the record moves only where an admin says
+so. The detail captured at request time (§17) survives into the approval UI, which
+is what makes gating usable rather than obstructive: this is a self-service flow
+with no admin present, so the ask, the diff and the note all have to outlive the
+submission.
+
+- **`sql/016_correction_requests.sql` (new)** — `correction_requests` holds the
+  diff as `jsonb` (`[{key, label, from, to}]`), the student's note, the admin's
+  note, `reviewed_by` / `reviewed_at`, and a status of
+  `pending|approved|rejected|withdrawn`.
+  `CREATE UNIQUE INDEX … ON correction_requests(student_id) WHERE status = 'pending'`
+  is what enforces "one open request per student" — the database, not the route, so
+  two submits from a impatient student cannot both land. RLS is on with zero
+  policies: the table is reachable only through the service role. `confirmations`
+  gains `correction_requested` in its action CHECK; `students.status` gains
+  nothing, because a disputed card is exactly `pending`.
+- **`backend/utils/correctionRequests.js` (new)** — the lifecycle both halves share,
+  so the public endpoint and the admin queue cannot disagree about what "pending"
+  means. Filing *replaces* the open request (a student reporting twice is editing
+  their ask, not queueing a second one) by catching the `23505` and updating the
+  row it collided with. Approval is a compare-and-set: every field is written only
+  if it still holds the value the student saw, so approving a two-week-old request
+  cannot silently roll back what the office changed in between.
+- **A photo report is not queued.** There is nothing to approve when the student
+  cannot upload a replacement image, so `photo_issue` still takes effect on submit —
+  the request machinery is for edits, not for "come and re-shoot me". It also means
+  the student's note now rides on the `photo_issue` row instead of being dropped.
+- **Confirmed cards reopen.** Filing a request moves a card out of `confirmed`,
+  because a record cannot be both confirmed and disputed; an admin-raised
+  `issue`/`photo_issue` state is left alone, since that state belongs to the office,
+  not the student. Confirming while a request is pending is refused in
+  `routes/confirmations.js` (409) rather than only hidden by a disabled button — and
+  the guard steps aside if sql/016 is not applied, so confirmations never come to
+  depend on a table the deployment may not have.
+- **Field keys are allowlisted on the way out too.** `applyCorrectionRequest`
+  re-checks every key against `CORRECTION_LABELS` before writing, so a row filed by
+  an older build — or edited directly — cannot turn an approval into a write to
+  `status` or `student_id`.
+- **`backend/routes/corrections.js` (new)** — `GET /api/corrections/mine` +
+  `POST /api/corrections/:id/withdraw` for the student (same signed token, and the
+  same 20/15-minute limiter as filing), and the admin queue: `GET /` (student
+  identity joined in code rather than by a PostgREST embed, `pending_count` for the
+  tab badge), `POST /:id/approve`, `POST /:id/reject`. Approving runs the same
+  storage follow-up as the admin `PUT` — year folders move, the old QR is deleted,
+  the card is re-issued — inside `enqueueImport`, after the response, and with each
+  step's failure logged rather than allowed to unsay the approval.
+- **Wording the whole way through.** The notification says *"… asked to correct
+  their full name and year level"*, the request's activity line says
+  `Name: A → B`, and only the approval writes `Name corrected to: B` as
+  `self_corrected`. `routes/analytics.js` needed no change: its "Name Corrections"
+  stat counts the applied row, so an unapproved ask cannot inflate it (§16).
+- **Frontend**: `PreviewPage` shows an under-review panel that quotes the same
+  `CorrectionDetails` block the admin queue renders — student and admin provably
+  look at one request — with Withdraw, a disabled Confirm plus the reason, the done
+  step saying "Sent for review" instead of showing values that are not yet real, and
+  the rejection note surfacing where the student will actually see it.
+  `CorrectionsTab.jsx` (new) is the queue, with the 409 conflict rendered as
+  *"they asked for X, the record now says Y"* and Apply anyway as the explicit
+  override. `ADMIN_TABS` grew a Corrections entry carrying the pending count, and a
+  `self_correction` notification click now lands on that row instead of opening the
+  editor to retype what the student already wrote.
+- **Deliberately not optimistic.** Every other decision in that dashboard flips the
+  row locally first; approval does not, because a row that reads 'approved' and then
+  rolls back is precisely how the same correction gets applied twice.
+
+### Verification
+- Backend: 139 tests pass. `tests/correctionsQueue.test.js` (34) covers the queue —
+  approve applying the diff, the 409 conflict and its `force` override, the
+  never-offered-column guard, the 410 for a deleted student, double-approval,
+  reject-with-note validation, withdraw ownership, the storage follow-up argument
+  list, a CHECK violation reaching the admin as an error instead of success, and the
+  whole file → queue → approve path with the student's `/mine` view at the end.
+  `tests/selfCorrect.test.js` (19) covers the request side, including "the record is
+  untouched", the replace-don't-stack behaviour and both missing-migration
+  degradations. `tests/corrections.test.js` (25) unit-tests the report builder.
+- New shared harness `backend/tests/helpers/inMemoryDb.js`: it emulates the partial
+  unique index and returns real affected-row counts for updates, so the
+  compare-and-set is tested rather than assumed. One file-level `beforeEach` resets
+  the migration-simulation flags — a leaked `missingRequestsTable` from one describe
+  reads as a phantom bug in the next.
+- Frontend: 149 tests pass, including `previewCorrectionRequest.test.jsx` (7) and
+  `correctionsTab.test.jsx` (13). `npm run lint` is at baseline in both packages
+  (2 pre-existing errors in `routes/templates.js`, 2 in `lib/optimistic.js` +
+  `RenewCohortSection.jsx`); `npm run build` succeeds.
+
+### Requires
+**`sql/016_correction_requests.sql` must be applied before this ships.** Without
+it, filing a correction fails with a readable 502 rather than quietly dropping the
+request; the student's `/mine` view degrades to "nothing open" and the admin queue
+reports a failed load instead of an empty queue.
+
+### Files Changed
+- `sql/016_correction_requests.sql` — new
+- `backend/utils/correctionRequests.js`, `backend/routes/corrections.js` — new
+- `backend/utils/corrections.js` — request semantics, `correction_requested` log line
+- `backend/routes/students.js` — self-correct now files a request; `migrateStudentFiles` exported for reuse
+- `backend/routes/confirmations.js` — confirm locked while a request is open
+- `backend/index.js` — router mount + shared rate limiter
+- `backend/tests/correctionsQueue.test.js`, `backend/tests/helpers/inMemoryDb.js` — new
+- `backend/tests/corrections.test.js`, `backend/tests/selfCorrect.test.js` — rebuilt around requests
+- `frontend/src/pages/admin/CorrectionsTab.jsx` — new
+- `frontend/src/pages/admin/AdminNav.jsx` — Corrections tab + pending count
+- `frontend/src/pages/AdminDashboard.jsx` — queue state, approve/reject, notification routing
+- `frontend/src/pages/PreviewPage.jsx` — review panel, Confirm lock, withdraw, request-shaped response
+- `frontend/src/index.css` — review-banner, resolution-box, conflict and tab-badge styles
+- `frontend/src/test/previewCorrectionRequest.test.jsx`, `frontend/src/test/correctionsTab.test.jsx` — new
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |
@@ -1036,6 +1260,22 @@ truncation.
 | `65feb9f` | Remove stray debug output files | Pushed |
 | `0f6b513` | Sub-percent layout precision + mm readouts + rounded corners for image fields | Pushed |
 | `f92f793` | Fix Name Corrections stat — was counting new registrations + unrelated corrections | Pushed |
+| `7ce15dc` | Self-correction notifications name the fields + take a student note | Pushed |
+| `26e450b` | Gate student self-corrections behind admin approval (needs `sql/016`) | Pushed |
+
+**Apply before students can ask for a correction (security):**
+1. `sql/016_correction_requests.sql` — creates `correction_requests` (one open
+   request per student, enforced by a partial unique index), enables RLS with no
+   policies, and extends `confirmations_action_check` with `correction_requested`.
+   Until it is applied a student's submit returns 502 "Could not save your
+   correction request" — the record is never written directly, so there is no
+   window where the old ungated behaviour is back.
+
+**Apply before self-correction notifications show per-field detail:**
+1. `sql/015_correction_details.sql` — adds `details JSONB` to `notifications` and
+   `confirmations` and re-creates `admin_notifications`. Until it is applied the
+   inserts fall back to prose-only messages (logged at `warn`), so nothing breaks,
+   but the "what changed" chips and the note block stay empty.
 
 **Apply before relying on server-side Auto-Map:**
 1. `supabase/migrations/20260812_add_template_zones_and_layout.sql` (adds `zones_*`/`suggested_layout_*` columns + `card_field_sides` row).

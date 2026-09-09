@@ -6,6 +6,10 @@ export const ADMIN_TABS = [
   { id: 'upload', label: 'Upload' },
   { id: 'layout', label: 'Layout' },
   { id: 'students', label: 'Students' },
+  // Between the record list and the enrollment queue because that is the order the
+  // work arrives in: a student disputes their card, someone has to decide. See
+  // pages/admin/CorrectionsTab.jsx.
+  { id: 'corrections', label: 'Corrections' },
   { id: 'submissions', label: 'Submissions' },
   { id: 'settings', label: 'Settings' },
 ]
@@ -30,6 +34,19 @@ export function AdminNav({ tabs, activeTab, onSelect, userRole, onNavigate }) {
     e.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus()
   }
 
+  // A queue that can go stale quietly carries its own count, supplied by the
+  // caller as `count` on the tab entry (see AdminDashboard). Zero renders nothing:
+  // a permanent '0' beside every section is noise, not information.
+  const renderCount = (tab) => {
+    const count = tab.count
+    if (!count || count < 1) return null
+    return (
+      <span className="tab-count" aria-label={`${count} waiting`}>
+        {count > 99 ? '99+' : count}
+      </span>
+    )
+  }
+
   const renderTabs = (className) =>
     tabs.map((tab, i) => (
       <button
@@ -45,9 +62,15 @@ export function AdminNav({ tabs, activeTab, onSelect, userRole, onNavigate }) {
         onKeyDown={(e) => onKeyDown(e, i)}
       >
         {className === 'admin-sidebar-item' ? (
-          <span className="admin-sidebar-label">{tab.label}</span>
+          <span className="admin-sidebar-label">
+            {tab.label}
+            {renderCount(tab)}
+          </span>
         ) : (
-          tab.label
+          <>
+            {tab.label}
+            {renderCount(tab)}
+          </>
         )}
       </button>
     ))
