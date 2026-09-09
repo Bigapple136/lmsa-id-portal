@@ -47,6 +47,12 @@ function validateYear(y) {
 function validateTextLength(v, max = MAX_TEXT_LENGTH) {
   return !v || v.length <= max
 }
+// Collapse all whitespace (including the non-breaking spaces some mobile
+// keyboards insert, which String.prototype.trim() does not remove) so a lookup
+// value carrying a stray NBSP or double space still matches the stored record.
+function normaliseLookup(v) {
+  return String(v).replace(/\s+/g, ' ').trim()
+}
 function validateImageMime(m) {
   return ALLOWED_IMAGE_TYPES.includes(m)
 }
@@ -201,8 +207,8 @@ router.get('/lookup', async (req, res) => {
     return res.status(400).json({ found: false, error: 'Missing fields.' })
   if (!validateTextLength(student_id, 50) || !validateTextLength(full_name))
     return res.status(400).json({ found: false, error: 'Input too long.' })
-  const safeId = student_id.trim().replace(/[\\%_]/g, (c) => `\\${c}`)
-  const safeName = full_name.trim().replace(/[\\%_]/g, (c) => `\\${c}`)
+  const safeId = normaliseLookup(student_id).replace(/[\\%_]/g, (c) => `\\${c}`)
+  const safeName = normaliseLookup(full_name).replace(/[\\%_]/g, (c) => `\\${c}`)
   const { data, error } = await supabase
     .from('students')
     .select('student_id')

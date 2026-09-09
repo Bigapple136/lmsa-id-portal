@@ -4694,7 +4694,15 @@ textarea:focus-visible {
   .split-brand {
     order: 2;
     min-height: auto;
-    padding: 34px 22px 38px;
+    padding: 20px 22px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "emblem title"
+      "emblem sub";
+    align-items: center;
+    column-gap: 14px;
+    text-align: left;
   }
 
   .landing-mobile-brand {
@@ -4735,19 +4743,34 @@ textarea:focus-visible {
   }
 
   .split-emblem {
-    width: 104px;
-    height: 104px;
-    margin-bottom: 18px;
-    padding: 10px;
+    grid-area: emblem;
+    align-self: center;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 0;
+    padding: 6px;
   }
 
   .split-emblem img {
-    width: 82px;
-    height: 82px;
+    width: 44px;
+    height: 44px;
   }
 
   .split-title {
-    font-size: clamp(1.55rem, 7vw, 2rem);
+    grid-area: title;
+    font-size: 1.05rem;
+    margin-bottom: 2px;
+    text-align: left;
+  }
+
+  .split-sub {
+    grid-area: sub;
+    margin-bottom: 0;
+    text-align: left;
+  }
+
+  .split-desc {
+    display: none;
   }
 }
 
@@ -4789,6 +4812,21 @@ textarea:focus-visible {
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+}
+
+/* P1 fix: collapse the 3-pill verification steps at the phone breakpoint
+   (600px) instead of 480px, so they never render as a cramped 3-across strip
+   on phones in landscape or small tablets — the "three column" mobile symptom. */
+@media (max-width: 600px) {
+  .verification-steps {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .verification-steps li {
+    justify-content: flex-start;
+    min-height: 38px;
+    padding-inline: 12px;
   }
 }
 

@@ -36,6 +36,16 @@ export default function StudentsTab() {
     yearFilter,
   } = useDashboard()
 
+  const hasActiveFilters =
+    Boolean(search) || yearFilter !== 'all' || statusFilter !== 'all'
+
+  const clearFilters = () => {
+    setSearch('')
+    setYearFilter('all')
+    setStatusFilter('all')
+    setCurrentPage(1)
+  }
+
   return (
   <div>
               {/* QR bulk controls - admin only */}
@@ -203,7 +213,23 @@ export default function StudentsTab() {
                   <div key={i} className="skeleton skeleton-row" />
                 ))
               ) : filtered.length === 0 ? (
-                <EmptyState>{search ? 'No students match your search.' : 'No students added yet.'}</EmptyState>
+                <EmptyState>
+                  {hasActiveFilters
+                    ? 'No students match the current filters.'
+                    : 'No students added yet.'}
+                  {hasActiveFilters && (
+                    <div style={{ marginTop: '12px' }}>
+                      <button
+                        type="button"
+                        className="btn-outline"
+                        style={{ fontSize: '12px', padding: '7px 14px' }}
+                        onClick={clearFilters}
+                      >
+                        Clear filters
+                      </button>
+                    </div>
+                  )}
+                </EmptyState>
               ) : (() => {
                 const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
                 const safePage = Math.min(currentPage, totalPages)

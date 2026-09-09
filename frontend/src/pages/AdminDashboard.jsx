@@ -376,15 +376,30 @@ export default function AdminDashboard() {
         hasUrlPrefs = true
       }
 
-      // Fallback to localStorage if URL has no values
+      // Fallback to localStorage if URL has no values.
+      // Validate every restored value against the current option sets — an
+      // invalid persisted filter (e.g. a year no longer in YEARS, or a stale
+      // status) would otherwise silently empty the list and show "No students
+      // added yet." on a returning device (most noticeable on mobile). The
+      // search term is intentionally NOT restored: it is ephemeral, and a stale
+      // term left in storage is the easiest way to hide the whole roster.
       if (!hasUrlPrefs) {
         const raw = localStorage.getItem('admin_students_prefs')
         if (raw) {
           const prefs = JSON.parse(raw)
-          if (prefs.currentPage) setCurrentPage(prefs.currentPage)
-          if (prefs.yearFilter) setYearFilter(prefs.yearFilter)
-          if (prefs.statusFilter) setStatusFilter(prefs.statusFilter)
-          if (prefs.search) setSearch(prefs.search)
+          if (prefs.currentPage) {
+            const p = parseInt(prefs.currentPage, 10)
+            if (!Number.isNaN(p) && p >= 1) setCurrentPage(p)
+          }
+          if (prefs.yearFilter && (prefs.yearFilter === 'all' || YEARS.includes(prefs.yearFilter))) {
+            setYearFilter(prefs.yearFilter)
+          }
+          if (
+            prefs.statusFilter &&
+            ['all', 'pending', 'confirmed', 'issues'].includes(prefs.statusFilter)
+          ) {
+            setStatusFilter(prefs.statusFilter)
+          }
           if (prefs.submissionsFilter) setSubmissionsFilter(prefs.submissionsFilter)
         }
       } else {

@@ -82,7 +82,7 @@ export default function LandingPage() {
               Enter your Student ID and enrolled name to preview, confirm, or report corrections on
               your student card.
             </p>
-            <form className="landing-form" onSubmit={handleSearch} noValidate>
+            <form className="landing-form" onSubmit={handleSearch} noValidate autoComplete="off">
               <div className="field-group">
                 <label className="field-label" htmlFor="student-id-input">
                   Student ID Number
@@ -97,6 +97,7 @@ export default function LandingPage() {
                   onChange={(e) => setStudentId(e.target.value)}
                   autoComplete="off"
                   autoCapitalize="characters"
+                  autoCorrect="off"
                   spellCheck={false}
                   required
                   aria-required="true"
@@ -116,7 +117,9 @@ export default function LandingPage() {
                   placeholder="As it appears on enrollment"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  autoComplete="name"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   required
                   aria-required="true"
                   aria-invalid={errorKind === 'missing' || errorKind === 'lookup'}
