@@ -391,13 +391,15 @@ router.get('/html/:studentId', async (req, res) => {
     const showCounty = qrFields.county_of_origin?.enabled && county
     const showAddress = qrFields.current_address?.enabled && address
 
-    const initials = rawName
-      .split(' ')
-      .map((w) => w[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join('')
-      .toUpperCase()
+    const initials = escapeHtml(
+      rawName
+        .split(' ')
+        .map((w) => w[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toUpperCase(),
+    )
 
     const html = `<!DOCTYPE html>
 <html lang="en">
