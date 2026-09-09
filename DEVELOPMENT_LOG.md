@@ -1010,7 +1010,7 @@ truncation.
 
 ---
 
-## 17. Feature: Self-Correction Notifications Now Say What Changed — and Take a Note From the Student
+## 17. Feature: Self-Correction Notifications Now Say What Changed — and Take a Note From the Student (commit `7ce15dc`)
 
 ### Problem
 A student using the self-service correction flow on their preview page produced
