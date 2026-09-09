@@ -60,8 +60,10 @@ async function getAuthHeaders() {
 }
 
 async function fetchWithTimeout(url, options = {}) {
-  const { signal: parentSignal, ...rest } = options
-  const { signal, cleanup } = withTimeout(parentSignal, REQUEST_TIMEOUT)
+  // Callers moving large payloads (e.g. a restore ZIP upload) can raise the
+  // ceiling per request via `timeoutMs`; everything else keeps 45s.
+  const { signal: parentSignal, timeoutMs, ...rest } = options
+  const { signal, cleanup } = withTimeout(parentSignal, timeoutMs || REQUEST_TIMEOUT)
   try {
     const res = await fetch(url, { ...rest, signal })
     cleanup()
@@ -115,9 +117,10 @@ export async function adminJson(path, method, body) {
   })
 }
 
-// Admin fetch with FormData body (file uploads)
-export async function adminForm(path, method, formData) {
-  return adminFetch(path, { method, body: formData })
+// Admin fetch with FormData body (file uploads).
+// Extra fetch options (e.g. { timeoutMs }) pass through as the 4th arg.
+export async function adminForm(path, method, formData, options = {}) {
+  return adminFetch(path, { method, body: formData, ...options })
 }
 
 // Get current user info

@@ -155,13 +155,23 @@ function getJobFilePath(jobId) {
   return full
 }
 
-function setJobReady(jobId, { buffer, filename, mimeType }) {
+function setJobReady(jobId, { buffer, filename, mimeType, result } = {}) {
   if (!isValidJobId(jobId)) return
   const meta = readMeta(jobId)
   if (!meta || isExpired(meta)) return
   try {
     ensureJobDir()
-    if (buffer) fs.writeFileSync(payloadPath(jobId), buffer)
+    if (buffer) {
+      fs.writeFileSync(payloadPath(jobId), buffer)
+    } else {
+      // Status-only job (e.g. a restore, whose outcome is `result` JSON
+      // rather than a file): make sure no stale payload lingers.
+      try {
+        fs.unlinkSync(payloadPath(jobId))
+      } catch {
+        // No payload — fine.
+      }
+    }
     meta.status = 'ready'
     if (filename) meta.filename = filename
     if (mimeType) meta.mimeType = mimeType
@@ -170,6 +180,7 @@ function setJobReady(jobId, { buffer, filename, mimeType }) {
     } catch {
       meta.size = buffer?.length || 0
     }
+    if (result !== undefined) meta.result = result
     writeMetaAtomic(jobId, meta)
     logger.info({ jobId, type: meta.type, size: meta.size }, 'Background export job ready')
   } catch (err) {
@@ -216,6 +227,24 @@ function setJobProcessing(jobId) {
   }
 }
 
+// Progress for long multi-phase jobs (restore). `progress` is an opaque
+// JSON object the job owner defines, e.g.
+// { phase: 'tables', tablesDone: 3, tablesTotal: 13 }.
+function setJobProgress(jobId, progress) {
+  if (!isValidJobId(jobId)) return
+  const meta = readMeta(jobId)
+  if (!meta || isExpired(meta)) return
+  // Terminal states are final — a late progress write must never
+  // resurrect a finished job.
+  if (meta.status === 'ready' || meta.status === 'failed') return
+  meta.progress = progress
+  try {
+    writeMetaAtomic(jobId, meta)
+  } catch {
+    // Best effort.
+  }
+}
+
 function deleteJob(jobId) {
   if (!isValidJobId(jobId)) return
   deleteJobFiles(jobId)
@@ -228,6 +257,7 @@ module.exports = {
   setJobReady,
   setJobFailed,
   setJobProcessing,
+  setJobProgress,
   deleteJob,
   cleanup,
 }

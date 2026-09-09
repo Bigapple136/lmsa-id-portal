@@ -1,6 +1,7 @@
 import ActivityLogSection from './ActivityLogSection'
 import { FIELD_META } from './constants'
 import FieldToggleGroup from '../../components/FieldToggleGroup'
+import RestoreSection from '../../components/RestoreSection'
 import RenewCohortSection from './RenewCohortSection'
 import SettingsCard from '../../components/SettingsCard'
 import { adminFetch } from '../../lib/api'
@@ -353,6 +354,8 @@ export default function SettingsTab() {
                   >
                     {downloading.backup ? 'Backup queued — processing...' : 'Download Full Backup'}
                   </button>
+                  <div style={{ margin: '16px 0 4px', borderTop: '0.5px solid var(--border)' }} />
+                  <RestoreSection />
                 </SettingsCard>
               )}
             </div>

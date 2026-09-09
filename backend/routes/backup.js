@@ -337,3 +337,11 @@ module.exports = router
 // Exported for the schema-coverage guard in backend/tests/backup.test.js
 module.exports.TABLES = TABLES
 module.exports.EXCLUDED_TABLES = EXCLUDED_TABLES
+// Exported for reuse by backend/routes/restore.js:
+//  - buildBackupZip takes the pre-restore snapshot (never apply without one)
+//  - STORAGE_BUCKETS / listAllFiles map backup folders back to live buckets
+//  - mapPool is the shared bounded-concurrency helper
+module.exports.STORAGE_BUCKETS = STORAGE_BUCKETS
+module.exports.buildBackupZip = buildBackupZip
+module.exports.listAllFiles = listAllFiles
+module.exports.mapPool = mapPool

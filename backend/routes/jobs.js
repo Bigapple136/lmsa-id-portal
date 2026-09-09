@@ -10,11 +10,11 @@ router.get('/:jobId', requireAdmin, async (req, res) => {
   const job = getJob(req.params.jobId)
   if (!job) return res.status(404).json({ error: 'Job not found or expired.' })
 
-  // Backup zips contain the whole database plus every uploaded file: only
-  // full admins may see their status or download them, mirroring
-  // /api/backup's own guards. Other job types keep this route's base
-  // requireAdmin rule.
-  if (job.type === 'backup' && req.userRole !== 'admin') {
+  // Backup zips contain the whole database plus every uploaded file, and
+  // restore jobs report on live-data writes: only full admins may see
+  // their status or output, mirroring /api/backup's and /api/restore's
+  // own guards. Other job types keep this route's base requireAdmin rule.
+  if ((job.type === 'backup' || job.type === 'restore') && req.userRole !== 'admin') {
     return res.status(403).json({ error: 'Insufficient permissions. Full admin required.' })
   }
 
@@ -27,9 +27,17 @@ router.get('/:jobId', requireAdmin, async (req, res) => {
         size: job.size || 0,
         type: job.type,
         mimeType: job.mimeType,
+        // Status-only jobs (restore) carry their outcome as JSON instead
+        // of a file; multi-phase jobs also report their last progress.
+        ...(job.progress ? { progress: job.progress } : {}),
+        ...(job.result !== undefined ? { result: job.result } : {}),
       })
     }
     const filePath = getJobFilePath(job.id)
+    // Status-only job (e.g. restore): serve the result JSON as the download.
+    if (!filePath && job.result !== undefined) {
+      return res.json({ status: 'ready', jobId: job.id, type: job.type, result: job.result })
+    }
     if (!filePath) return res.status(500).json({ error: 'Result file is no longer available.' })
     // Same audit trail as downloading straight from /api/backup/:jobId —
     // a full PII export must be traceable whichever endpoint served it.
@@ -49,7 +57,13 @@ router.get('/:jobId', requireAdmin, async (req, res) => {
     return res.status(500).json({ status: 'failed', error: job.error || 'Job failed', type: job.type })
   }
 
-  res.json({ status: job.status, jobId: job.id, message: `${job.type} still processing...`, type: job.type })
+  res.json({
+    status: job.status,
+    jobId: job.id,
+    message: `${job.type} still processing...`,
+    type: job.type,
+    ...(job.progress ? { progress: job.progress } : {}),
+  })
 })
 
 module.exports = router

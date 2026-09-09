@@ -83,14 +83,49 @@ The job store is visible to all workers **on one host**. If the backend
 ever scales to 2+ hosts/instances, background jobs also need sticky
 sessions (or a shared store) or polls may 404 across instances.
 
-## Restore runbook
+## Restore (guided, in-app)
 
-There is intentionally **no one-click restore endpoint** — overwriting the
-live database from a web button is too dangerous to expose. Restores are a
-manual, deliberate procedure:
+**Admin → Settings → System → Restore from backup.** Full admins only,
+every step audit-logged (`restore_uploaded/started/completed/failed/
+discarded` in `admin_actions`).
 
-1. **Stop the bleeding**: if restoring because of bad data, disable the
-   affected writes first (e.g. close the submission form, pause imports).
+1. **Upload & validate** — attach a backup ZIP. The server streams it to a
+   staging area (never fully in memory), rejects anything without a valid
+   `manifest.json`, and summarizes tables/rows/files plus warnings.
+2. **Review the preview** — a live-vs-backup diff per table (backup rows
+   vs current rows, Merge/Skip per table) and per bucket. The preview
+   must be viewed before apply is allowed.
+3. **Type `RESTORE` to apply** — optionally uncheck file restore to merge
+   database rows only. Apply runs as a background job with phase progress:
+   - **Snapshot first**: the CURRENT live data is backed up to a
+     pre-restore snapshot before a single row changes. If the snapshot
+     fails, the restore aborts untouched. The snapshot stays downloadable
+     from the result screen for 24 hours.
+   - **Tables merge** in foreign-key-safe order (upsert by primary key).
+     Backup rows overwrite same-record live rows; **live-only rows are
+     never deleted**. Rows that fail (e.g. referencing a removed admin
+     login) are skipped and reported, never silently dropped — whole
+     batches that fail are retried row-by-row so one bad row can't sink
+     499 good ones. Re-running apply after a partial failure is safe.
+   - **Files merge** (same-path overwrite, live-only files untouched).
+   - The `qr_audit` id sequence is advanced afterwards (requires
+     `sql/017_restore_sequence_reset.sql` to have been run once in
+     Supabase; otherwise you get a warning naming it).
+4. **Verify** — spot-check student lookup, a preview page, and QR
+   verification. Keep the pre-restore snapshot until you are satisfied.
+
+Rules that always hold: nothing applies without the typed phrase; nothing
+applies without a snapshot; merges never delete; `qr_keys` is never
+touched (restore it separately if needed — see above). Staged uploads and
+snapshots expire after 24 hours.
+
+## Restore runbook (manual fallback)
+
+If the app itself is down and the guided restore is unreachable, the same
+recovery can be done by hand in Supabase:
+
+1. **Stop the bleeding**: disable the affected writes first (e.g. close
+   the submission form, pause imports).
 2. **Database**: in Supabase → Table Editor (or SQL Editor), re-import each
    `database/*.json` file.
    - `manifest.json → tables` tells you the expected row count per table —
@@ -101,6 +136,10 @@ manual, deliberate procedure:
    - `admins` rows reference Supabase Auth users by `id` — recreating auth
      users is separate (Authentication → Users); the JSON preserves the
      ids to relink.
+   - After re-importing `qr_audit`, run
+     `sql/017_restore_sequence_reset.sql` (or
+     `SELECT setval('qr_audit_id_seq', (SELECT MAX(id) FROM qr_audit));`)
+     so the id sequence matches the restored rows.
 3. **Files**: re-upload each `files/<folder>/…` tree to its bucket
    (`photos-and-signatures` → `id-cards`, `qr-codes` → `qr-codes`,
    `templates` → `templates`), preserving subfolder paths — the database
