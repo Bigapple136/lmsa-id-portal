@@ -25,6 +25,7 @@ const submissionsRouter = require('./routes/submissions')
 const backupRouter = require('./routes/backup')
 const jobsRouter = require('./routes/jobs')
 const notificationsRouter = require('./routes/notifications')
+const correctionsRouter = require('./routes/corrections')
 const analyticsRouter = require('./routes/analytics')
 const adminActionsRouter = require('./routes/adminActions')
 
@@ -139,6 +140,16 @@ const submissionLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many submissions. Please try again later.' },
 })
+// Corrections are student-initiated and cheap to file, so the ceiling is tight:
+// filing a request replaces the student's existing open one, and a queue full of
+// near-duplicates from one student is a queue nobody finishes.
+const correctionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many correction attempts. Please try again later.' },
+})
 const qrBulkLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -162,6 +173,13 @@ app.use('/api/submissions', (req, res, next) => {
 })
 app.use(['/api/qr/generate-all', '/api/qr/regenerate-all'], qrBulkLimiter)
 
+app.use('/api/students/:studentId/self-correct', correctionLimiter)
+app.use('/api/corrections', (req, res, next) =>
+  // Admins browse and review on this router; only the student-facing half needs
+  // throttling, and the same limiter covers withdraw for the same reason as file.
+  req.method === 'POST' && req.path.endsWith('/withdraw') ? correctionLimiter(req, res, next) : next(),
+)
+app.use('/api/corrections', correctionsRouter)
 app.use('/api/students', studentsRouter)
 app.use('/api/confirmations', confirmationsRouter)
 app.use('/api/templates', templatesRouter)

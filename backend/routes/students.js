@@ -27,7 +27,7 @@ const logger = require('../logger')
 const { logAdminAction } = require('../auditLog')
 const { withVersion } = require('../utils/storageUrl')
 const { CORRECTION_LABELS, buildCorrectionReport, sanitizeStudentNote, MAX_STUDENT_NOTE_LENGTH } = require('../utils/corrections')
-const { emitNotification, logStudentActivity } = require('../utils/notificationLog')
+const { fileCorrectionRequest } = require('../utils/correctionRequests')
 
 const FRONTEND_URL = process.env.FRONTEND_URL
 
@@ -44,7 +44,6 @@ const ALLOWED_YEARS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year
 const ALLOWED_BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png']
 const MAX_TEXT_LENGTH = 200
-const MAX_NOTE_LENGTH = 1000
 // Everything a student may change about their own record through
 // /:studentId/self-correct — the card fields plus the QR-payload fields. Kept in
 // sync with CORRECTION_LABELS, which is also where the admin-facing wording for
@@ -837,11 +836,12 @@ router.patch(
   },
 )
 
-// ── PUBLIC: self-correct ──
-// A student fixes their own record here (self-service — the change is applied
-// immediately, no admin approval step). Because nothing is queued for review,
-// the notification IS the review: it has to say which fields moved and carry the
-// student's own description of what they thought was wrong.
+// ── PUBLIC: request a self-correction ──
+// The student picks what is wrong and says why; LMSA decides. Kept on this URL
+// because it is what every issued preview link and the preview page already
+// call, and because "self-correct" still describes the student's intent — what
+// changed is that the record only moves once an admin approves it. See
+// utils/correctionRequests.js for the lifecycle and sql/016 for the queue.
 router.patch('/:studentId/self-correct', async (req, res) => {
   const sidErr = maxLength(req.params.studentId, 50, 'studentId')
   if (sidErr) return res.status(400).json({ error: sidErr })
@@ -858,9 +858,9 @@ router.patch('/:studentId/self-correct', async (req, res) => {
 
   if (student_note !== undefined && student_note !== null && typeof student_note !== 'string')
     return res.status(400).json({ error: 'student_note must be text.' })
-  // 500, not the 1000 the admin/issue note paths allow: this text is appended
-  // to the activity-log line that also carries "X corrected to: Y" per field,
-  // and that line is truncated at MAX_NOTE_LENGTH with the prefixes first.
+  // 500, not the 1000 the admin/issue note paths allow: this text is appended to
+  // the activity-log line that also carries the per-field detail, and that line is
+  // truncated at 1000 with the fields first — a long note must never eat them.
   const noteErr = maxLength(student_note, MAX_STUDENT_NOTE_LENGTH, 'student_note')
   if (noteErr) return res.status(400).json({ error: noteErr })
 
@@ -931,71 +931,19 @@ router.patch('/:studentId/self-correct', async (req, res) => {
   })
 
   // A report that changed nothing and carries no note is not worth an admin's
-  // attention — and saying so beats returning 200 after quietly doing nothing.
+  // attention — and saying so beats filing an empty request.
   if (!report.hasAnything) {
     return res.status(400).json({
       error: 'Nothing to correct — the details you sent already match your record. If something still looks wrong, enter the correct value or describe it in the note box.',
     })
   }
 
-  const updates = {}
-  for (const { key, to } of report.changes) updates[key] = to
-  if (Object.keys(updates).length) {
-    // Self-service: applied now, and the record returns to 'pending' so it
-    // needs a fresh confirmation from the student afterwards.
-    updates.status = 'pending'
-    const { error } = await supabase.from('students').update(updates).eq('student_id', studentId)
-    if (error) return res.status(400).json({ error: error.message })
-  }
-
-  if (report.hasPhotoIssue) {
-    await logStudentActivity({
-      studentId,
-      action: 'photo_issue',
-      note: 'Student reported incorrect photo.',
-    })
-    await supabase.from('students').update({ status: 'photo_issue' }).eq('student_id', studentId)
-  }
-
-  if (report.hasChanges || report.hasNote) {
-    await logStudentActivity({
-      studentId,
-      action: 'self_corrected',
-      note: report.activityNote.slice(0, MAX_NOTE_LENGTH),
-      details: report.details,
-    })
-  }
-
-  if (report.hasChanges) {
-    const { data: updated } = await supabase
-      .from('students')
-      .select('*')
-      .eq('student_id', studentId)
-      .single()
-    if (updated) {
-      try {
-        await getQRGenerator()(updated)
-      } catch (err) {
-        logger.warn({ studentId: updated.student_id, err: err.message }, 'Self-correct QR generation failed')
-      }
-    }
-  }
-
-  // One notification per kind of thing that happened, each carrying its own
-  // specifics. A student who both fixed their name and flagged their photo used
-  // to produce only a photo_issue notification — so the name correction was
-  // invisible to anyone browsing the Self-Corrections filter.
-  for (const notice of [report.notifications.selfCorrection, report.notifications.photoIssue]) {
-    if (!notice) continue
-    emitNotification({
-      type: notice.type,
-      title: notice.title,
-      message: notice.message,
-      messageWithNote: notice.messageWithNote,
-      studentId,
-      details: notice.details,
-    }).catch((err) => logger.warn({ err: err?.message, type: notice.type }, `${notice.type} notification failed`))
-  }
+  // Nothing is written to the student's record here. What is written is a
+  // correction request, which an admin approves (routes/corrections.js) before it
+  // touches `students` — a preview link identifies a student, it does not entitle
+  // them to edit their enrollment record.
+  const { request, error: fileError } = await fileCorrectionRequest({ student, studentId, report })
+  if (fileError) return res.status(502).json({ error: fileError })
 
   const { data, error } = await supabase
     .from('students')
@@ -1003,7 +951,10 @@ router.patch('/:studentId/self-correct', async (req, res) => {
     .eq('student_id', studentId)
     .single()
   if (error) return res.status(400).json({ error: error.message })
-  res.json(data)
+
+  // `student` is the record as it stands (unchanged, except that a photo report
+  // or a disputed confirmation moves `status`); `request` is what is pending.
+  res.json({ student: data, request })
 })
 
 // ── ADMIN: export photoshoot roster as PDF ── (supports ?background=true for optimistic UX)
@@ -1515,3 +1466,8 @@ router.put('/renew-cohort', requireAdmin, requireFullAdmin, async (req, res) => 
 })
 
 module.exports = router
+// The admin approval path has to move a student's photo/signature/QR between year
+// folders exactly like PUT /:studentId does, so the helper is exported rather than
+// copied — a second copy drifting is how a cohort change ends up with its assets
+// stranded in the old folder.
+module.exports.migrateStudentFiles = migrateStudentFiles

@@ -43,7 +43,23 @@ function stubApi({ patchResponse } = {}) {
   apiFetch.mockImplementation((url, opts) => {
     if (url.includes('/self-correct')) {
       calls.push({ url, body: JSON.parse(opts.body) })
-      return Promise.resolve(patchResponse || { ok: true, json: async () => STUDENT })
+      // The real shape: `student` is the record as it still stands, `request` is
+      // the ask an admin has to approve. A correction is no longer an edit.
+      return Promise.resolve(
+        patchResponse || {
+          ok: true,
+          json: async () => ({
+            student: STUDENT,
+            request: {
+              id: 'req-1',
+              status: 'pending',
+              created_at: new Date().toISOString(),
+              fields: [{ key: 'full_name', label: 'full name', from: STUDENT.full_name, to: 'Ama Serwaa Boateng' }],
+              student_note: null,
+            },
+          }),
+        },
+      )
     }
     if (url.includes('/settings/qr-fields')) {
       return Promise.resolve({

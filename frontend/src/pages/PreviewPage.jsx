@@ -1,7 +1,8 @@
 /* eslint-disable react/prop-types */
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import IDCardDisplay from '../components/IDCardDisplay'
+import CorrectionDetails from '../components/CorrectionDetails'
 import CardCanvas from '../components/CardCanvas'
 import PrintPreviewModal from '../components/PrintPreviewModal'
 import Navbar from '../components/Navbar'
@@ -88,6 +89,14 @@ export default function PreviewPage() {
   const [correctionError, setCorrectionError] = useState('')
   const [photoNoticed, setPhotoNoticed] = useState(false)
   const [reportTab, setReportTab] = useState('qr')
+  // The student's own requests. A correction is an ask now, not an edit, so the
+  // page has to show the ask: what is waiting on an admin (which locks Confirm),
+  // and how the last one was decided (which is the only place a rejection reason
+  // reaches the student). `/api/corrections/mine` returns newest first.
+  const [openRequest, setOpenRequest] = useState(null)
+  const [requestHistory, setRequestHistory] = useState([])
+  // `useState` initialiser is not enough here — the list is refetched after every
+  // submit — so the derived value lives with the render instead.
 
   const [, setTemplateStatus] = useState('loading')
 
@@ -102,6 +111,8 @@ export default function PreviewPage() {
     return { version: 'v2', exp: claims.exp, expInfo, claims }
   }, [token])
 
+  const resolvedNotice = !openRequest && requestHistory.length ? requestHistory[0] : null
+
   // CardCanvas resolves front/back independently against calibrated
   // defaults, so it only needs a template and field-sides to render
   // something correct — no completeness gate required.
@@ -112,6 +123,7 @@ export default function PreviewPage() {
 
   useEffect(() => {
     fetchStudent()
+    fetchRequests()
     fetchTemplateAndLayout()
   }, [token])
 
@@ -123,9 +135,26 @@ export default function PreviewPage() {
       if (event.data?.type === 'layout-updated') {
         fetchTemplateAndLayout()
       }
+      // An approval changes the record the student is looking at. Refetching here
+      // is what stops a page that was open while the admin decided from showing
+      // the old details and a locked Confirm button until the student reloads.
+      if (event.data?.type === 'student-updated' && event.data.studentId === studentIdRef.current) {
+        refreshFromServer()
+      }
     }
     return () => channel.close()
   }, [])
+
+  // Read from inside the channel callback, which is installed once: closures
+  // over `student` or over the fetchers themselves would compare against — and
+  // call — whatever the first render captured.
+  const studentIdRef = useRef(null)
+  studentIdRef.current = student?.student_id || null
+  const refreshFromServer = useRef(() => {})
+  refreshFromServer.current = () => {
+    fetchStudent()
+    fetchRequests()
+  }
 
   async function fetchTemplateAndLayout() {
     // Fetch each resource independently so one failing endpoint never discards
@@ -192,7 +221,21 @@ export default function PreviewPage() {
     }
   }
 
+  async function fetchRequests() {
+    try {
+      const res = await apiFetch(`/api/corrections/mine?token=${encodeURIComponent(token)}`)
+      if (!res.ok) return
+      const data = await res.json()
+      setRequestHistory(data.requests || [])
+      setOpenRequest(data.open || null)
+    } catch {
+      // Context about a pending request, not state the page cannot run without:
+      // a failure here must not stop the card from loading.
+    }
+  }
+
   async function handleConfirm() {
+    if (openRequest) return
     setSubmitting(true)
     try {
       const res = await apiFetch('/api/confirmations/student', {
@@ -342,10 +385,15 @@ export default function PreviewPage() {
         },
       )
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
-      const updated = await res.json()
-      setStudent(updated)
+      // `student` is the record as it still stands, `request` is the ask. Applying
+      // the requested values to the card here would show the student a record that
+      // does not exist until an admin approves it.
+      const payload = await res.json()
+      if (payload.student) setStudent(payload.student)
+      if (payload.request) setOpenRequest(payload.request)
       if (hasPhoto) setPhotoNoticed(true)
       setStep('done')
+      fetchRequests()
     } catch (err) {
       // The route explains what it rejected (e.g. "nothing changed"), which is
       // actionable; the generic fallback is only for transport failures.
@@ -371,10 +419,29 @@ export default function PreviewPage() {
         },
       )
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
-      const updated = await res.json()
-      setStudent(updated)
+      const payload = await res.json()
+      if (payload.student) setStudent(payload.student)
       setPhotoNoticed(true)
       setStep('done')
+      fetchRequests()
+    } catch (err) {
+      toast.error(err?.message || 'Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleWithdrawRequest() {
+    if (!openRequest) return
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(
+        `/api/corrections/${encodeURIComponent(openRequest.id)}/withdraw?token=${encodeURIComponent(token)}`,
+        { method: 'POST' },
+      )
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || '')
+      toast.success('Request withdrawn. Your card is back to you — confirm it if it looks right.')
+      await fetchRequests()
     } catch (err) {
       toast.error(err?.message || 'Something went wrong. Please try again.')
     } finally {
@@ -561,10 +628,14 @@ export default function PreviewPage() {
                   </div>
                   <div className="meta-row meta-row--last">
                     <span className="meta-key">Status</span>
-                    <span className="meta-val status-pending">
+                    <span
+                      className={`meta-val${openRequest ? '' : ' status-pending'}`}
+                    >
                       {student.status === 'photo_issue'
                         ? 'Photo issue — admin notified'
-                        : 'Pending confirmation'}
+                        : openRequest
+                          ? 'Correction under review'
+                          : 'Pending confirmation'}
                     </span>
                   </div>
                 </div>
@@ -589,20 +660,42 @@ export default function PreviewPage() {
                   ))}
                 </div>
 
+                {openRequest && (
+                  <CorrectionReviewBanner
+                    request={openRequest}
+                    busy={submitting}
+                    onWithdraw={handleWithdrawRequest}
+                  />
+                )}
+
                 {student.status === 'photo_issue' ? (
                   <div className="info-box">
                     Your photo issue has been reported. LMSA will contact you to arrange a re-shoot.
                   </div>
                 ) : (
-                  <div className="btn-row">
-                    <button className="btn-gold" onClick={handleConfirm} disabled={submitting}>
-                      {submitting ? 'Confirming...' : 'Confirm — all correct'}
-                    </button>
-                    <button className="btn-outline" onClick={() => setStep('select')}>
-                      Report an issue
-                    </button>
-                  </div>
+                  <>
+                    <div className="btn-row">
+                      <button
+                        className="btn-gold"
+                        onClick={handleConfirm}
+                        disabled={submitting || Boolean(openRequest)}
+                      >
+                        {submitting ? 'Confirming...' : 'Confirm — all correct'}
+                      </button>
+                      <button className="btn-outline" onClick={() => setStep('select')}>
+                        {openRequest ? 'Add to your request' : 'Report an issue'}
+                      </button>
+                    </div>
+                    {openRequest && (
+                      <p className="confirm-locked-hint">
+                        Confirm is waiting on the admin reviewing your request above — a card
+                        cannot be confirmed and disputed at the same time.
+                      </p>
+                    )}
+                  </>
                 )}
+
+                <RequestOutcomeNotice request={resolvedNotice} />
               </>
             )}
 
@@ -926,10 +1019,12 @@ export default function PreviewPage() {
             {/* ── STEP: DONE ── */}
             {step === 'done' && (
               <div className="success-box">
-                {photoNoticed && !selectedIssues.some((i) => i !== 'photo_issue')
-                  ? 'Photo issue reported. LMSA will contact you to arrange a re-shoot.'
-                  : 'Corrections submitted. Please review your updated card above and confirm if everything looks correct now.'}
-                {selectedIssues.some((i) => i !== 'photo_issue') && !confirmed && (
+                {openRequest
+                  ? 'Sent for review. Your card keeps showing what LMSA has on record until an admin approves the change — it updates here as soon as they decide.'
+                  : photoNoticed && !selectedIssues.some((i) => i !== 'photo_issue')
+                    ? 'Photo issue reported. LMSA will contact you to arrange a re-shoot.'
+                    : 'Corrections submitted. Please review your updated card above and confirm if everything looks correct now.'}
+                {selectedIssues.some((i) => i !== 'photo_issue') && !confirmed && !openRequest && (
                   <div className="mt-12">
                     <button
                       className="btn-gold btn-full"
@@ -977,6 +1072,67 @@ function IssueNoteField({ value, onChange }) {
           ? `${MAX_STUDENT_NOTE_LENGTH - value.length} characters left — LMSA reads this with your correction.`
           : 'Only LMSA admins see this. Include exactly what looks wrong, and what it should say.'}
       </p>
+    </div>
+  )
+}
+
+/**
+ * The student's own view of the request they have open.
+ *
+ * It exists because gating the flow changes what "I fixed it" means: the card
+ * above them still shows the old values, and without this panel that reads as the
+ * portal ignoring them. It renders the request through the same CorrectionDetails
+ * component the admin queue uses, so what the student wrote and what the admin
+ * approves cannot drift apart.
+ */
+function CorrectionReviewBanner({ request, onWithdraw, busy }) {
+  return (
+    <div className="review-banner" role="status">
+      <div className="review-banner-head">
+        <span className="review-banner-title">Correction under review</span>
+        <span className="review-banner-age">
+          {new Date(request.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })}
+        </span>
+      </div>
+      <CorrectionDetails details={request} heading="You asked to change" />
+      <p className="review-banner-body">
+        Nothing on your card has changed yet — an LMSA admin checks corrections before they are
+        applied. You can withdraw this request, or add to it, and the details stay as they are
+        until then.
+      </p>
+      <button type="button" className="btn-outline review-banner-withdraw" onClick={onWithdraw} disabled={busy}>
+        {busy ? 'Withdrawing...' : 'Withdraw request'}
+      </button>
+    </div>
+  )
+}
+
+// Only for a fortnight: after that the record itself (or the next request) is the
+// answer, and a stale "an admin rejected this" line would just be noise.
+const RESOLVED_WINDOW_DAYS = 14
+
+function RequestOutcomeNotice({ request }) {
+  if (!request) return null
+  const decidedAt = request.reviewed_at || request.updated_at
+  const ageDays = decidedAt ? (Date.now() - new Date(decidedAt).getTime()) / 86400000 : Infinity
+  if (ageDays > RESOLVED_WINDOW_DAYS) return null
+
+  const text =
+    request.status === 'approved'
+      ? 'An admin approved your last correction request — your details above are the updated ones.'
+      : request.status === 'rejected'
+        ? 'An admin looked at your request and left your details as they were.'
+        : 'Your last correction request was withdrawn.'
+
+  return (
+    <div className={`resolution-box resolution-box--${request.status}`}>
+      <span>{text}</span>
+      {request.status === 'rejected' && request.admin_note ? (
+        <span className="resolution-box-note">They said: “{request.admin_note}”</span>
+      ) : null}
     </div>
   )
 }

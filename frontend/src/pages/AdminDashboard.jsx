@@ -32,6 +32,7 @@ import LayoutTab from './admin/LayoutTab'
 import SubmissionsTab from './admin/SubmissionsTab'
 import SettingsTab from './admin/SettingsTab'
 import StudentsTab from './admin/StudentsTab'
+import CorrectionsTab from './admin/CorrectionsTab'
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
@@ -148,6 +149,20 @@ export default function AdminDashboard() {
   const [pendingDeleteSubmission, setPendingDeleteSubmission] = useState(null)
   const [pendingDeleteStudent, setPendingDeleteStudent] = useState(null)
   const [dangerSubmitting, setDangerSubmitting] = useState(false)
+
+  // Correction requests (sql/016) — the queue that stands between a student's
+  // signed preview link and their own record. `correctionConflict` holds the 409
+  // the API returns when the record moved after the ask; it is kept per row so the
+  // "Apply anyway" button can only ever act on the request it describes.
+  const [corrections, setCorrections] = useState([])
+  const [correctionsFilter, setCorrectionsFilter] = useState('pending')
+  const [correctionsLoading, setCorrectionsLoading] = useState(false)
+  const [correctionMsg, setCorrectionMsg] = useState(null)
+  const [correctionConflict, setCorrectionConflict] = useState(null)
+  const [correctionsPendingCount, setCorrectionsPendingCount] = useState(0)
+  const [focusCorrectionId, setFocusCorrectionId] = useState(null)
+  const [pendingRejectCorrection, setPendingRejectCorrection] = useState(null)
+  const [correctionRejectNote, setCorrectionRejectNote] = useState('')
 
   const DRAFT_KEY = 'admin_dashboard_draft'
 
@@ -334,6 +349,7 @@ export default function AdminDashboard() {
           safeLoad(loadLayout),
           safeLoad(loadFieldSides),
           safeLoad(() => loadSubmissions(undefined, { silent: true })),
+          safeLoad(() => loadCorrections(undefined, { silent: true })),
           safeLoad(loadSubmissionForm),
           safeLoad(loadAnalytics),
         ],
@@ -689,6 +705,106 @@ export default function AdminDashboard() {
       if (!silent) setSubmissionsLoading(false)
     }
   }
+
+  async function loadCorrections(statusFilterParam, options = {}) {
+    const filter = typeof statusFilterParam === 'string' ? statusFilterParam : correctionsFilter
+    const silent = Boolean(options.silent)
+    if (!silent) setCorrectionsLoading(true)
+    try {
+      const res = await adminFetch(`/api/corrections?status=${filter}`)
+      if (!res.ok) {
+        // An unreadable queue must not render as an empty one: "no corrections
+        // waiting" is the message that makes students look like they asked for
+        // nothing, and the tab would keep saying that until someone reloaded.
+        setCorrectionMsg({ ok: false, text: 'Could not load correction requests. Try again.' })
+        return
+      }
+      const data = await res.json()
+      setCorrections(data.requests || [])
+      setCorrectionsPendingCount(data.pending_count || 0)
+    } catch {
+      setCorrectionMsg({ ok: false, text: 'Could not load correction requests. Try again.' })
+    } finally {
+      if (!silent) setCorrectionsLoading(false)
+    }
+  }
+
+  // ── Corrections: approve ──
+  // Not optimistic, unlike every other decision in this dashboard: this is the one
+  // write that changes a student's record, and a row that flips to 'approved' then
+  // rolls back is exactly how the same correction gets applied twice.
+  async function handleApproveCorrection(correction, options = {}) {
+    if (!correction) return
+    setCorrectionConflict(null)
+    setCorrectionsLoading(true)
+    try {
+      const res = await adminJson(`/api/corrections/${correction.id}/approve`, 'POST', {
+        force: options.force === true,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409 && data.conflicts?.length) {
+        setCorrectionConflict({ id: correction.id, error: data.error, conflicts: data.conflicts })
+        return
+      }
+      if (!res.ok) throw new Error(data.error || 'Could not approve this request.')
+
+      const who = correction.student?.full_name || correction.student_id
+      setCorrectionMsg({ ok: true, text: `Correction applied to ${who}. Card re-issued in the background.` })
+      // The record moved, so everything derived from it is re-read: the student
+      // list, the counts, and the student's own open preview page.
+      loadStudents({ silent: true, preservePage: true })
+      loadAnalytics()
+      if (typeof BroadcastChannel !== 'undefined') {
+        new BroadcastChannel('layout-changes').postMessage({
+          type: 'student-updated',
+          studentId: correction.student_id,
+        })
+      }
+    } catch (err) {
+      setCorrectionMsg({ ok: false, text: err?.message || 'Could not approve this request.' })
+    } finally {
+      setCorrectionsLoading(false)
+      loadCorrections(undefined, { silent: true })
+      setTimeout(() => setCorrectionMsg(null), 5000)
+    }
+  }
+
+  function handleRejectCorrection(correction) {
+    setCorrectionConflict(null)
+    setPendingRejectCorrection(correction)
+    setCorrectionRejectNote('')
+  }
+
+  async function confirmRejectCorrection() {
+    if (!pendingRejectCorrection) return
+    const correction = pendingRejectCorrection
+    const note = correctionRejectNote
+    setPendingRejectCorrection(null)
+    setDangerSubmitting(true)
+    try {
+      const res = await adminJson(`/api/corrections/${correction.id}/reject`, 'POST', { note })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not reject this request.')
+      setCorrectionMsg({ ok: true, text: 'Request rejected. The student sees your note on their card.' })
+    } catch (err) {
+      setCorrectionMsg({ ok: false, text: err?.message || 'Could not reject this request.' })
+    } finally {
+      setDangerSubmitting(false)
+      setCorrectionRejectNote('')
+      loadCorrections(undefined, { silent: true })
+      setTimeout(() => setCorrectionMsg(null), 5000)
+    }
+  }
+
+  const prevCorrectionsFilterRef = useRef(correctionsFilter)
+  useEffect(() => {
+    if (!session) return
+    if (prevCorrectionsFilterRef.current !== correctionsFilter) {
+      prevCorrectionsFilterRef.current = correctionsFilter
+      loadCorrections(correctionsFilter)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [correctionsFilter, session])
 
   // Track previous submissions filter to detect explicit user changes
   const prevSubFilterRef = useRef(submissionsFilter)
@@ -1800,11 +1916,21 @@ export default function AdminDashboard() {
   function selectTab(tab) {
     setActiveTab(tab)
     if (tab === 'submissions') loadSubmissions(undefined, { silent: true })
+    if (tab === 'corrections') {
+      loadCorrections(undefined, { silent: true })
+      setFocusCorrectionId(null)
+    }
   }
 
   const recentActivity = [...students]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 6)
+
+  // The sidebar and the mobile strip are one definition, so the pending count is
+  // attached here rather than duplicated across both.
+  const navTabs = correctionsPendingCount
+    ? ADMIN_TABS.map((t) => (t.id === 'corrections' ? { ...t, count: correctionsPendingCount } : t))
+    : ADMIN_TABS
 
   const dashboard = {
     PAGE_SIZE,
@@ -1812,6 +1938,17 @@ export default function AdminDashboard() {
     activeTemplateFront,
     analyticsData,
     bgJobs,
+    correctionConflict,
+    correctionMsg,
+    corrections,
+    correctionsFilter,
+    correctionsLoading,
+    focusCorrectionId,
+    handleApproveCorrection,
+    handleRejectCorrection,
+    setCorrectionConflict,
+    setCorrectionsFilter,
+    setFocusCorrectionId,
     cardLayout,
     csvFile,
     currentPage,
@@ -1981,10 +2118,29 @@ export default function AdminDashboard() {
                 ×
               </button>
             </div>
+            {correctionBrief?.request_id && (
+              <p className="field-hint u-mb-8">
+                This is a request, not a change yet — approve it in{' '}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    setCorrectionsFilter('pending')
+                    setActiveTab('corrections')
+                    setFocusCorrectionId(correctionBrief.request_id)
+                    setEditStudent(null)
+                    loadCorrections('pending', { silent: true })
+                  }}
+                >
+                  Corrections
+                </button>{' '}
+                to apply exactly what was asked.
+              </p>
+            )}
             {correctionBrief && (
               <div className="info-box u-mb-14">
                 <strong>Reported by the student</strong>
-                <CorrectionDetails details={correctionBrief} heading="They corrected" />
+                <CorrectionDetails details={correctionBrief} heading="They asked to change" />
                 {(correctionBrief.photo_issue || correctionBrief.photo_issue_reported) && (
                   <p className="correction-note-text u-mt-8">
                     They also reported the photo on their card is wrong — a re-shoot is needed.
@@ -2272,6 +2428,39 @@ export default function AdminDashboard() {
       </ConfirmDialog>
 
       <ConfirmDialog
+        open={Boolean(pendingRejectCorrection)}
+        title="Reject this correction request?"
+        confirmLabel="Reject request"
+        onCancel={() => {
+          setPendingRejectCorrection(null)
+          setCorrectionRejectNote('')
+        }}
+        onConfirm={confirmRejectCorrection}
+        loading={dangerSubmitting}
+      >
+        <p>
+          <strong>{pendingRejectCorrection?.student?.full_name || pendingRejectCorrection?.student_id}</strong>{' '}
+          keeps their details exactly as they are, and the correction on their card stays unresolved.
+        </p>
+        <div className="field-group u-mt-12" >
+          <label className="field-label" htmlFor="correction-reject-note">
+            Why? (the student reads this)
+          </label>
+          <textarea
+            id="correction-reject-note"
+            className="field-input"
+            rows={3}
+            maxLength={1000}
+            value={correctionRejectNote}
+            onChange={(e) => setCorrectionRejectNote(e.target.value)}
+            placeholder="e.g. The registrar has the spelling right — bring your ID to the office to change it."
+            style={{ fontFamily: 'inherit' }}
+          />
+          <p className="field-hint">Stored on the request and shown on the student&rsquo;s preview page.</p>
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
         open={Boolean(pendingDeleteSubmission)}
         title="Delete submission?"
         confirmLabel="Delete submission"
@@ -2315,11 +2504,19 @@ export default function AdminDashboard() {
         <div className="u-flex u-ai-center u-gap-8">
           <NotificationCenter
             onNavigateStudent={(studentId, type, notification) => {
+              // A correction request is decided in the queue, not by jumping into
+              // the record and retyping what the student asked for — approving
+              // there is what keeps the from/to the student saw intact.
+              if (type === 'self_correction') {
+                setCorrectionsFilter('pending')
+                setActiveTab('corrections')
+                setFocusCorrectionId(notification?.details?.request_id || studentId)
+                loadCorrections('pending', { silent: true })
+                return
+              }
               // A photo report leaves the student in the issues list, which is
-              // where the admin wants to land. A self-correction does not: the
-              // record goes back to 'pending' for re-confirmation, so filtering
-              // to issues would hide the very row they clicked through to see.
-              setStatusFilter(type === 'photo_issue' ? 'issues' : 'all')
+              // where the admin wants to land.
+              setStatusFilter('all')
               setActiveTab('students')
               const student = students.find((s) => s.student_id === studentId)
               if (student) openEdit(student)
@@ -2334,7 +2531,7 @@ export default function AdminDashboard() {
 
       <div className="admin-sidebar-layout">
         <AdminNav
-          tabs={ADMIN_TABS}
+          tabs={navTabs}
           activeTab={activeTab}
           onSelect={selectTab}
           userRole={userRole}
@@ -2360,6 +2557,9 @@ export default function AdminDashboard() {
         )}
         {activeTab === 'students' && (
           <StudentsTab />
+        )}
+        {activeTab === 'corrections' && (
+          <CorrectionsTab />
         )}
         </DashboardProvider>
       </main>

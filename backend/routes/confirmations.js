@@ -29,6 +29,27 @@ router.post('/student', async (req, res) => {
     .maybeSingle()
   if (lookupErr || !student) return res.status(404).json({ error: 'Student not found.' })
 
+  // A student cannot confirm the card while they are disputing it. Without this
+  // the front-end lock is the only thing between "an admin approves your
+  // correction" and "you already said this was right", and a record that is both
+  // confirmed and disputed is worse than either. Only for 'confirmed': reporting
+  // an issue is always allowed, and stays meaningful while a request is open.
+  // If sql/016 is not applied the lookup fails and the guard steps aside —
+  // confirmations must not depend on a table the deployment may not have.
+  if (resolvedAction === 'confirmed') {
+    const { data: openCorrection } = await supabase
+      .from('correction_requests')
+      .select('id')
+      .eq('student_id', studentId)
+      .eq('status', 'pending')
+      .maybeSingle()
+    if (openCorrection) {
+      return res.status(409).json({
+        error: 'You have a correction waiting for review. Confirm your card once an admin has resolved it.',
+      })
+    }
+  }
+
   const { error: confError } = await supabase
     .from('confirmations')
     .insert({ student_id: studentId, action: resolvedAction, note: note?.slice(0, MAX_NOTE_LENGTH) || null })
