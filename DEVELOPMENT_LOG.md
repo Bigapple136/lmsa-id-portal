@@ -1234,6 +1234,149 @@ reports a failed load instead of an empty queue.
 
 ---
 
+## 19. Backup Hardening: Cluster-Safe Jobs, Missing Table, Manifest, Audit Trail (commit `c902ec2`)
+
+### Problem
+Pre-live audit of the backup system (it guards real student PII + photos)
+found two critical defects and a set of logic/speed gaps:
+
+1. **Background downloads were broken in production.** The Dockerfile runs
+   `node cluster.js` (up to 4 workers) but the job store was an in-memory
+   `Map` per worker — a backup queued on worker A 404'd ("Job not found
+   or expired") whenever the status poll / download landed on another
+   worker. This hit every background export, not just backup (QR export,
+   photoshoot roster, card-design roster).
+2. **`correction_requests` was silently excluded from every backup.**
+   Added in migration 016 after the last backup-table fix (`2f9a943`) —
+   the same bug recurring. The pending student-correction queue would
+   have been lost in a restore.
+3. `/api/jobs/:jobId` only required any admin, so a `support_admin` could
+   download a full backup, bypassing `/api/backup`'s full-admin guard.
+4. Empty tables were omitted from the ZIP (indistinguishable from
+   "failed to back up"); no manifest, so partial failures were silent;
+   full-database PII exports were never audit-logged; the frontend
+   queued via a state-changing GET with a dead blob fallback (read an
+   already-consumed response body); no rate limit on the heavy op.
+5. Speed: tables fetched one-by-one, files downloaded one-by-one, and
+   JPEGs/PNGs pointlessly DEFLATE-compressed (CPU burn, ~zero size gain).
+
+### Solution
+- **`backend/jobStore.js` rewritten as a filesystem-backed store**
+  (`$TMPDIR/lmsa-jobs`, 30-min TTL, atomic meta writes, strict job-id
+  validation as path-traversal protection). All cluster workers share
+  the container filesystem, so every job is visible to every worker with
+  no new infra. Result files now stream from disk (`res.sendFile`)
+  instead of sitting in the heap. Same `createJob/getJob/setJob*`
+  signatures, so the qr/students background exporters were fixed with
+  zero changes. Documented limit: multi-worker, not multi-instance
+  (sticky sessions needed if the backend ever scales past one host).
+- **`backend/routes/backup.js`**: added `correction_requests`;
+  bounded-parallel table fetch (4×) + file downloads (8×); STORE for
+  binaries / DEFLATE for JSON; table files always written; `manifest.json`
+  (row/file/byte counts, failures, `excluded_tables` with the `qr_keys`
+  reason); audit-logged `backup_queued/completed/failed/downloaded`;
+  dedicated limiter (10/15 min) on queue/download entry only, polls
+  untouched; single shared `queueBackupJob` for POST + legacy GET.
+- **`backend/routes/jobs.js`**: backup-type jobs require full admin;
+  streams from disk; audit-logs backup downloads served via this route.
+- **Frontend (`SettingsTab.jsx`)**: queues via `POST /api/backup`;
+  content-type-aware response handling replaces the dead fallback.
+- **`docs/BACKUP.md` (new)**: ZIP layout, the deliberate `qr_keys`
+  exclusion + separate key-backup procedure, how it runs, scaling
+  caveat, step-by-step restore runbook. No one-click restore endpoint
+  on purpose — overwriting live data from a web button is too dangerous.
+- **Tests (`backend/tests/backup.test.js`, 15 new)**: schema-coverage
+  guard (every `CREATE TABLE` in `sql/` must be backed up or a
+  documented exclusion — fails the build if a future migration is
+  missed); jobStore round-trip/expiry/traversal/cleanup +
+  cross-instance visibility proof; `/api/jobs` privilege tests
+  (support_admin blocked from backup jobs, still served own exports).
+
+### Verification
+Backend: 154/154 tests (139 existing + 15 new); ESLint clean on all
+touched files (the 2 errors + 3 warnings in `templates.js`/`qr.js` are
+pre-existing at HEAD, unrelated). Frontend: 149/149 tests, production
+build succeeds, ESLint clean on `SettingsTab.jsx` (its 2 errors are
+pre-existing elsewhere). `correction_requests` confirmed present in the
+backup table list; `qr_keys` confirmed excluded with reason.
+
+### Files Changed
+- `backend/jobStore.js` — rewritten (filesystem-backed)
+- `backend/routes/backup.js` — table fix, parallelism, manifest, audit, limiter
+- `backend/routes/jobs.js` — backup privilege boundary, disk streaming, audit
+- `backend/tests/backup.test.js` — new (15 tests)
+- `frontend/src/pages/admin/SettingsTab.jsx` — POST queue, response fix
+- `docs/BACKUP.md` — new (operations + restore runbook)
+
+---
+
+## 20. Feature: Guided In-App Restore (commit `5cc9d90`)
+
+### Problem
+The portal could *take* backups but had no way to *apply* one: recovery
+was a manual Supabase procedure (re-import 13 JSON files in FK-safe order,
+re-upload three buckets, fix the `qr_audit` sequence by hand). Workable,
+but slow and error-prone in exactly the emergency where it matters most —
+and the system is now live with student data.
+
+### Solution
+Guided restore under Admin → Settings → System → Restore from backup
+(full admin only, every step audit-logged):
+- **Upload & validate** (`POST /api/restore/upload`): ZIP streams to a
+  disk staging area via `unzipper` (never fully in memory — photo-heavy
+  backups are hundreds of MB), with zip-slip, file-count (50k) and
+  uncompressed-size (5 GB) guards. Anything without a valid `manifest.json`
+  is rejected as "not a LIMSA backup". Writes nothing live.
+- **Preview** (`GET /api/restore/:id/preview`): live-vs-backup diff per
+  table and per bucket, Merge/Skip per table, warnings. Read-only, but
+  marks the session reviewed — apply refuses without it.
+- **Apply** (`POST /api/restore/:id/apply`, exact `RESTORE` phrase +
+  optional file toggle): background job with phase progress over
+  `/api/jobs`. Snapshots CURRENT live data first (abort untouched if the
+  snapshot fails); merges tables in FK-safe order by upsert — live-only
+  rows/files are never deleted; failing batches retry row-by-row; files
+  upload with `upsert:true`; `qr_audit` BIGSERIAL sequence advanced via
+  new `sql/017` RPC with a graceful warning on older databases. Every
+  phase idempotent, so re-running after a partial failure is safe.
+- **Snapshot/result/discard**: pre-restore snapshot downloadable for 24h,
+  result re-fetchable past the 30-min job TTL, staging discarded on
+  demand. Workspaces expire after 24h so a stale preview can never apply.
+- **Job store**: `setJobProgress` + status-only jobs (`result` JSON
+  instead of a file); `/api/jobs` passes progress/result through and
+  restricts `restore` jobs to full admins like `backup` jobs.
+- **Frontend** (`RestoreSection.jsx`): staged summary → diff table →
+  file toggle → typed confirm → progress bar → results with row-level
+  details, snapshot download, start-over. `api.js` gained a per-request
+  `timeoutMs` (restore uploads get 10 min instead of 45s).
+- `docs/BACKUP.md` documents the guided flow; the manual Supabase
+  procedure stays as the app-is-down fallback.
+
+### Verification
+Backend: 167/167 tests (13 new in `tests/restore.test.js`: FK-safe plan
+guard, manifest validation, upload rejection paths, preview diff, apply
+guards, full mocked apply incl. snapshot/upsert order/bucket mapping/
+sequence/audit, batch salvage + keyless skips, missing-RPC warning,
+discard/TTL, support_admin blocks). Frontend: 154/154 (5 new
+`RestoreSection` flow tests) + production build. ESLint clean on all
+touched files.
+
+### Files Changed
+- `backend/routes/restore.js` — new (upload/preview/apply/snapshot/result/discard)
+- `backend/jobStore.js` — `setJobProgress`, status-only `result` jobs
+- `backend/routes/jobs.js` — progress/result passthrough, restore privilege
+- `backend/routes/backup.js` — reuse exports (snapshot builder, buckets, pool)
+- `backend/index.js` — mount `/api/restore`
+- `backend/package.json`, `backend/package-lock.json` — `unzipper`
+- `backend/tests/restore.test.js` — new (13 tests)
+- `sql/017_restore_sequence_reset.sql` — new (run once in Supabase)
+- `frontend/src/components/RestoreSection.jsx` — new (guided UI)
+- `frontend/src/pages/admin/SettingsTab.jsx` — mount under System
+- `frontend/src/lib/api.js` — per-request `timeoutMs`, `adminForm` options
+- `frontend/src/test/RestoreSection.test.jsx` — new (5 tests)
+- `docs/BACKUP.md` — guided restore docs, manual fallback kept
+
+---
+
 ## Deployment Notes
 
 | Commit | Description | Status |

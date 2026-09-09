@@ -1,6 +1,7 @@
 import ActivityLogSection from './ActivityLogSection'
 import { FIELD_META } from './constants'
 import FieldToggleGroup from '../../components/FieldToggleGroup'
+import RestoreSection from '../../components/RestoreSection'
 import RenewCohortSection from './RenewCohortSection'
 import SettingsCard from '../../components/SettingsCard'
 import { adminFetch } from '../../lib/api'
@@ -253,16 +254,20 @@ export default function SettingsTab() {
                         setDownloading((prev) => ({ ...prev, backup: true }))
                         toast.info('Backup queued — processing in background, you can continue working...')
                         // Optimistic: queue backup in background, poll for readiness
-                        const queueRes = await adminFetch('/api/backup?background=true')
-                        const queueData = await queueRes.json().catch(() => ({}))
+                        // POST is the canonical queue endpoint (queueing is a
+                        // state change, so it must not be a GET).
+                        const queueRes = await adminFetch('/api/backup', { method: 'POST' })
+                        const contentType = queueRes.headers.get('Content-Type') || ''
                         if (!queueRes.ok) {
+                          const queueData = await queueRes.json().catch(() => ({}))
                           toast.error(queueData.error || 'Backup queue failed.')
                           setDownloading((prev) => ({ ...prev, backup: false }))
                           return
                         }
-                        const jobId = queueData.jobId
-                        if (!jobId) {
-                          // Fallback: if backend returned direct file (legacy), handle blob
+                        if (!contentType.includes('application/json')) {
+                          // Legacy direct-file response: download the blob.
+                          // (The body can only be read once, so this branch
+                          // must come before any .json() call.)
                           const blob = await queueRes.blob()
                           const disposition = queueRes.headers.get('Content-Disposition') || ''
                           const match = disposition.match(/filename="?(.+?)"?$/)
@@ -276,6 +281,13 @@ export default function SettingsTab() {
                           a.remove()
                           URL.revokeObjectURL(url)
                           toast.success('Backup downloaded')
+                          setDownloading((prev) => ({ ...prev, backup: false }))
+                          return
+                        }
+                        const queueData = await queueRes.json().catch(() => ({}))
+                        const jobId = queueData.jobId
+                        if (!jobId) {
+                          toast.error('Unexpected backup response — please try again.')
                           setDownloading((prev) => ({ ...prev, backup: false }))
                           return
                         }
@@ -342,6 +354,8 @@ export default function SettingsTab() {
                   >
                     {downloading.backup ? 'Backup queued — processing...' : 'Download Full Backup'}
                   </button>
+                  <div style={{ margin: '16px 0 4px', borderTop: '0.5px solid var(--border)' }} />
+                  <RestoreSection />
                 </SettingsCard>
               )}
             </div>
