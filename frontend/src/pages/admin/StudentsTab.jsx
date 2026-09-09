@@ -155,27 +155,24 @@ export default function StudentsTab() {
                 </button>
               </div>
   
-              <div
-                className="u-flex u-gap-8 u-mb-14 u-ai-center"
-              >
+              <div className="students-filter-row">
                 <input
-                  className="field-input u-flex-1"
+                  className="field-input students-filter-search"
                   placeholder="Search by name or student ID..."
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value)
                     setCurrentPage(1)
                   }}
-                  
-/>
+                />
                 <select
-                  className="field-input"
+                  className="field-input students-filter-select"
+                  aria-label="Class"
                   value={yearFilter}
                   onChange={(e) => {
                     setYearFilter(e.target.value)
                     setCurrentPage(1)
                   }}
-                  style={{ width: 'auto', minWidth: '130px', fontSize: '13px' }}
                 >
                   <option value="all">All Classes</option>
                   {YEARS.map((y) => (
@@ -185,13 +182,13 @@ export default function StudentsTab() {
                   ))}
                 </select>
                 <select
-                  className="field-input"
+                  className="field-input students-filter-select students-filter-select--status"
+                  aria-label="Status"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value)
                     setCurrentPage(1)
                   }}
-                  style={{ width: 'auto', minWidth: '120px', fontSize: '13px' }}
                 >
                   <option value="all">All Status</option>
                   <option value="pending">Pending</option>
@@ -199,7 +196,7 @@ export default function StudentsTab() {
                   <option value="issues">Issues</option>
                 </select>
                 <button
-                  className="btn-gold"
+                  className="btn-gold students-filter-add"
                   onClick={() => {
                     setActiveTab('upload')
                     setUploadMode('manual')
